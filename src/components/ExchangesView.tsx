@@ -202,7 +202,7 @@ export function ExchangesView({
                   <button
                     type="button"
                     onClick={() => onOpenStoryById(activeExchange.storyId)}
-                    className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                    className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 border border-stone-200 rounded-md hover:border-stone-400 transition-[border-color,transform] duration-150 ease-out active:scale-[0.96] inline-flex items-center gap-1.5 whitespace-nowrap"
                   >
                     <BookOpen className="w-3.5 h-3.5" />
                     <span>Relire le récit</span>

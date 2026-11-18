@@ -574,7 +574,7 @@ function SalonApp() {
                           type="button"
                           onClick={() => enterSalon(salon.id)}
                           style={{ color: salon.palette.textAccent }}
-                          className="min-h-[38px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          className="min-h-[38px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-transform duration-150 ease-out active:scale-[0.96]"
                         >
                           <span>Entrer dans le salon</span>
                           <ArrowRight className="w-3.5 h-3.5" />
@@ -757,7 +757,7 @@ function SalonApp() {
                             <button
                               type="button"
                               onClick={() => setReadingStory(leadStory)}
-                              className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                              className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
                             >
                               <span>Lire le récit et répondre</span>
                               <ArrowRight className="w-4 h-4" />
@@ -816,7 +816,7 @@ function SalonApp() {
                                 <button
                                   type="button"
                                   onClick={() => setReadingStory(story)}
-                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
                                 >
                                   <span>Lire et échanger</span>
                                   <ArrowRight className="w-3.5 h-3.5" />

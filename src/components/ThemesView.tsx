@@ -47,39 +47,43 @@ export function ThemesView({ onStartFromTheme, onVisitSalon }: ThemesViewProps) 
         <div className="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <figure className="flex flex-col">
             {!img1Failed ? (
-              <img
-                src="/src/assets/images/theme_creation_workshop_1794978654371.jpg"
-                alt="Mains écrivant des idées dans un carnet près d’un ordinateur"
-                referrerPolicy="no-referrer"
-                onError={() => setImg1Failed(true)}
-                className="w-full h-60 lg:h-full object-cover rounded-sm border border-stone-200"
-              />
+              <div className="w-full aspect-[3/4] rounded-sm border border-stone-200 bg-white overflow-hidden">
+                <img
+                  src="/assets/aistudio/0e2eea87952ac6209f6b8adc4f36e5a1_e3232990.jpg"
+                  alt="Silhouette monochrome assise en train de lire au sommet d’une haute pile de livres"
+                  referrerPolicy="no-referrer"
+                  onError={() => setImg1Failed(true)}
+                  className="w-full h-full object-contain p-2"
+                />
+              </div>
             ) : (
-              <div className="w-full h-60 lg:h-full rounded-sm border border-stone-200 bg-stone-100 flex items-center justify-center p-4 text-center text-xs text-stone-500">
-                Atelier d’écriture et de création
+              <div className="w-full aspect-[3/4] rounded-sm border border-stone-200 bg-stone-100 flex items-center justify-center p-4 text-center text-xs text-stone-500">
+                Plonger dans la lecture et l’écriture
               </div>
             )}
             <figcaption className="text-xs font-serif italic text-stone-500 mt-2">
-              Fig. 2 — Dessiner des outils pour relier
+              Fig. 2 — Prendre de la hauteur par les mots
             </figcaption>
           </figure>
 
           <figure className="flex flex-col">
             {!img2Failed ? (
-              <img
-                src="/src/assets/images/theme_quiet_connection_1794978654450.jpg"
-                alt="Deux personnes échangeant calmement près d’une fenêtre avec leurs carnets"
-                referrerPolicy="no-referrer"
-                onError={() => setImg2Failed(true)}
-                className="w-full h-60 lg:h-full object-cover rounded-sm border border-stone-200"
-              />
+              <div className="w-full aspect-[3/4] rounded-sm border border-stone-200 bg-[#F4E6AE] overflow-hidden">
+                <img
+                  src="/assets/aistudio/81e1cb2d98f4d0407dd276e96bfde77f_04c63d1e.jpg"
+                  alt="Illustration de lecteurs réunis autour d’une table ronde bleue avec des tasses et des carnets ouverts"
+                  referrerPolicy="no-referrer"
+                  onError={() => setImg2Failed(true)}
+                  className="w-full h-full object-cover object-center"
+                />
+              </div>
             ) : (
-              <div className="w-full h-60 lg:h-full rounded-sm border border-stone-200 bg-stone-100 flex items-center justify-center p-4 text-center text-xs text-stone-500">
-                Échanges calmes et attentifs
+              <div className="w-full aspect-[3/4] rounded-sm border border-stone-200 bg-stone-100 flex items-center justify-center p-4 text-center text-xs text-stone-500">
+                Échanges autour d’une même table
               </div>
             )}
             <figcaption className="text-xs font-serif italic text-stone-500 mt-2">
-              Fig. 3 — Prendre le temps d’écouter
+              Fig. 3 — Se retrouver autour des récits partagés
             </figcaption>
           </figure>
         </div>
@@ -138,7 +142,7 @@ export function ThemesView({ onStartFromTheme, onVisitSalon }: ThemesViewProps) 
               <button
                 type="button"
                 onClick={() => onVisitSalon(theme.id)}
-                className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 transition-[border-color,transform] duration-150 ease-out active:scale-[0.96] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <span>Visiter le salon</span>
                 <ArrowRight className="w-3.5 h-3.5" />

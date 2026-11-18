@@ -413,7 +413,7 @@ export function SalonRoomView({
                         type="button"
                         onClick={() => onReadStory(leadStory)}
                         style={{ backgroundColor: salon.palette.accent }}
-                        className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                        className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-[opacity,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
                       >
                         <span>Lire le récit et répondre</span>
                         <ArrowRight className="w-4 h-4" />
@@ -461,7 +461,7 @@ export function SalonRoomView({
                           type="button"
                           onClick={() => onReadStory(story)}
                           style={{ color: salon.palette.textAccent }}
-                          className="min-h-[36px] px-3 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                          className="min-h-[36px] px-3 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
                         >
                           <span>Lire et échanger</span>
                           <ArrowRight className="w-3.5 h-3.5" />
