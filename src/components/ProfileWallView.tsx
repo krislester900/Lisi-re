@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { compressPhotoForWall } from '../lib/storageService';
+import { compressAvatarForProfile, compressPhotoForWall } from '../lib/storageService';
 import {
   createDirectExchangeWithFirstMessage,
   createWallItem,
@@ -145,6 +145,14 @@ export function ProfileWallView({
   const [savingItem, setSavingItem] = useState(false);
   const [itemError, setItemError] = useState<string | null>(null);
 
+  // Owner Profile Photo (Avatar) Modal
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
+  const [avatarDraftUrl, setAvatarDraftUrl] = useState('');
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarDraftFailed, setAvatarDraftFailed] = useState(false);
+
   const isOwner = Boolean(user && user.uid === memberId);
 
   useEffect(() => {
@@ -177,16 +185,17 @@ export function ProfileWallView({
   }, [loaded, isOwner, memberProfile, user]);
 
   useEffect(() => {
-    if (!lightboxItem && !composerOpen) return;
+    if (!lightboxItem && !composerOpen && !avatarModalOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (lightboxItem) setLightboxItem(null);
+        else if (avatarModalOpen && !savingAvatar) setAvatarModalOpen(false);
         else if (composerOpen && !savingItem) setComposerOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [lightboxItem, composerOpen, savingItem]);
+  }, [lightboxItem, composerOpen, savingItem, avatarModalOpen, savingAvatar]);
 
   const existingDirectExchange =
     user && !isOwner
@@ -208,6 +217,64 @@ export function ProfileWallView({
     setBody('');
     setSetAsFavoriteMusic(true);
     setComposerOpen(true);
+  };
+
+  const openAvatarModal = () => {
+    setAvatarDraftUrl(memberProfile?.avatarUrl ?? '');
+    setAvatarDraftFailed(false);
+    setAvatarError(null);
+    setAvatarModalOpen(true);
+  };
+
+  const handleAvatarSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarError(null);
+    setAvatarBusy(true);
+    try {
+      const compressed = await compressAvatarForProfile(file);
+      setAvatarDraftUrl(compressed);
+      setAvatarDraftFailed(false);
+    } catch (err) {
+      setAvatarError(
+        err instanceof Error ? err.message : 'Impossible de préparer cette photo de profil.'
+      );
+    } finally {
+      setAvatarBusy(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveAvatar = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !isOwner) return;
+    setAvatarError(null);
+    setSavingAvatar(true);
+    try {
+      if (!memberProfile) {
+        await ensureUserProfiles(user);
+      }
+      const ownerName =
+        memberProfile?.displayName || myProfile?.displayName || user.displayName || 'Auteur';
+      await updatePublicProfile(user.uid, {
+        displayName: ownerName,
+        bio: memberProfile?.bio || '',
+        listeningNote: memberProfile?.listeningNote || '',
+        avatarUrl: avatarDraftUrl.trim(),
+      });
+      setFailedImages((prev) => ({
+        ...prev,
+        'header-avatar': false,
+        'circle-portrait': false,
+      }));
+      setAvatarModalOpen(false);
+    } catch (err) {
+      setAvatarError(
+        formatReadableWallError(err, 'Impossible d’enregistrer votre photo de profil.')
+      );
+    } finally {
+      setSavingAvatar(false);
+    }
   };
 
   const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -531,24 +598,59 @@ export function ProfileWallView({
       <section className="bg-white border border-stone-200 rounded-xl p-6 sm:p-7 space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="flex items-start gap-4 min-w-0">
-            {memberProfile.avatarUrl && !failedImages['header-avatar'] ? (
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={openAvatarModal}
+                aria-label="Modifier votre photo de profil"
+                className="relative group shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B365D]"
+              >
+                {memberProfile.avatarUrl && !failedImages['header-avatar'] ? (
+                  <img
+                    src={memberProfile.avatarUrl}
+                    alt={memberProfile.displayName}
+                    referrerPolicy="no-referrer"
+                    onError={() => setFailedImages((prev) => ({ ...prev, 'header-avatar': true }))}
+                    className="w-16 h-16 rounded-full object-cover border border-stone-200 group-hover:brightness-95 transition"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-2xl group-hover:border-[#1B365D] transition-colors">
+                    {memberProfile.displayName.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+                <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#1B365D] text-white border-2 border-white flex items-center justify-center shadow-sm group-hover:bg-[#132744] transition-colors">
+                  <Camera className="w-3 h-3" />
+                </span>
+              </button>
+            ) : memberProfile.avatarUrl && !failedImages['header-avatar'] ? (
               <img
                 src={memberProfile.avatarUrl}
                 alt={memberProfile.displayName}
                 referrerPolicy="no-referrer"
                 onError={() => setFailedImages((prev) => ({ ...prev, 'header-avatar': true }))}
-                className="w-14 h-14 rounded-full object-cover border border-stone-200 shrink-0"
+                className="w-16 h-16 rounded-full object-cover border border-stone-200 shrink-0"
               />
             ) : (
-              <div className="w-14 h-14 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-2xl shrink-0">
+              <div className="w-16 h-16 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-2xl shrink-0">
                 {memberProfile.displayName.slice(0, 1).toUpperCase()}
               </div>
             )}
 
             <div className="space-y-1.5 min-w-0">
-              <p className="text-xs uppercase tracking-widest text-stone-500">
-                Mur personnel · Photos, musique, romans & notes
-              </p>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className="text-xs uppercase tracking-widest text-stone-500">
+                  Mur personnel · Photos, musique, romans & notes
+                </p>
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={openAvatarModal}
+                    className="text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
+                  >
+                    {memberProfile.avatarUrl ? 'Changer la photo de profil' : 'Ajouter une photo de profil'}
+                  </button>
+                )}
+              </div>
               <h1 className="font-display text-3xl font-medium text-stone-900">
                 {memberProfile.displayName}
               </h1>
@@ -1510,6 +1612,132 @@ export function ProfileWallView({
                   className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60 whitespace-nowrap"
                 >
                   {savingItem ? 'Publication…' : 'Épingler sur mon mur'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Owner's Profile Photo (Avatar) Modal */}
+      {isOwner && avatarModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Modifier votre photo de profil"
+          onClick={() => {
+            if (!savingAvatar) setAvatarModalOpen(false);
+          }}
+          className="fixed inset-0 z-50 bg-stone-950/65 p-4 sm:p-6 flex items-center justify-center overflow-y-auto"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white border border-stone-300 rounded-xl p-6 space-y-5 shadow-xl my-auto"
+          >
+            <div className="flex items-start justify-between gap-4 pb-3 border-b border-stone-200">
+              <div>
+                <h2 className="font-display text-2xl font-medium text-stone-900">
+                  Photo de profil
+                </h2>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  Visible sur votre mur, votre portrait et dans l’annuaire des membres.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={savingAvatar}
+                onClick={() => setAvatarModalOpen(false)}
+                aria-label="Fermer"
+                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-md inline-flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Fermer</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveAvatar} className="space-y-5">
+              <div className="flex flex-col items-center gap-4 py-2">
+                {avatarDraftUrl && !avatarDraftFailed ? (
+                  <img
+                    src={avatarDraftUrl}
+                    alt="Aperçu de votre photo de profil"
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarDraftFailed(true)}
+                    className="w-28 h-28 rounded-full object-cover ring-4 ring-stone-100 border border-stone-200"
+                  />
+                ) : (
+                  <div className="w-28 h-28 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-4xl">
+                    {memberProfile.displayName.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <label className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] cursor-pointer inline-flex items-center gap-2 whitespace-nowrap">
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{avatarBusy ? 'Préparation…' : 'Choisir depuis l’appareil'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarSelect}
+                      className="sr-only"
+                    />
+                  </label>
+
+                  {avatarDraftUrl && (
+                    <button
+                      type="button"
+                      disabled={savingAvatar}
+                      onClick={() => {
+                        setAvatarDraftUrl('');
+                        setAvatarDraftFailed(false);
+                      }}
+                      className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-red-700 bg-white border border-red-200 rounded-md hover:bg-red-50 whitespace-nowrap"
+                    >
+                      Retirer
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="wall-avatar-url" className="block text-xs text-stone-600 mb-1">
+                  Ou coller un lien d’image directe (facultatif)
+                </label>
+                <input
+                  id="wall-avatar-url"
+                  type="text"
+                  value={avatarDraftUrl.startsWith('data:') ? '' : avatarDraftUrl}
+                  onChange={(e) => {
+                    setAvatarDraftUrl(e.target.value);
+                    setAvatarDraftFailed(false);
+                  }}
+                  placeholder="https://…"
+                  className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                />
+              </div>
+
+              {avatarError && (
+                <p role="alert" className="text-xs text-red-700">
+                  {avatarError}
+                </p>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-1">
+                <button
+                  type="button"
+                  disabled={savingAvatar}
+                  onClick={() => setAvatarModalOpen(false)}
+                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 hover:text-stone-900"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingAvatar || avatarBusy}
+                  className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60 whitespace-nowrap"
+                >
+                  {savingAvatar ? 'Enregistrement…' : 'Enregistrer la photo'}
                 </button>
               </div>
             </form>

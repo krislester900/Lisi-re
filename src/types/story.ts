@@ -151,7 +151,7 @@ export const FIELD_LIMITS = {
   favoriteTrackUrl: { max: 500 },
   favoriteNovel: { max: 140 },
   interests: { max: 240 },
-  avatarUrl: { max: 500 },
+  avatarUrl: { max: 60000 },
   wallTitle: { min: 1, max: 140 },
   wallSubtitle: { max: 140 },
   wallBody: { max: 600 },

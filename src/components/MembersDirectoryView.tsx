@@ -29,6 +29,7 @@ export function MembersDirectoryView({
 }: MembersDirectoryViewProps) {
   const { user, signInWithGoogle } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [failedAvatars, setFailedAvatars] = useState<Record<string, boolean>>({});
 
   const storyCountByAuthor = useMemo(() => {
     const map: Record<string, number> = {};
@@ -151,9 +152,21 @@ export function MembersDirectoryView({
                 <div className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-11 h-11 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-lg shrink-0">
-                        {member.displayName.slice(0, 1).toUpperCase()}
-                      </div>
+                      {member.avatarUrl && !failedAvatars[member.userId] ? (
+                        <img
+                          src={member.avatarUrl}
+                          alt={member.displayName}
+                          referrerPolicy="no-referrer"
+                          onError={() =>
+                            setFailedAvatars((prev) => ({ ...prev, [member.userId]: true }))
+                          }
+                          className="w-11 h-11 rounded-full object-cover border border-stone-200 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-lg shrink-0">
+                          {member.displayName.slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <h2 className="font-display text-xl font-medium text-stone-900 truncate">
                           {member.displayName}

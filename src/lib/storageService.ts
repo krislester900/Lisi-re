@@ -4,8 +4,9 @@
  */
 
 const MAX_WALL_DATA_URL_CHARS = 150000;
+const MAX_AVATAR_DATA_URL_CHARS = 45000;
 
-export async function compressPhotoForWall(file: File): Promise<string> {
+async function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   const isImageMime = file.type.startsWith('image/');
   const isImageExt = /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i.test(file.name);
   if (!isImageMime && !isImageExt) {
@@ -28,7 +29,7 @@ export async function compressPhotoForWall(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
     const el = new Image();
     el.onload = () => resolve(el);
     el.onerror = () =>
@@ -39,6 +40,10 @@ export async function compressPhotoForWall(file: File): Promise<string> {
       );
     el.src = dataUrl;
   });
+}
+
+export async function compressPhotoForWall(file: File): Promise<string> {
+  const img = await loadImageFromFile(file);
 
   const maxSideList = [760, 620, 500];
   const qualities = [0.76, 0.62, 0.48];
@@ -67,6 +72,40 @@ export async function compressPhotoForWall(file: File): Promise<string> {
 
   throw new Error(
     'Cette photo reste trop dense après compression. Essayez une autre photo ou collez son lien.'
+  );
+}
+
+export async function compressAvatarForProfile(file: File): Promise<string> {
+  const img = await loadImageFromFile(file);
+  const srcWidth = img.width || 1;
+  const srcHeight = img.height || 1;
+  const cropSide = Math.min(srcWidth, srcHeight);
+  const offsetX = Math.max(0, Math.round((srcWidth - cropSide) / 2));
+  const offsetY = Math.max(0, Math.round((srcHeight - cropSide) / 2));
+
+  const targetSizes = [320, 256, 200];
+  const qualities = [0.8, 0.68, 0.54];
+
+  for (const size of targetSizes) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Traitement d’image indisponible sur ce navigateur.');
+    }
+    ctx.drawImage(img, offsetX, offsetY, cropSide, cropSide, 0, 0, size, size);
+
+    for (const quality of qualities) {
+      const compressed = canvas.toDataURL('image/jpeg', quality);
+      if (compressed.length <= MAX_AVATAR_DATA_URL_CHARS) {
+        return compressed;
+      }
+    }
+  }
+
+  throw new Error(
+    'Cette photo de profil reste trop lourde après compression. Essayez une autre image.'
   );
 }
 

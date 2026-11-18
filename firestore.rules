@@ -55,7 +55,7 @@ service cloud.firestore {
         && (!('favoriteTrackUrl' in data) || (data.favoriteTrackUrl is string && data.favoriteTrackUrl.size() <= 500))
         && (!('favoriteNovel' in data) || (data.favoriteNovel is string && data.favoriteNovel.size() <= 140))
         && (!('interests' in data) || (data.interests is string && data.interests.size() <= 240))
-        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000))
         && (!('discoverable' in data) || data.discoverable is bool)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;

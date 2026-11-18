@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
+  Camera,
   Edit3,
   Eye,
   EyeOff,
@@ -11,6 +12,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { compressAvatarForProfile } from '../lib/storageService';
 import { deleteStory, updatePublicProfile, updateStory } from '../lib/storyService';
 import {
   formatCumulativeMinutes,
@@ -45,6 +47,9 @@ export function JournalView({
   const [subTab, setSubTab] = useState<JournalSubTab>('wall');
 
   const [displayName, setDisplayName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
   const [bio, setBio] = useState('');
   const [listeningNote, setListeningNote] = useState('');
   const [favoriteTrackTitle, setFavoriteTrackTitle] = useState('');
@@ -62,8 +67,10 @@ export function JournalView({
   const [busyStoryId, setBusyStoryId] = useState<string | null>(null);
 
   useEffect(() => {
+    setAvatarPreviewFailed(false);
     if (profile) {
       setDisplayName(profile.displayName);
+      setAvatarUrl(profile.avatarUrl ?? '');
       setBio(profile.bio);
       setListeningNote(profile.listeningNote);
       setFavoriteTrackTitle(profile.favoriteTrackTitle ?? '');
@@ -74,6 +81,7 @@ export function JournalView({
       setDiscoverable(profile.discoverable !== false);
     } else if (user) {
       setDisplayName(user.displayName || 'Auteur');
+      setAvatarUrl(user.photoURL ?? '');
       setBio('');
       setListeningNote('');
       setFavoriteTrackTitle('');
@@ -110,6 +118,26 @@ export function JournalView({
     );
   }
 
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProfileError(null);
+    setProfileMessage(null);
+    setAvatarBusy(true);
+    try {
+      const compressed = await compressAvatarForProfile(file);
+      setAvatarUrl(compressed);
+      setAvatarPreviewFailed(false);
+    } catch (err) {
+      setProfileError(
+        err instanceof Error ? err.message : 'Impossible de préparer cette photo de profil.'
+      );
+    } finally {
+      setAvatarBusy(false);
+      e.target.value = '';
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setProfileError(null);
@@ -118,6 +146,7 @@ export function JournalView({
     try {
       await updatePublicProfile(user.uid, {
         displayName,
+        avatarUrl,
         bio,
         listeningNote,
         favoriteTrackTitle,
@@ -127,7 +156,7 @@ export function JournalView({
         interests,
         discoverable,
       });
-      setProfileMessage('Votre carte et vos préférences ont bien été enregistrées.');
+      setProfileMessage('Votre carte, votre photo de profil et vos préférences ont bien été enregistrées.');
     } catch (err) {
       setProfileError(
         err instanceof Error ? err.message : 'Impossible d’enregistrer votre présentation.'
@@ -428,6 +457,70 @@ export function JournalView({
           </p>
 
           <form onSubmit={handleSaveProfile} className="space-y-5">
+            {/* Profile Photo Uploader */}
+            <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
+              {avatarUrl && !avatarPreviewFailed ? (
+                <img
+                  src={avatarUrl}
+                  alt={displayName || 'Votre photo de profil'}
+                  referrerPolicy="no-referrer"
+                  onError={() => setAvatarPreviewFailed(true)}
+                  className="w-16 h-16 rounded-full object-cover border border-stone-300 shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-2xl shrink-0">
+                  {(displayName || 'A').slice(0, 1).toUpperCase()}
+                </div>
+              )}
+
+              <div className="flex-1 min-w-0 space-y-2">
+                <div>
+                  <p className="text-xs font-medium text-stone-800">Photo de profil</p>
+                  <p className="text-xs text-stone-500">
+                    Affichée sur votre mur, votre portrait et dans l’annuaire des membres.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap">
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{avatarBusy ? 'Préparation…' : 'Choisir une photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarFileChange}
+                      className="sr-only"
+                    />
+                  </label>
+
+                  {avatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAvatarUrl('');
+                        setAvatarPreviewFailed(false);
+                      }}
+                      className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-red-300 hover:text-red-700 whitespace-nowrap"
+                    >
+                      Retirer
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  type="text"
+                  aria-label="Lien d’image pour la photo de profil"
+                  value={avatarUrl.startsWith('data:') ? '' : avatarUrl}
+                  onChange={(e) => {
+                    setAvatarUrl(e.target.value);
+                    setAvatarPreviewFailed(false);
+                  }}
+                  placeholder="Ou coller un lien d’image (https://…)"
+                  className="w-full px-3 py-1.5 bg-white border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1E3A8A]"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label

@@ -45,7 +45,7 @@
         },
         "avatarUrl": {
           "type": "string",
-          "maxLength": 500
+          "maxLength": 60000
         },
         "discoverable": {
           "type": "boolean"
