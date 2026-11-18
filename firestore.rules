@@ -13,6 +13,10 @@ service cloud.firestore {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isValidSalonId(salonId) {
+      return salonId in ['creation', 'rencontres', 'solitudes', 'premiers-elans', 'quotidien'];
+    }
+
     function incoming() {
       return request.resource.data;
     }
@@ -36,11 +40,48 @@ service cloud.firestore {
     // --- Validation Blueprints ---
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'userId', 'displayName', 'bio', 'listeningNote',
+          'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
+          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable',
+          'createdAt', 'updatedAt'
+        ])
         && isValidId(data.userId)
         && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60
         && data.bio is string && data.bio.size() <= 320
         && data.listeningNote is string && data.listeningNote.size() <= 200
+        && (!('favoriteTrackTitle' in data) || (data.favoriteTrackTitle is string && data.favoriteTrackTitle.size() <= 120))
+        && (!('favoriteTrackArtist' in data) || (data.favoriteTrackArtist is string && data.favoriteTrackArtist.size() <= 100))
+        && (!('favoriteTrackUrl' in data) || (data.favoriteTrackUrl is string && data.favoriteTrackUrl.size() <= 500))
+        && (!('favoriteNovel' in data) || (data.favoriteNovel is string && data.favoriteNovel.size() <= 140))
+        && (!('interests' in data) || (data.interests is string && data.interests.size() <= 240))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 500))
+        && (!('discoverable' in data) || data.discoverable is bool)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWallItem(data) {
+      return data.keys().hasAll([
+          'itemId', 'ownerId', 'ownerName', 'visibility', 'kind',
+          'title', 'subtitle', 'body', 'mediaUrl', 'accentTone',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'itemId', 'ownerId', 'ownerName', 'visibility', 'kind',
+          'title', 'subtitle', 'body', 'mediaUrl', 'accentTone',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.itemId)
+        && isValidId(data.ownerId)
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 60
+        && data.visibility == 'public'
+        && data.kind in ['photo', 'music', 'novel', 'note']
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.subtitle is string && data.subtitle.size() <= 140
+        && data.body is string && data.body.size() <= 600
+        && data.mediaUrl is string && data.mediaUrl.size() <= 160000
+        && data.accentTone in ['ink', 'ochre', 'terracotta', 'sage', 'sand']
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -62,8 +103,10 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'storyId', 'authorId', 'authorName', 'title', 'excerpt', 'content',
-          'theme', 'promptQuestion', 'visibility', 'readingMinutes',
-          'resonanceCount', 'echoCount', 'lastEchoId', 'createdAt', 'updatedAt'
+          'theme', 'storyFormat', 'releaseCadence', 'seriesStatus',
+          'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility',
+          'readingMinutes', 'resonanceCount', 'echoCount', 'lastEchoId',
+          'createdAt', 'updatedAt'
         ])
         && isValidId(data.storyId)
         && isValidId(data.authorId)
@@ -71,13 +114,42 @@ service cloud.firestore {
         && data.title is string && data.title.size() >= 3 && data.title.size() <= 140
         && data.excerpt is string && data.excerpt.size() >= 10 && data.excerpt.size() <= 300
         && data.content is string && data.content.size() >= 20 && data.content.size() <= 8000
-        && data.theme in ['creation', 'rencontres', 'solitudes', 'premiers-elans', 'quotidien']
+        && isValidSalonId(data.theme)
+        && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
+        && (!('releaseCadence' in data) || data.releaseCadence in ['unique', 'hebdomadaire', 'bihebdomadaire', 'libre'])
+        && (!('seriesStatus' in data) || data.seriesStatus in ['complet', 'en-cours', 'termine'])
+        && (!('chapterCount' in data) || (data.chapterCount is int && data.chapterCount >= 0 && data.chapterCount <= 500))
+        && (!('lastChapterId' in data) || isValidId(data.lastChapterId))
         && data.promptQuestion is string && data.promptQuestion.size() <= 240
         && data.visibility in ['public', 'private']
         && data.readingMinutes is int && data.readingMinutes >= 1 && data.readingMinutes <= 60
         && data.resonanceCount is int && data.resonanceCount >= 0
         && data.echoCount is int && data.echoCount >= 0
         && (!('lastEchoId' in data) || isValidId(data.lastEchoId))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidChapter(data) {
+      return data.keys().hasAll([
+          'chapterId', 'storyId', 'authorId', 'storyVisibility',
+          'chapterNumber', 'title', 'content', 'authorNote',
+          'readingMinutes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'chapterId', 'storyId', 'authorId', 'storyVisibility',
+          'chapterNumber', 'title', 'content', 'authorNote',
+          'readingMinutes', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.chapterId)
+        && isValidId(data.storyId)
+        && isValidId(data.authorId)
+        && data.storyVisibility in ['public', 'private']
+        && data.chapterNumber is int && data.chapterNumber >= 1 && data.chapterNumber <= 500
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 140
+        && data.content is string && data.content.size() >= 20 && data.content.size() <= 12000
+        && data.authorNote is string && data.authorNote.size() <= 400
+        && data.readingMinutes is int && data.readingMinutes >= 1 && data.readingMinutes <= 60
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -104,8 +176,23 @@ service cloud.firestore {
         && data.storyVisibility == 'public'
         && isValidId(data.authorId)
         && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60
-        && data.replyType in ['resonance', 'question', 'experience']
-        && data.content is string && data.content.size() >= 5 && data.content.size() <= 1500
+        && data.replyType in ['comment', 'resonance', 'question', 'experience']
+        && data.content is string && data.content.size() >= 2 && data.content.size() <= 1500
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSalonMessage(data) {
+      return data.keys().hasAll([
+          'messageId', 'salonId', 'senderId', 'senderName', 'content', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'messageId', 'salonId', 'senderId', 'senderName', 'content', 'createdAt'
+        ])
+        && isValidId(data.messageId)
+        && isValidSalonId(data.salonId)
+        && isValidId(data.senderId)
+        && data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 60
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 1000
         && data.createdAt is timestamp;
     }
 
@@ -116,11 +203,12 @@ service cloud.firestore {
           'lastMessagePreview', 'lastSenderId', 'createdAt', 'updatedAt'
         ])
         && data.keys().hasOnly([
-          'exchangeId', 'storyId', 'storyTitle', 'initiatorId', 'initiatorName',
+          'exchangeId', 'kind', 'storyId', 'storyTitle', 'initiatorId', 'initiatorName',
           'recipientId', 'recipientName', 'participantIds', 'status',
           'lastMessagePreview', 'lastSenderId', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.exchangeId)
+        && (!('kind' in data) || data.kind in ['story', 'direct'])
         && isValidId(data.storyId)
         && data.storyTitle is string && data.storyTitle.size() >= 1 && data.storyTitle.size() <= 140
         && isValidId(data.initiatorId)
@@ -163,10 +251,11 @@ service cloud.firestore {
 
     // --- Collection Rules ---
 
-    // Public author cards (no PII, no list scraping)
+    // Public author cards (no PII)
     match /publicProfiles/{userId} {
       allow get: if isValidId(userId);
-      allow list: if false;
+      allow list: if isSignedIn()
+        && (resource.data.discoverable == true || resource.data.userId == request.auth.uid);
       allow create: if isVerifiedUser()
         && isValidId(userId)
         && isOwner(userId)
@@ -181,8 +270,47 @@ service cloud.firestore {
         && incoming().userId == existing().userId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'bio', 'listeningNote', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'bio', 'listeningNote',
+          'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
+          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'updatedAt'
+        ]);
       allow delete: if false;
+
+      // Yope-style profile wall cards
+      match /wallItems/{itemId} {
+        allow get: if isValidId(userId) && isValidId(itemId);
+        allow list: if resource.data.visibility == 'public';
+        allow create: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(itemId)
+          && isOwner(userId)
+          && isValidWallItem(incoming())
+          && incoming().itemId == itemId
+          && incoming().ownerId == request.auth.uid
+          && incoming().visibility == 'public'
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/publicProfiles/$(userId));
+        allow update: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(itemId)
+          && isOwner(userId)
+          && isValidWallItem(incoming())
+          && incoming().itemId == existing().itemId
+          && incoming().ownerId == existing().ownerId
+          && incoming().visibility == existing().visibility
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'ownerName', 'kind', 'title', 'subtitle', 'body', 'mediaUrl', 'accentTone', 'updatedAt'
+          ]);
+        allow delete: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(itemId)
+          && isOwner(userId)
+          && existing().ownerId == request.auth.uid;
+      }
     }
 
     // Private PII user info
@@ -209,7 +337,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Personal stories
+    // Personal stories & serialized novels
     match /stories/{storyId} {
       allow get: if isValidId(storyId)
         && (existing().visibility == 'public' || (isSignedIn() && existing().authorId == request.auth.uid));
@@ -224,6 +352,8 @@ service cloud.firestore {
         && incoming().resonanceCount == 0
         && incoming().echoCount == 0
         && !('lastEchoId' in incoming())
+        && !('lastChapterId' in incoming())
+        && (!('chapterCount' in incoming()) || incoming().chapterCount <= 1)
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
 
@@ -235,14 +365,20 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          // Action A: Author edits story content or visibility
+          // Action A: Author edits story content, format, cadence, or visibility
           (
             existing().authorId == request.auth.uid
             && incoming().resonanceCount == existing().resonanceCount
             && incoming().echoCount == existing().echoCount
-            && (!('lastEchoId' in existing()) ? !('lastEchoId' in incoming()) : ('lastEchoId' in incoming() && incoming().lastEchoId == existing().lastEchoId))
+            && ((!('lastEchoId' in existing()) && !('lastEchoId' in incoming()))
+              || ('lastEchoId' in existing() && 'lastEchoId' in incoming() && incoming().lastEchoId == existing().lastEchoId))
+            && ((!('lastChapterId' in existing()) && !('lastChapterId' in incoming()))
+              || ('lastChapterId' in existing() && 'lastChapterId' in incoming() && incoming().lastChapterId == existing().lastChapterId))
+            && ((!('chapterCount' in existing()) && !('chapterCount' in incoming()))
+              || ('chapterCount' in existing() && 'chapterCount' in incoming() && incoming().chapterCount == existing().chapterCount))
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'authorName', 'title', 'excerpt', 'content', 'theme',
+              'storyFormat', 'releaseCadence', 'seriesStatus',
               'promptQuestion', 'visibility', 'readingMinutes', 'updatedAt'
             ])
           )
@@ -266,7 +402,7 @@ service cloud.firestore {
             )
           )
           ||
-          // Action C: Atomic echo increment on a public story
+          // Action C: Atomic echo/comment increment on a public story
           (
             existing().visibility == 'public'
             && 'lastEchoId' in incoming()
@@ -275,11 +411,69 @@ service cloud.firestore {
             && !exists(/databases/$(database)/documents/stories/$(storyId)/echoes/$(incoming().lastEchoId))
             && existsAfter(/databases/$(database)/documents/stories/$(storyId)/echoes/$(incoming().lastEchoId))
           )
+          ||
+          // Action D: Author atomically publishes a new chapter in serialized novel
+          (
+            existing().authorId == request.auth.uid
+            && 'lastChapterId' in incoming()
+            && 'chapterCount' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'chapterCount', 'lastChapterId', 'seriesStatus', 'updatedAt'
+            ])
+            && (
+              ('chapterCount' in existing() && incoming().chapterCount == existing().chapterCount + 1)
+              || (!('chapterCount' in existing()) && incoming().chapterCount == 2)
+            )
+            && !exists(/databases/$(database)/documents/stories/$(storyId)/chapters/$(incoming().lastChapterId))
+            && existsAfter(/databases/$(database)/documents/stories/$(storyId)/chapters/$(incoming().lastChapterId))
+          )
         );
 
       allow delete: if isVerifiedUser()
         && isValidId(storyId)
         && existing().authorId == request.auth.uid;
+
+      // Story chapters subcollection (for Wattpad-style serialized novels)
+      match /chapters/{chapterId} {
+        allow get: if isValidId(storyId)
+          && isValidId(chapterId)
+          && (
+            get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+            || (isSignedIn() && existing().authorId == request.auth.uid)
+          );
+        allow list: if resource.data.storyVisibility == 'public'
+          || (isSignedIn() && resource.data.authorId == request.auth.uid);
+        allow create: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(chapterId)
+          && isValidChapter(incoming())
+          && incoming().chapterId == chapterId
+          && incoming().storyId == storyId
+          && incoming().authorId == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid
+          && incoming().storyVisibility == get(/databases/$(database)/documents/stories/$(storyId)).data.visibility
+          && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.lastChapterId == chapterId;
+        allow update: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(chapterId)
+          && isValidChapter(incoming())
+          && existing().authorId == request.auth.uid
+          && incoming().chapterId == existing().chapterId
+          && incoming().storyId == existing().storyId
+          && incoming().authorId == existing().authorId
+          && incoming().chapterNumber == existing().chapterNumber
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'content', 'authorNote', 'readingMinutes', 'storyVisibility', 'updatedAt'
+          ]);
+        allow delete: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(chapterId)
+          && existing().authorId == request.auth.uid;
+      }
 
       // Story resonances subcollection
       match /resonances/{userId} {
@@ -310,7 +504,7 @@ service cloud.firestore {
              == get(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount - 1;
       }
 
-      // Story echoes subcollection
+      // Story comments & echoes subcollection
       match /echoes/{echoId} {
         allow get: if isValidId(storyId)
           && isValidId(echoId)
@@ -336,7 +530,30 @@ service cloud.firestore {
       }
     }
 
-    // 1-on-1 Exchanges (Passerelles)
+    // Salon text-only public chat rooms
+    match /salons/{salonId}/messages/{messageId} {
+      allow get: if isSignedIn()
+        && isValidSalonId(salonId)
+        && isValidId(messageId);
+      allow list: if isSignedIn()
+        && isValidSalonId(salonId)
+        && resource.data.salonId == salonId;
+      allow create: if isVerifiedUser()
+        && isValidSalonId(salonId)
+        && isValidId(messageId)
+        && isValidSalonMessage(incoming())
+        && incoming().messageId == messageId
+        && incoming().salonId == salonId
+        && incoming().senderId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isVerifiedUser()
+        && isValidSalonId(salonId)
+        && isValidId(messageId)
+        && existing().senderId == request.auth.uid;
+    }
+
+    // 1-on-1 Private Exchanges (story-anchored OR direct member chat)
     match /exchanges/{exchangeId} {
       allow get: if isSignedIn()
         && isValidId(exchangeId)
@@ -356,8 +573,19 @@ service cloud.firestore {
         && incoming().status == 'active'
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
-        && exists(/databases/$(database)/documents/stories/$(incoming().storyId))
-        && get(/databases/$(database)/documents/stories/$(incoming().storyId)).data.visibility == 'public';
+        && (
+          (
+            incoming().storyId == 'direct'
+            && 'kind' in incoming()
+            && incoming().kind == 'direct'
+            && exists(/databases/$(database)/documents/publicProfiles/$(incoming().recipientId))
+          )
+          ||
+          (
+            exists(/databases/$(database)/documents/stories/$(incoming().storyId))
+            && get(/databases/$(database)/documents/stories/$(incoming().storyId)).data.visibility == 'public'
+          )
+        );
 
       allow update: if isVerifiedUser()
         && isValidId(exchangeId)
@@ -371,6 +599,10 @@ service cloud.firestore {
         && incoming().recipientId == existing().recipientId
         && incoming().recipientName == existing().recipientName
         && incoming().participantIds == existing().participantIds
+        && (
+          (!('kind' in existing()) && !('kind' in incoming()))
+          || ('kind' in existing() && 'kind' in incoming() && incoming().kind == existing().kind)
+        )
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
@@ -389,7 +621,7 @@ service cloud.firestore {
 
       allow delete: if false;
 
-      // Messages inside an exchange
+      // Messages inside a private exchange
       match /messages/{messageId} {
         allow get: if isSignedIn()
           && isValidId(exchangeId)

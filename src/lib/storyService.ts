@@ -19,6 +19,7 @@ import { db } from './firebase';
 import { handleFirestoreError, OperationType } from './firestoreErrors';
 import { estimateReadingMinutes } from './themes';
 import {
+  Chapter,
   Echo,
   EchoReplyType,
   Exchange,
@@ -27,9 +28,16 @@ import {
   FIELD_LIMITS,
   ID_PATTERN,
   PublicProfile,
+  ReleaseCadence,
+  SalonMessage,
+  SeriesStatus,
   Story,
+  StoryFormat,
   StoryThemeId,
   StoryVisibility,
+  WallAccentTone,
+  WallItem,
+  WallItemKind,
 } from '../types/story';
 
 function clampString(value: string, max: number): string {
@@ -63,6 +71,11 @@ export function buildExchangeId(storyId: string, uidA: string, uidB: string): st
     .slice(0, 128);
 }
 
+export function buildDirectExchangeId(uidA: string, uidB: string): string {
+  const pair = [uidA, uidB].sort();
+  return `dm_${pair[0]}_${pair[1]}`.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 128);
+}
+
 export async function ensureUserProfiles(user: User): Promise<void> {
   assertValidId(user.uid, 'userId');
   const publicPath = `publicProfiles/${user.uid}`;
@@ -81,9 +94,24 @@ export async function ensureUserProfiles(user: User): Promise<void> {
         displayName,
         bio: '',
         listeningNote: '',
+        favoriteTrackTitle: '',
+        favoriteTrackArtist: '',
+        favoriteTrackUrl: '',
+        favoriteNovel: '',
+        interests: '',
+        avatarUrl: clampString(user.photoURL || '', FIELD_LIMITS.avatarUrl.max),
+        discoverable: true,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+    } else {
+      const data = publicSnap.data() as Partial<PublicProfile>;
+      if (data.discoverable === undefined) {
+        await updateDoc(publicRef, {
+          discoverable: true,
+          updatedAt: serverTimestamp(),
+        });
+      }
     }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, publicPath);
@@ -123,6 +151,24 @@ export function subscribeToPublicProfile(
   );
 }
 
+export function subscribeToDiscoverableProfiles(
+  onData: (profiles: PublicProfile[]) => void
+): () => void {
+  const path = 'publicProfiles';
+  const q = query(collection(db, 'publicProfiles'), where('discoverable', '==', true), limit(80));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as PublicProfile);
+      list.sort((a, b) => a.displayName.localeCompare(b.displayName, 'fr'));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
 export async function fetchPublicProfile(userId: string): Promise<PublicProfile | null> {
   assertValidId(userId, 'userId');
   const path = `publicProfiles/${userId}`;
@@ -134,41 +180,166 @@ export async function fetchPublicProfile(userId: string): Promise<PublicProfile 
   }
 }
 
+export interface ProfileUpdatePayload {
+  displayName: string;
+  bio: string;
+  listeningNote: string;
+  favoriteTrackTitle?: string;
+  favoriteTrackArtist?: string;
+  favoriteTrackUrl?: string;
+  favoriteNovel?: string;
+  interests?: string;
+  avatarUrl?: string;
+  discoverable?: boolean;
+}
+
 export async function updatePublicProfile(
   userId: string,
-  payload: { displayName: string; bio: string; listeningNote: string }
+  payload: ProfileUpdatePayload
 ): Promise<void> {
   assertValidId(userId, 'userId');
   const displayName = clampString(payload.displayName, FIELD_LIMITS.displayName.max);
   if (displayName.length < FIELD_LIMITS.displayName.min) {
     throw new Error('Votre nom affiché doit contenir au moins 2 caractères.');
   }
-  const bio = clampString(payload.bio, FIELD_LIMITS.bio.max);
-  const listeningNote = clampString(payload.listeningNote, FIELD_LIMITS.listeningNote.max);
+
+  const updateFields: Record<string, unknown> = {
+    displayName,
+    bio: clampString(payload.bio, FIELD_LIMITS.bio.max),
+    listeningNote: clampString(payload.listeningNote, FIELD_LIMITS.listeningNote.max),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (payload.favoriteTrackTitle !== undefined) {
+    updateFields.favoriteTrackTitle = clampString(
+      payload.favoriteTrackTitle,
+      FIELD_LIMITS.favoriteTrackTitle.max
+    );
+  }
+  if (payload.favoriteTrackArtist !== undefined) {
+    updateFields.favoriteTrackArtist = clampString(
+      payload.favoriteTrackArtist,
+      FIELD_LIMITS.favoriteTrackArtist.max
+    );
+  }
+  if (payload.favoriteTrackUrl !== undefined) {
+    updateFields.favoriteTrackUrl = clampString(
+      payload.favoriteTrackUrl,
+      FIELD_LIMITS.favoriteTrackUrl.max
+    );
+  }
+  if (payload.favoriteNovel !== undefined) {
+    updateFields.favoriteNovel = clampString(payload.favoriteNovel, FIELD_LIMITS.favoriteNovel.max);
+  }
+  if (payload.interests !== undefined) {
+    updateFields.interests = clampString(payload.interests, FIELD_LIMITS.interests.max);
+  }
+  if (payload.avatarUrl !== undefined) {
+    updateFields.avatarUrl = clampString(payload.avatarUrl, FIELD_LIMITS.avatarUrl.max);
+  }
+  if (payload.discoverable !== undefined) {
+    updateFields.discoverable = Boolean(payload.discoverable);
+  }
 
   const path = `publicProfiles/${userId}`;
   try {
-    await updateDoc(doc(db, 'publicProfiles', userId), {
-      displayName,
-      bio,
-      listeningNote,
-      updatedAt: serverTimestamp(),
-    });
+    await updateDoc(doc(db, 'publicProfiles', userId), updateFields);
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 
-export function subscribeToPublicStories(
-  onData: (stories: Story[]) => void
+// --- Yope-style Profile Wall Items ---
+
+export function subscribeToWallItems(
+  userId: string,
+  onData: (items: WallItem[]) => void
 ): () => void {
+  const path = `publicProfiles/${userId}/wallItems`;
+  const q = query(
+    collection(db, 'publicProfiles', userId, 'wallItems'),
+    where('visibility', '==', 'public'),
+    limit(60)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as WallItem);
+      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export interface CreateWallItemInput {
+  kind: WallItemKind;
+  title: string;
+  subtitle: string;
+  body: string;
+  mediaUrl: string;
+  accentTone: WallAccentTone;
+}
+
+export async function createWallItem(
+  ownerId: string,
+  ownerName: string,
+  input: CreateWallItemInput
+): Promise<string> {
+  assertValidId(ownerId, 'ownerId');
+  const title = clampString(input.title, FIELD_LIMITS.wallTitle.max);
+  if (title.length < FIELD_LIMITS.wallTitle.min) {
+    throw new Error('Ajoutez un titre à votre carte du mur.');
+  }
+
+  const cleanOwnerName = clampString(ownerName, FIELD_LIMITS.displayName.max);
+  const itemId = generateSafeId('wall');
+  const path = `publicProfiles/${ownerId}/wallItems/${itemId}`;
+
+  try {
+    await setDoc(doc(db, 'publicProfiles', ownerId, 'wallItems', itemId), {
+      itemId,
+      ownerId,
+      ownerName: cleanOwnerName.length >= 2 ? cleanOwnerName : 'Auteur',
+      visibility: 'public',
+      kind: input.kind,
+      title,
+      subtitle: clampString(input.subtitle, FIELD_LIMITS.wallSubtitle.max),
+      body: clampString(input.body, FIELD_LIMITS.wallBody.max),
+      mediaUrl: clampString(input.mediaUrl, FIELD_LIMITS.wallMediaUrl.max),
+      accentTone: input.accentTone,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return itemId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function deleteWallItem(ownerId: string, itemId: string): Promise<void> {
+  assertValidId(ownerId, 'ownerId');
+  assertValidId(itemId, 'itemId');
+  const path = `publicProfiles/${ownerId}/wallItems/${itemId}`;
+  try {
+    await deleteDoc(doc(db, 'publicProfiles', ownerId, 'wallItems', itemId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- Stories & Wattpad-style Serialized Novels ---
+
+export function subscribeToPublicStories(onData: (stories: Story[]) => void): () => void {
   const path = 'stories';
-  const q = query(collection(db, 'stories'), where('visibility', '==', 'public'), limit(60));
+  const q = query(collection(db, 'stories'), where('visibility', '==', 'public'), limit(80));
   return onSnapshot(
     q,
     (snapshot) => {
       const list = snapshot.docs.map((d) => d.data() as Story);
-      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      list.sort((a, b) => toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt));
       onData(list);
     },
     (error) => {
@@ -201,6 +372,9 @@ export interface StoryInput {
   excerpt: string;
   content: string;
   theme: StoryThemeId;
+  storyFormat?: StoryFormat;
+  releaseCadence?: ReleaseCadence;
+  seriesStatus?: SeriesStatus;
   promptQuestion: string;
   visibility: StoryVisibility;
 }
@@ -229,6 +403,12 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     }
   }
 
+  const storyFormat: StoryFormat = input.storyFormat ?? 'confession';
+  const releaseCadence: ReleaseCadence =
+    storyFormat === 'confession' ? 'unique' : (input.releaseCadence ?? 'hebdomadaire');
+  const seriesStatus: SeriesStatus =
+    storyFormat === 'confession' ? 'complet' : (input.seriesStatus ?? 'en-cours');
+
   const promptQuestion = clampString(input.promptQuestion, FIELD_LIMITS.promptQuestion.max);
   const readingMinutes = estimateReadingMinutes(content);
 
@@ -238,6 +418,9 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     excerpt,
     content,
     theme: input.theme,
+    storyFormat,
+    releaseCadence,
+    seriesStatus,
     promptQuestion,
     visibility: input.visibility,
     readingMinutes,
@@ -259,6 +442,7 @@ export async function createStory(
       storyId,
       authorId,
       ...fields,
+      chapterCount: 1,
       resonanceCount: 0,
       echoCount: 0,
       createdAt: serverTimestamp(),
@@ -298,6 +482,102 @@ export async function deleteStory(storyId: string): Promise<void> {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
+
+export function subscribeToStoryChapters(
+  storyId: string,
+  storyVisibility: StoryVisibility,
+  userId: string | null,
+  authorId: string,
+  onData: (chapters: Chapter[]) => void
+): () => void {
+  const path = `stories/${storyId}/chapters`;
+  const q =
+    storyVisibility === 'public'
+      ? query(
+          collection(db, 'stories', storyId, 'chapters'),
+          where('storyVisibility', '==', 'public'),
+          limit(100)
+        )
+      : query(
+          collection(db, 'stories', storyId, 'chapters'),
+          where('authorId', '==', userId || authorId),
+          limit(100)
+        );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as Chapter);
+      list.sort((a, b) => a.chapterNumber - b.chapterNumber);
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function addStoryChapter(params: {
+  story: Story;
+  authorId: string;
+  chapterNumber: number;
+  title: string;
+  content: string;
+  authorNote: string;
+  nextSeriesStatus?: SeriesStatus;
+}): Promise<string> {
+  assertValidId(params.story.storyId, 'storyId');
+  assertValidId(params.authorId, 'authorId');
+
+  const title = clampString(params.title, FIELD_LIMITS.chapterTitle.max);
+  if (title.length < FIELD_LIMITS.chapterTitle.min) {
+    throw new Error('Le titre du chapitre doit contenir au moins 2 caractères.');
+  }
+
+  const content = clampString(params.content, FIELD_LIMITS.chapterContent.max);
+  if (content.length < FIELD_LIMITS.chapterContent.min) {
+    throw new Error('Le chapitre doit contenir au moins 20 caractères.');
+  }
+
+  const authorNote = clampString(params.authorNote, FIELD_LIMITS.chapterNote.max);
+  const readingMinutes = estimateReadingMinutes(content);
+  const chapterId = generateSafeId('chap');
+  const chapterRef = doc(db, 'stories', params.story.storyId, 'chapters', chapterId);
+  const storyRef = doc(db, 'stories', params.story.storyId);
+  const path = `stories/${params.story.storyId}/chapters/${chapterId}`;
+
+  const currentCount = params.story.chapterCount ?? 1;
+  const nextSeriesStatus: SeriesStatus =
+    params.nextSeriesStatus ?? params.story.seriesStatus ?? 'en-cours';
+
+  try {
+    const batch = writeBatch(db);
+    batch.set(chapterRef, {
+      chapterId,
+      storyId: params.story.storyId,
+      authorId: params.authorId,
+      storyVisibility: params.story.visibility,
+      chapterNumber: params.chapterNumber,
+      title,
+      content,
+      authorNote,
+      readingMinutes,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(storyRef, {
+      chapterCount: currentCount + 1,
+      lastChapterId: chapterId,
+      seriesStatus: nextSeriesStatus,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return chapterId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// --- Resonances & Comments / Echoes ---
 
 export function subscribeToUserResonance(
   storyId: string,
@@ -387,7 +667,7 @@ export async function addStoryEcho(
   const cleanName = clampString(authorName, FIELD_LIMITS.displayName.max);
   const content = clampString(rawContent, FIELD_LIMITS.echoContent.max);
   if (content.length < FIELD_LIMITS.echoContent.min) {
-    throw new Error('Votre écho doit contenir au moins 5 caractères.');
+    throw new Error('Votre commentaire doit contenir au moins 2 caractères.');
   }
 
   const echoId = generateSafeId('echo');
@@ -418,6 +698,79 @@ export async function addStoryEcho(
   }
 }
 
+// --- Salon Public Text-Only Chat ---
+
+export function subscribeToSalonMessages(
+  salonId: StoryThemeId,
+  onData: (messages: SalonMessage[]) => void
+): () => void {
+  const path = `salons/${salonId}/messages`;
+  const q = query(
+    collection(db, 'salons', salonId, 'messages'),
+    where('salonId', '==', salonId),
+    limit(150)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as SalonMessage);
+      list.sort((a, b) => toTimestampMs(a.createdAt) - toTimestampMs(b.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function sendSalonMessage(params: {
+  salonId: StoryThemeId;
+  senderId: string;
+  senderName: string;
+  rawContent: string;
+}): Promise<void> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.senderId, 'senderId');
+
+  const content = clampString(params.rawContent, FIELD_LIMITS.salonChatContent.max);
+  if (content.length < FIELD_LIMITS.salonChatContent.min) {
+    throw new Error('Écrivez un message avant d’envoyer.');
+  }
+
+  const cleanName = clampString(params.senderName, FIELD_LIMITS.displayName.max);
+  const messageId = generateSafeId('smsg');
+  const path = `salons/${params.salonId}/messages/${messageId}`;
+
+  try {
+    await setDoc(doc(db, 'salons', params.salonId, 'messages', messageId), {
+      messageId,
+      salonId: params.salonId,
+      senderId: params.senderId,
+      senderName: cleanName.length >= 2 ? cleanName : 'Auteur',
+      content,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function deleteSalonMessage(
+  salonId: StoryThemeId,
+  messageId: string
+): Promise<void> {
+  assertValidId(salonId, 'salonId');
+  assertValidId(messageId, 'messageId');
+  const path = `salons/${salonId}/messages/${messageId}`;
+  try {
+    await deleteDoc(doc(db, 'salons', salonId, 'messages', messageId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- 1-on-1 Private Exchanges (Story-Anchored OR Direct Member Chat) ---
+
 export function subscribeToUserExchanges(
   userId: string,
   onData: (exchanges: Exchange[]) => void
@@ -426,7 +779,7 @@ export function subscribeToUserExchanges(
   const q = query(
     collection(db, 'exchanges'),
     where('participantIds', 'array-contains', userId),
-    limit(50)
+    limit(60)
   );
   return onSnapshot(
     q,
@@ -501,8 +854,85 @@ export async function createExchangeWithFirstMessage(params: {
     const batch = writeBatch(db);
     batch.set(exchangeRef, {
       exchangeId,
+      kind: 'story',
       storyId: params.storyId,
       storyTitle,
+      initiatorId: params.initiatorId,
+      initiatorName: initiatorName.length >= 2 ? initiatorName : 'Auteur',
+      recipientId: params.recipientId,
+      recipientName: recipientName.length >= 2 ? recipientName : 'Auteur',
+      participantIds,
+      status: 'active',
+      lastMessagePreview,
+      lastSenderId: params.initiatorId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.set(messageRef, {
+      messageId,
+      exchangeId,
+      senderId: params.initiatorId,
+      senderName: initiatorName.length >= 2 ? initiatorName : 'Auteur',
+      participantIds,
+      content,
+      createdAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return exchangeId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `exchanges/${exchangeId}`);
+  }
+}
+
+export async function createDirectExchangeWithFirstMessage(params: {
+  initiatorId: string;
+  initiatorName: string;
+  recipientId: string;
+  recipientName: string;
+  firstMessage: string;
+}): Promise<string> {
+  assertValidId(params.initiatorId, 'initiatorId');
+  assertValidId(params.recipientId, 'recipientId');
+  if (params.initiatorId === params.recipientId) {
+    throw new Error('Vous ne pouvez pas ouvrir une conversation privée avec vous-même.');
+  }
+
+  const content = clampString(params.firstMessage, FIELD_LIMITS.messageContent.max);
+  if (content.length < FIELD_LIMITS.messageContent.min) {
+    throw new Error('Écrivez un premier message pour commencer la discussion.');
+  }
+
+  const exchangeId = buildDirectExchangeId(params.initiatorId, params.recipientId);
+  const exchangeRef = doc(db, 'exchanges', exchangeId);
+
+  try {
+    const existingSnap = await getDoc(exchangeRef);
+    if (existingSnap.exists()) {
+      const existingExchange = existingSnap.data() as Exchange;
+      await sendExchangeMessage({
+        exchange: existingExchange,
+        senderId: params.initiatorId,
+        senderName: params.initiatorName,
+        rawContent: content,
+      });
+      return exchangeId;
+    }
+
+    const messageId = generateSafeId('msg');
+    const participantIds = [params.initiatorId, params.recipientId];
+    const initiatorName =
+      clampString(params.initiatorName, FIELD_LIMITS.displayName.max) || 'Auteur';
+    const recipientName =
+      clampString(params.recipientName, FIELD_LIMITS.displayName.max) || 'Auteur';
+    const lastMessagePreview = clampString(content, FIELD_LIMITS.lastMessagePreview.max);
+
+    const messageRef = doc(db, 'exchanges', exchangeId, 'messages', messageId);
+    const batch = writeBatch(db);
+    batch.set(exchangeRef, {
+      exchangeId,
+      kind: 'direct',
+      storyId: 'direct',
+      storyTitle: 'Discussion privée',
       initiatorId: params.initiatorId,
       initiatorName: initiatorName.length >= 2 ? initiatorName : 'Auteur',
       recipientId: params.recipientId,

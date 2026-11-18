@@ -1,23 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { Heart, MessageCircle, X } from 'lucide-react';
+import { BookOpen, Heart, MessageCircle, Plus, User as UserIcon, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  addStoryChapter,
   addStoryEcho,
   buildExchangeId,
   createExchangeWithFirstMessage,
   fetchPublicProfile,
+  subscribeToStoryChapters,
   subscribeToStoryEchoes,
   subscribeToUserResonance,
   toggleStoryResonance,
 } from '../lib/storyService';
-import { ECHO_TYPE_LABELS, formatFrenchDate, THEME_MAP } from '../lib/themes';
-import { Echo, EchoReplyType, Exchange, FIELD_LIMITS, PublicProfile, Story } from '../types/story';
+import {
+  ECHO_TYPE_LABELS,
+  formatFrenchDate,
+  RELEASE_CADENCE_LABELS,
+  SERIES_STATUS_LABELS,
+  STORY_FORMAT_LABELS,
+  THEME_MAP,
+} from '../lib/themes';
+import {
+  Chapter,
+  Echo,
+  EchoReplyType,
+  Exchange,
+  FIELD_LIMITS,
+  PublicProfile,
+  SeriesStatus,
+  Story,
+} from '../types/story';
 
 interface StoryReaderModalProps {
   story: Story | null;
   onClose: () => void;
   existingExchanges: Exchange[];
   onOpenExchange: (exchangeId: string) => void;
+  onOpenMemberWall: (userId: string) => void;
 }
 
 export function StoryReaderModal({
@@ -25,14 +44,17 @@ export function StoryReaderModal({
   onClose,
   existingExchanges,
   onOpenExchange,
+  onOpenMemberWall,
 }: StoryReaderModalProps) {
   const { user, profile, signInWithGoogle } = useAuth();
   const [echoes, setEchoes] = useState<Echo[]>([]);
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  const [activeChapterIdx, setActiveChapterIdx] = useState(0); // 0 = Chapitre 1 (story.content), >=1 = chapters[idx - 1]
   const [hasResonated, setHasResonated] = useState(false);
   const [authorProfile, setAuthorProfile] = useState<PublicProfile | null>(null);
   const [resonateBusy, setResonateBusy] = useState(false);
 
-  const [replyType, setReplyType] = useState<EchoReplyType>('resonance');
+  const [replyType, setReplyType] = useState<EchoReplyType>('comment');
   const [echoText, setEchoText] = useState('');
   const [echoBusy, setEchoBusy] = useState(false);
   const [echoError, setEchoError] = useState<string | null>(null);
@@ -42,19 +64,52 @@ export function StoryReaderModal({
   const [bridgeBusy, setBridgeBusy] = useState(false);
   const [bridgeError, setBridgeError] = useState<string | null>(null);
 
+  // Author chapter composer state
+  const [showChapterForm, setShowChapterForm] = useState(false);
+  const [chapterTitle, setChapterTitle] = useState('');
+  const [chapterContent, setChapterContent] = useState('');
+  const [chapterNote, setChapterNote] = useState('');
+  const [markCompleted, setMarkCompleted] = useState(false);
+  const [chapterBusy, setChapterBusy] = useState(false);
+  const [chapterError, setChapterError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!story) return;
     setEchoText('');
     setEchoError(null);
+    setReplyType('comment');
     setShowBridgeBox(false);
     setBridgeMessage('');
     setBridgeError(null);
+    setActiveChapterIdx(0);
+    setShowChapterForm(false);
+    setChapterTitle('');
+    setChapterContent('');
+    setChapterNote('');
+    setMarkCompleted(false);
+    setChapterError(null);
+
+    const unsubChapters =
+      story.storyFormat === 'roman'
+        ? subscribeToStoryChapters(
+            story.storyId,
+            story.visibility,
+            user?.uid ?? null,
+            story.authorId,
+            setChapters
+          )
+        : (() => {
+            setChapters([]);
+            return () => {};
+          })();
 
     if (story.visibility !== 'public') {
       setEchoes([]);
       setHasResonated(false);
       setAuthorProfile(null);
-      return;
+      return () => {
+        unsubChapters();
+      };
     }
 
     const unsubEchoes = subscribeToStoryEchoes(story.storyId, setEchoes);
@@ -71,16 +126,27 @@ export function StoryReaderModal({
       .catch(() => setAuthorProfile(null));
 
     return () => {
+      unsubChapters();
       unsubEchoes();
       if (unsubResonance) unsubResonance();
     };
-  }, [story, user]);
+  }, [story?.storyId, story?.visibility, story?.storyFormat, user]);
 
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
+  const isRoman = story.storyFormat === 'roman';
   const theme = THEME_MAP[story.theme];
-  const paragraphs = story.content
+  const totalChapters = isRoman ? 1 + chapters.length : 1;
+  const activeFollowupChapter =
+    isRoman && activeChapterIdx > 0 ? chapters[activeChapterIdx - 1] ?? null : null;
+
+  const displayedContent = activeFollowupChapter ? activeFollowupChapter.content : story.content;
+  const displayedMinutes = activeFollowupChapter
+    ? activeFollowupChapter.readingMinutes
+    : story.readingMinutes;
+
+  const paragraphs = displayedContent
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
@@ -114,7 +180,7 @@ export function StoryReaderModal({
     }
     setEchoError(null);
     if (echoText.trim().length < FIELD_LIMITS.echoContent.min) {
-      setEchoError('Écrivez au moins 5 caractères pour déposer un écho.');
+      setEchoError('Écrivez au moins 2 caractères pour publier votre commentaire.');
       return;
     }
     setEchoBusy(true);
@@ -123,9 +189,51 @@ export function StoryReaderModal({
       await addStoryEcho(story.storyId, user.uid, displayName, replyType, echoText);
       setEchoText('');
     } catch (err) {
-      setEchoError(err instanceof Error ? err.message : 'Impossible de publier cet écho.');
+      setEchoError(
+        err instanceof Error ? err.message : 'Impossible de publier ce commentaire.'
+      );
     } finally {
       setEchoBusy(false);
+    }
+  };
+
+  const handleAddChapter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !isAuthor) return;
+    setChapterError(null);
+    if (chapterTitle.trim().length < FIELD_LIMITS.chapterTitle.min) {
+      setChapterError('Donnez un titre à ce chapitre.');
+      return;
+    }
+    if (chapterContent.trim().length < FIELD_LIMITS.chapterContent.min) {
+      setChapterError('Le chapitre doit contenir au moins 20 caractères.');
+      return;
+    }
+
+    setChapterBusy(true);
+    try {
+      const nextNum = totalChapters + 1;
+      const nextSeriesStatus: SeriesStatus = markCompleted ? 'termine' : 'en-cours';
+      await addStoryChapter({
+        story,
+        authorId: user.uid,
+        chapterNumber: nextNum,
+        title: chapterTitle,
+        content: chapterContent,
+        authorNote: chapterNote,
+        nextSeriesStatus,
+      });
+      setChapterTitle('');
+      setChapterContent('');
+      setChapterNote('');
+      setShowChapterForm(false);
+      setActiveChapterIdx(nextNum - 1);
+    } catch (err) {
+      setChapterError(
+        err instanceof Error ? err.message : 'Impossible de publier ce chapitre.'
+      );
+    } finally {
+      setChapterBusy(false);
     }
   };
 
@@ -172,10 +280,12 @@ export function StoryReaderModal({
     >
       <div className="w-full max-w-4xl bg-[#FBF9F5] border border-stone-300 rounded-lg my-auto overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-stone-500 min-w-0">
             <span className="truncate">{theme.salonName}</span>
             <span aria-hidden="true">·</span>
-            <span className="whitespace-nowrap">{story.readingMinutes} min de lecture</span>
+            <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
+            <span aria-hidden="true">·</span>
+            <span className="whitespace-nowrap tabular-nums">{displayedMinutes} min de lecture</span>
             {story.visibility === 'private' && (
               <>
                 <span aria-hidden="true">·</span>
@@ -209,11 +319,188 @@ export function StoryReaderModal({
               {story.title}
             </h1>
 
-            <div className="flex flex-wrap items-center gap-2 text-sm text-stone-600 pb-6 border-b border-stone-200 mb-8">
-              <span className="font-medium text-stone-900">{story.authorName}</span>
-              <span aria-hidden="true">·</span>
-              <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-600 pb-6 border-b border-stone-200 mb-6">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenMemberWall(story.authorId);
+                  }}
+                  className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
+                >
+                  <UserIcon className="w-3.5 h-3.5 text-stone-500" />
+                  <span>{story.authorName}</span>
+                </button>
+                <span aria-hidden="true">·</span>
+                <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                {isRoman && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{RELEASE_CADENCE_LABELS[story.releaseCadence ?? 'hebdomadaire']}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}</span>
+                  </>
+                )}
+              </div>
+
+              {isRoman && isAuthor && (
+                <button
+                  type="button"
+                  onClick={() => setShowChapterForm((prev) => !prev)}
+                  className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Publier le chapitre {totalChapters + 1}</span>
+                </button>
+              )}
             </div>
+
+            {/* Chapter Navigation Rail for Serialized Novels */}
+            {isRoman && (
+              <div className="mb-8 bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs text-stone-500">
+                  <span className="uppercase tracking-widest inline-flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5" />
+                    Table des chapitres
+                  </span>
+                  <span className="tabular-nums">
+                    {totalChapters} chapitre{totalChapters > 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setActiveChapterIdx(0)}
+                    className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded border transition-colors ${
+                      activeChapterIdx === 0
+                        ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                    }`}
+                  >
+                    Chapitre 1
+                  </button>
+                  {chapters.map((chap, idx) => {
+                    const chapIdx = idx + 1;
+                    const active = activeChapterIdx === chapIdx;
+                    return (
+                      <button
+                        key={chap.chapterId}
+                        type="button"
+                        onClick={() => setActiveChapterIdx(chapIdx)}
+                        className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded border transition-colors ${
+                          active
+                            ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                        }`}
+                      >
+                        Ch. {chap.chapterNumber} · {chap.title}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Author Next-Chapter Form */}
+            {isRoman && isAuthor && showChapterForm && (
+              <form
+                onSubmit={handleAddChapter}
+                className="mb-8 bg-white border border-stone-300 rounded-md p-5 space-y-4"
+              >
+                <h2 className="font-display text-lg font-medium text-stone-900">
+                  Publier le chapitre {totalChapters + 1}
+                </h2>
+                <div>
+                  <label htmlFor="chap-title" className="block text-xs font-medium text-stone-700 mb-1">
+                    Titre du chapitre
+                  </label>
+                  <input
+                    id="chap-title"
+                    type="text"
+                    required
+                    maxLength={FIELD_LIMITS.chapterTitle.max}
+                    value={chapterTitle}
+                    onChange={(e) => setChapterTitle(e.target.value)}
+                    placeholder="Ex. La gare du matin…"
+                    className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="chap-content" className="block text-xs font-medium text-stone-700 mb-1">
+                    Texte du chapitre
+                  </label>
+                  <textarea
+                    id="chap-content"
+                    rows={8}
+                    required
+                    maxLength={FIELD_LIMITS.chapterContent.max}
+                    value={chapterContent}
+                    onChange={(e) => setChapterContent(e.target.value)}
+                    placeholder="Poursuivez votre histoire…"
+                    className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm leading-relaxed text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="chap-note" className="block text-xs font-medium text-stone-700 mb-1">
+                    Mot de fin pour les lecteurs (facultatif)
+                  </label>
+                  <input
+                    id="chap-note"
+                    type="text"
+                    maxLength={FIELD_LIMITS.chapterNote.max}
+                    value={chapterNote}
+                    onChange={(e) => setChapterNote(e.target.value)}
+                    placeholder="Ex. Prochain chapitre dimanche prochain !"
+                    className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-stone-700">
+                  <input
+                    type="checkbox"
+                    checked={markCompleted}
+                    onChange={(e) => setMarkCompleted(e.target.checked)}
+                    className="rounded border-stone-300"
+                  />
+                  <span>Marquer ce roman comme terminé après ce chapitre</span>
+                </label>
+
+                {chapterError && (
+                  <p role="alert" className="text-xs text-red-700">
+                    {chapterError}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowChapterForm(false)}
+                    className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={chapterBusy}
+                    className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60"
+                  >
+                    {chapterBusy ? 'Publication…' : `Publier le chapitre ${totalChapters + 1}`}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {activeFollowupChapter && (
+              <div className="mb-6 pb-4 border-b border-stone-200">
+                <p className="text-xs uppercase tracking-widest text-[#1B365D]">
+                  Chapitre {activeFollowupChapter.chapterNumber}
+                </p>
+                <h2 className="font-display text-2xl font-medium text-stone-900 mt-1">
+                  {activeFollowupChapter.title}
+                </h2>
+              </div>
+            )}
 
             <div className="space-y-5 text-base sm:text-[17px] leading-[1.8] text-stone-800">
               {paragraphs.map((para, idx) => (
@@ -223,20 +510,64 @@ export function StoryReaderModal({
               ))}
             </div>
 
+            {activeFollowupChapter?.authorNote && (
+              <div className="mt-8 p-4 bg-white border border-stone-200 rounded-md text-sm text-stone-700 italic">
+                Note de {story.authorName} : « {activeFollowupChapter.authorNote} »
+              </div>
+            )}
+
+            {isRoman && totalChapters > 1 && (
+              <div className="mt-8 pt-5 border-t border-stone-200 flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  disabled={activeChapterIdx === 0}
+                  onClick={() => setActiveChapterIdx((prev) => Math.max(0, prev - 1))}
+                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 disabled:opacity-40"
+                >
+                  Chapitre précédent
+                </button>
+                <span className="text-xs text-stone-500 tabular-nums">
+                  Chapitre {activeChapterIdx + 1} / {totalChapters}
+                </span>
+                <button
+                  type="button"
+                  disabled={activeChapterIdx >= totalChapters - 1}
+                  onClick={() =>
+                    setActiveChapterIdx((prev) => Math.min(totalChapters - 1, prev + 1))
+                  }
+                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-40"
+                >
+                  Chapitre suivant
+                </button>
+              </div>
+            )}
+
             {authorProfile && (authorProfile.bio || authorProfile.listeningNote) && (
-              <div className="mt-10 p-5 bg-white border border-stone-200 rounded-md">
-                <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
-                  À propos de {authorProfile.displayName}
-                </p>
-                {authorProfile.bio && (
-                  <p className="text-sm text-stone-700 leading-relaxed">{authorProfile.bio}</p>
-                )}
-                {authorProfile.listeningNote && (
-                  <p className="text-sm text-stone-600 mt-2">
-                    <span className="font-medium text-stone-800">Disponibilité d’échange :</span>{' '}
-                    {authorProfile.listeningNote}
+              <div className="mt-10 p-5 bg-white border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
+                    À propos de {authorProfile.displayName}
                   </p>
-                )}
+                  {authorProfile.bio && (
+                    <p className="text-sm text-stone-700 leading-relaxed">{authorProfile.bio}</p>
+                  )}
+                  {authorProfile.listeningNote && (
+                    <p className="text-sm text-stone-600 mt-2">
+                      <span className="font-medium text-stone-800">Disponibilité d’échange :</span>{' '}
+                      {authorProfile.listeningNote}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenMemberWall(story.authorId);
+                  }}
+                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] border border-[#CBD6E6] bg-[#F3F6FA] rounded-md hover:bg-[#E7EEF7] whitespace-nowrap shrink-0 self-start sm:self-center"
+                >
+                  Voir son mur
+                </button>
               </div>
             )}
 
@@ -269,7 +600,7 @@ export function StoryReaderModal({
                       className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-[#1E3A8A] text-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
                     >
                       <MessageCircle className="w-4 h-4" />
-                      <span>Poursuivre la passerelle</span>
+                      <span>Poursuivre en privé</span>
                     </button>
                   ) : (
                     <button
@@ -284,14 +615,14 @@ export function StoryReaderModal({
                       className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-stone-300 text-stone-800 bg-white hover:border-[#1E3A8A] hover:text-[#1E3A8A] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
                     >
                       <MessageCircle className="w-4 h-4" />
-                      <span>Ouvrir une passerelle</span>
+                      <span>Écrire en privé à l’auteur</span>
                     </button>
                   )
                 )}
               </div>
 
               <span className="text-xs text-stone-500 tabular-nums">
-                {echoes.length} écho{echoes.length > 1 ? 's' : ''} déposé{echoes.length > 1 ? 's' : ''}
+                {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
               </span>
             </div>
 
@@ -313,7 +644,7 @@ export function StoryReaderModal({
                   maxLength={FIELD_LIMITS.messageContent.max}
                   value={bridgeMessage}
                   onChange={(e) => setBridgeMessage(e.target.value)}
-                  placeholder={`Bonjour ${story.authorName}, votre récit m’a particulièrement touché parce que…`}
+                  placeholder={`Bonjour ${story.authorName}, votre texte m’a particulièrement touché parce que…`}
                   className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1E3A8A]"
                 />
                 {bridgeError && (
@@ -334,35 +665,47 @@ export function StoryReaderModal({
                     disabled={bridgeBusy}
                     className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 whitespace-nowrap"
                   >
-                    {bridgeBusy ? 'Ouverture…' : 'Envoyer et ouvrir la passerelle'}
+                    {bridgeBusy ? 'Ouverture…' : 'Envoyer en privé'}
                   </button>
                 </div>
               </form>
             )}
 
-            {/* Echoes Section */}
+            {/* Comments & Echoes Section */}
             {story.visibility === 'public' && (
-              <section className="mt-10 pt-8 border-t border-stone-200" aria-label="Échos des lecteurs">
+              <section
+                className="mt-10 pt-8 border-t border-stone-200"
+                aria-label="Commentaires et échos des lecteurs"
+              >
                 <h2 className="font-display text-2xl font-medium text-stone-900 mb-2">
-                  Échos des lecteurs
+                  Commentaires des lecteurs
                 </h2>
                 <p className="text-sm text-stone-600 mb-6">
-                  Des réponses posées et sincères pour prolonger le récit.
+                  Réactions, retours de lecture et échos sincères sous cette histoire.
                 </p>
 
                 {echoes.length === 0 ? (
                   <p className="text-sm text-stone-500 italic py-4">
-                    Aucun écho n’a encore été déposé. Soyez la première personne à répondre à ce texte.
+                    Aucun commentaire pour l’instant. Soyez la première personne à réagir à cette histoire.
                   </p>
                 ) : (
                   <div className="divide-y divide-stone-200 mb-8">
                     {echoes.map((echo) => (
                       <div key={echo.echoId} className="py-5">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mb-2">
-                          <span className="font-semibold text-stone-900">{echo.authorName}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onClose();
+                              onOpenMemberWall(echo.authorId);
+                            }}
+                            className="font-semibold text-stone-900 hover:text-[#1B365D] hover:underline"
+                          >
+                            {echo.authorName}
+                          </button>
                           <span aria-hidden="true">·</span>
                           <span className="text-[#1E3A8A] font-medium">
-                            {ECHO_TYPE_LABELS[echo.replyType]?.label ?? 'En écho'}
+                            {ECHO_TYPE_LABELS[echo.replyType]?.label ?? 'Commentaire'}
                           </span>
                           <span aria-hidden="true">·</span>
                           <span>{formatFrenchDate(echo.createdAt?.toDate() ?? null)}</span>
@@ -381,7 +724,7 @@ export function StoryReaderModal({
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs uppercase tracking-widest text-stone-500">
-                      Déposer un écho
+                      Laisser un commentaire
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {(Object.keys(ECHO_TYPE_LABELS) as EchoReplyType[]).map((type) => (
@@ -409,7 +752,7 @@ export function StoryReaderModal({
                         maxLength={FIELD_LIMITS.echoContent.max}
                         value={echoText}
                         onChange={(e) => setEchoText(e.target.value)}
-                        placeholder="Partagez ce que ce récit réveille chez vous…"
+                        placeholder="Écrivez votre commentaire sous cette histoire…"
                         className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1E3A8A]"
                       />
                       {echoError && (
@@ -419,21 +762,21 @@ export function StoryReaderModal({
                       )}
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-xs text-stone-500">
-                          Les échos sont des contributions permanentes dans le salon.
+                          Visible par tous les lecteurs de ce salon.
                         </span>
                         <button
                           type="submit"
                           disabled={echoBusy}
                           className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 whitespace-nowrap shrink-0"
                         >
-                          {echoBusy ? 'Publication…' : 'Publier cet écho'}
+                          {echoBusy ? 'Publication…' : 'Publier le commentaire'}
                         </button>
                       </div>
                     </>
                   ) : (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
                       <p className="text-xs text-stone-600">
-                        Connectez-vous avec Google pour déposer un écho ou ouvrir une passerelle.
+                        Connectez-vous avec Google pour commenter ou écrire en privé à l’auteur.
                       </p>
                       <button
                         type="button"

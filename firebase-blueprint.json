@@ -2,7 +2,7 @@
   "entities": {
     "PublicProfile": {
       "title": "PublicProfile",
-      "description": "Public non-PII author card displayed alongside shared stories and exchanges.",
+      "description": "Public non-PII author card displayed alongside shared stories, member directory, profile wall, and exchanges.",
       "type": "object",
       "properties": {
         "userId": {
@@ -23,6 +23,33 @@
           "type": "string",
           "maxLength": 200
         },
+        "favoriteTrackTitle": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "favoriteTrackArtist": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "favoriteTrackUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "favoriteNovel": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "interests": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "avatarUrl": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "discoverable": {
+          "type": "boolean"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -33,6 +60,79 @@
         }
       },
       "required": ["userId", "displayName", "bio", "listeningNote", "createdAt", "updatedAt"]
+    },
+    "WallItem": {
+      "title": "WallItem",
+      "description": "A Yope-style profile wall card (photo, music, novel, or personal note) pinned to a member's public profile.",
+      "type": "object",
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public"]
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["photo", "music", "novel", "note"]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "subtitle": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 600
+        },
+        "mediaUrl": {
+          "type": "string",
+          "maxLength": 160000
+        },
+        "accentTone": {
+          "type": "string",
+          "enum": ["ink", "ochre", "terracotta", "sage", "sand"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "itemId",
+        "ownerId",
+        "ownerName",
+        "visibility",
+        "kind",
+        "title",
+        "subtitle",
+        "body",
+        "mediaUrl",
+        "accentTone",
+        "createdAt",
+        "updatedAt"
+      ]
     },
     "PrivateUserInfo": {
       "title": "PrivateUserInfo",
@@ -61,7 +161,7 @@
     },
     "Story": {
       "title": "Story",
-      "description": "A personal story shared in the public salon or saved as a private journal draft.",
+      "description": "A personal confession or serialized Wattpad-style novel shared in a salon or saved as a private draft.",
       "type": "object",
       "properties": {
         "storyId": {
@@ -97,6 +197,26 @@
         "theme": {
           "type": "string",
           "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+        },
+        "storyFormat": {
+          "type": "string",
+          "enum": ["confession", "roman"]
+        },
+        "releaseCadence": {
+          "type": "string",
+          "enum": ["unique", "hebdomadaire", "bihebdomadaire", "libre"]
+        },
+        "seriesStatus": {
+          "type": "string",
+          "enum": ["complet", "en-cours", "termine"]
+        },
+        "chapterCount": {
+          "type": "integer"
+        },
+        "lastChapterId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
         "promptQuestion": {
           "type": "string",
@@ -146,6 +266,73 @@
         "updatedAt"
       ]
     },
+    "Chapter": {
+      "title": "Chapter",
+      "description": "A follow-up chapter published sequentially under a Wattpad-style serialized novel.",
+      "type": "object",
+      "properties": {
+        "chapterId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyVisibility": {
+          "type": "string",
+          "enum": ["public", "private"]
+        },
+        "chapterNumber": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140
+        },
+        "content": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 12000
+        },
+        "authorNote": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "readingMinutes": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "chapterId",
+        "storyId",
+        "authorId",
+        "storyVisibility",
+        "chapterNumber",
+        "title",
+        "content",
+        "authorNote",
+        "readingMinutes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
     "Resonance": {
       "title": "Resonance",
       "description": "A quiet gesture of empathy attached by a reader to a public story.",
@@ -170,7 +357,7 @@
     },
     "Echo": {
       "title": "Echo",
-      "description": "A thoughtful written response to a public personal story.",
+      "description": "A public comment or thoughtful written response to a public story.",
       "type": "object",
       "properties": {
         "echoId": {
@@ -199,11 +386,11 @@
         },
         "replyType": {
           "type": "string",
-          "enum": ["resonance", "question", "experience"]
+          "enum": ["comment", "resonance", "question", "experience"]
         },
         "content": {
           "type": "string",
-          "minLength": 5,
+          "minLength": 2,
           "maxLength": 1500
         },
         "createdAt": {
@@ -222,15 +409,55 @@
         "createdAt"
       ]
     },
+    "SalonMessage": {
+      "title": "SalonMessage",
+      "description": "A text-only public chat message posted inside one of the five thematic salons.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "salonId": {
+          "type": "string",
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+        },
+        "senderId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["messageId", "salonId", "senderId", "senderName", "content", "createdAt"]
+    },
     "Exchange": {
       "title": "Exchange",
-      "description": "A gentle one-to-one bridge conversation between two members anchored to a shared story.",
+      "description": "A private one-to-one text conversation between two members, either direct or anchored to a shared story.",
       "type": "object",
       "properties": {
         "exchangeId": {
           "type": "string",
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["story", "direct"]
         },
         "storyId": {
           "type": "string",
@@ -305,7 +532,7 @@
     },
     "ExchangeMessage": {
       "title": "ExchangeMessage",
-      "description": "A direct message inside a one-to-one story-anchored exchange.",
+      "description": "A direct text message inside a one-to-one private exchange.",
       "type": "object",
       "properties": {
         "messageId": {
@@ -359,6 +586,12 @@
       },
       "description": "Public author profile cards without PII."
     },
+    "/publicProfiles/{userId}/wallItems/{itemId}": {
+      "schema": {
+        "$ref": "#/entities/WallItem"
+      },
+      "description": "Yope-style profile wall cards (photos, music, novels, notes) per member."
+    },
     "/users/{userId}/private/{docId}": {
       "schema": {
         "$ref": "#/entities/PrivateUserInfo"
@@ -369,7 +602,13 @@
       "schema": {
         "$ref": "#/entities/Story"
       },
-      "description": "Personal stories shared in the salon or kept as private drafts."
+      "description": "Confessions and serialized novels shared in a salon or kept as private drafts."
+    },
+    "/stories/{storyId}/chapters/{chapterId}": {
+      "schema": {
+        "$ref": "#/entities/Chapter"
+      },
+      "description": "Sequential chapters attached to serialized novels."
     },
     "/stories/{storyId}/resonances/{userId}": {
       "schema": {
@@ -381,19 +620,25 @@
       "schema": {
         "$ref": "#/entities/Echo"
       },
-      "description": "Thoughtful replies attached to a public story."
+      "description": "Public comments and thoughtful replies attached to a public story."
+    },
+    "/salons/{salonId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/SalonMessage"
+      },
+      "description": "Text-only public chat messages inside each salon."
     },
     "/exchanges/{exchangeId}": {
       "schema": {
         "$ref": "#/entities/Exchange"
       },
-      "description": "One-to-one story-anchored exchanges between two members."
+      "description": "One-to-one private exchanges between two members (story-anchored or direct)."
     },
     "/exchanges/{exchangeId}/messages/{messageId}": {
       "schema": {
         "$ref": "#/entities/ExchangeMessage"
       },
-      "description": "Messages within a one-to-one exchange."
+      "description": "Text messages within a one-to-one private exchange."
     }
   }
 }

@@ -1,4 +1,10 @@
-import { EchoReplyType, StoryThemeId } from '../types/story';
+import {
+  EchoReplyType,
+  ReleaseCadence,
+  SeriesStatus,
+  StoryFormat,
+  StoryThemeId,
+} from '../types/story';
 
 export type SalonEmblemType = 'bridge' | 'horizon' | 'chairs' | 'leaf' | 'cup';
 
@@ -27,6 +33,8 @@ export interface ThemeDefinition {
   atmosphere: string;
   description: string;
   curatorialNote: string;
+  epigraph: string;
+  roomPillars: Array<{ title: string; body: string }>;
   promptQuestion: string;
   starterSentence: string;
   invitationTopics: string[];
@@ -51,6 +59,22 @@ export const STORY_THEMES: ThemeDefinition[] = [
       'Pourquoi nous fabriquons des outils, des textes ou des logiciels : ce que créer permet de dire lorsque les mots manquent.',
     curatorialNote:
       'Ce salon rassemble celles et ceux qui construisent — un code, une histoire, une image, un lieu — parce que fabriquer reste leur manière la plus sincère d’aller vers les autres.',
+    epigraph:
+      '« Créer, c’est parfois la façon la plus douce de dire bonjour sans savoir par où commencer. »',
+    roomPillars: [
+      {
+        title: 'Ce qu’on y dépose',
+        body: 'L’histoire derrière un projet, un code, un objet ou un carnet qui cherche à rapprocher les gens.',
+      },
+      {
+        title: 'L’esprit de la pièce',
+        body: 'Curiosité artisanale et sincérité : on parle autant des doutes de fabrication que du but humain.',
+      },
+      {
+        title: 'Comment réagir',
+        body: 'Demandez ce qui a déclenché l’idée, ou racontez à votre tour comment vous créez pour relier.',
+      },
+    ],
     promptQuestion:
       'Pourquoi avez-vous choisi de créer quelque chose qui met les gens en relation ?',
     starterSentence:
@@ -87,6 +111,22 @@ export const STORY_THEMES: ThemeDefinition[] = [
       "Les tournants discrets, les choix d'orientation, les passions silencieuses qui tracent une route personnelle.",
     curatorialNote:
       'Une pièce lumineuse dédiée aux débuts incertains, aux doutes avant de se lancer et aux petits déclics qui ont doucement changé la direction d’une vie.',
+    epigraph:
+      '« Il y a souvent un long silence avant qu’un choix ne devienne évident aux yeux des autres. »',
+    roomPillars: [
+      {
+        title: 'Ce qu’on y dépose',
+        body: 'Les carrefours d’orientation, les envies tardives et les premiers pas hésitants.',
+      },
+      {
+        title: 'L’esprit de la pièce',
+        body: 'Bienveillance envers les chemins sinueux : personne ici n’avait tout prévu dès le départ.',
+      },
+      {
+        title: 'Comment réagir',
+        body: 'Partagez un moment où vous avez vous aussi changé de cap ou douté avant d’avancer.',
+      },
+    ],
     promptQuestion:
       "Quel déclic ou quelle hésitation a orienté votre parcours jusqu'ici ?",
     starterSentence:
@@ -123,6 +163,22 @@ export const STORY_THEMES: ThemeDefinition[] = [
       'Ces moments où un inconnu, un camarade ou un échange bref laisse une trace durable sans grand discours.',
     curatorialNote:
       'Ici, on garde la trace des conversations de cinq minutes, des regards bienveillants et des présences qui ont compté sans même le savoir.',
+    epigraph:
+      '« Certaines rencontres ne durent que quelques instants et éclairent pourtant plusieurs années. »',
+    roomPillars: [
+      {
+        title: 'Ce qu’on y dépose',
+        body: 'Un mot reçu au bon moment, une complicité discrète ou un visage croisé dans la foule.',
+      },
+      {
+        title: 'L’esprit de la pièce',
+        body: 'Une attention fine portée aux gestes modestes et aux liens qui naissent sans bruit.',
+      },
+      {
+        title: 'Comment réagir',
+        body: 'Racontez à votre tour une phrase ou une présence discrète dont vous vous souvenez encore.',
+      },
+    ],
     promptQuestion:
       "Quelle rencontre silencieuse a compté pour vous sans que l'autre personne ne le sache ?",
     starterSentence:
@@ -159,6 +215,22 @@ export const STORY_THEMES: ThemeDefinition[] = [
       'Mettre des mots calmes sur la difficulté à communiquer spontanément, et découvrir que d’autres ressentent la même chose.',
     curatorialNote:
       'Un espace sans pression ni bruit pour celles et ceux qui trouvent plus juste d’écrire que de parler fort. Ici, la retenue rapproche au lieu d’isoler.',
+    epigraph:
+      '« Écrire n’efface pas la timidité, mais cela permet enfin de ne plus la porter seul. »',
+    roomPillars: [
+      {
+        title: 'Ce qu’on y dépose',
+        body: 'Les difficultés à communiquer spontanément, les soirs calmes et ce que la page écrite libère.',
+      },
+      {
+        title: 'L’esprit de la pièce',
+        body: 'Écoute lente, zéro jugement et respect du rythme de chacun pour répondre ou se confier.',
+      },
+      {
+        title: 'Comment réagir',
+        body: 'Un simple « Cela résonne » ou un écho posé montre déjà à l’auteur qu’il a été entendu.',
+      },
+    ],
     promptQuestion:
       "À quel moment avez-vous ressenti que le silence pesait moins lorsque vous l'écriviez ?",
     starterSentence:
@@ -195,6 +267,22 @@ export const STORY_THEMES: ThemeDefinition[] = [
       'Un carnet oublié, un trajet matinal, une tasse de thé : les détails ordinaires qui disent beaucoup de notre vie intérieure.',
     curatorialNote:
       'Le salon des habitudes minuscules et des objets fidèles : parce qu’une façon de nouer son carnet ou d’observer la rue raconte parfois tout d’une personne.',
+    epigraph:
+      '« Ce sont les gestes minuscules répétés chaque matin qui dessinent le portrait le plus fidèle. »',
+    roomPillars: [
+      {
+        title: 'Ce qu’on y dépose',
+        body: 'Une tasse de thé, un trajet en train, un carnet d’annotations ou un détail de la semaine.',
+      },
+      {
+        title: 'L’esprit de la pièce',
+        body: 'Rien n’est trop petit pour être raconté dès lors qu’on l’observe avec justesse.',
+      },
+      {
+        title: 'Comment réagir',
+        body: 'Rebondissez sur un détail familier ou ouvrez une passerelle autour d’une passion commune.',
+      },
+    ],
     promptQuestion:
       "Quel détail simple de votre semaine raconte quelque chose d'essentiel sur vous ?",
     starterSentence:
@@ -230,6 +318,10 @@ export const THEME_MAP: Record<StoryThemeId, ThemeDefinition> = STORY_THEMES.red
 );
 
 export const ECHO_TYPE_LABELS: Record<EchoReplyType, { label: string; hint: string }> = {
+  comment: {
+    label: 'Commentaire',
+    hint: 'Laisser un commentaire libre ou un ressenti juste en dessous de l’histoire.',
+  },
   resonance: {
     label: 'En écho',
     hint: 'Dire ce qui vous a touché ou fait réfléchir dans ce récit.',
@@ -242,6 +334,30 @@ export const ECHO_TYPE_LABELS: Record<EchoReplyType, { label: string; hint: stri
     label: 'Question ouverte',
     hint: 'Prolonger le dialogue par une question sincère et bienveillante.',
   },
+};
+
+export const STORY_FORMAT_LABELS: Record<StoryFormat, { label: string; description: string }> = {
+  confession: {
+    label: 'Confession',
+    description: 'Un texte intime, un souvenir ou une confidence en un seul souffle.',
+  },
+  roman: {
+    label: 'Roman à chapitres',
+    description: 'Une histoire suivie publiée chapitre par chapitre, façon feuilleton.',
+  },
+};
+
+export const RELEASE_CADENCE_LABELS: Record<ReleaseCadence, string> = {
+  unique: 'Texte complet',
+  hebdomadaire: 'Parution hebdomadaire',
+  bihebdomadaire: 'Deux chapitres par semaine',
+  libre: 'Au rythme du créateur',
+};
+
+export const SERIES_STATUS_LABELS: Record<SeriesStatus, string> = {
+  complet: 'Complet',
+  'en-cours': 'En cours de parution',
+  termine: 'Terminé',
 };
 
 export function formatFrenchDate(date: Date | null): string {
@@ -263,4 +379,12 @@ export function formatFrenchDate(date: Date | null): string {
 export function estimateReadingMinutes(text: string): number {
   const words = text.trim().split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.min(60, Math.ceil(words / 180)));
+}
+
+export function formatCumulativeMinutes(totalMinutes: number): string {
+  if (totalMinutes <= 0) return '0 min';
+  if (totalMinutes < 60) return `${totalMinutes} min`;
+  const hours = Math.floor(totalMinutes / 60);
+  const mins = totalMinutes % 60;
+  return mins === 0 ? `${hours} h` : `${hours} h ${mins} min`;
 }

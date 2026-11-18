@@ -9,15 +9,49 @@ export type StoryThemeId =
 
 export type StoryVisibility = 'public' | 'private';
 
-export type EchoReplyType = 'resonance' | 'question' | 'experience';
+export type StoryFormat = 'confession' | 'roman';
+
+export type ReleaseCadence = 'unique' | 'hebdomadaire' | 'bihebdomadaire' | 'libre';
+
+export type SeriesStatus = 'complet' | 'en-cours' | 'termine';
+
+export type EchoReplyType = 'comment' | 'resonance' | 'question' | 'experience';
+
+export type ExchangeKind = 'story' | 'direct';
 
 export type ExchangeStatus = 'active' | 'archived';
+
+export type WallItemKind = 'photo' | 'music' | 'novel' | 'note';
+
+export type WallAccentTone = 'ink' | 'ochre' | 'terracotta' | 'sage' | 'sand';
 
 export interface PublicProfile {
   userId: string;
   displayName: string;
   bio: string;
   listeningNote: string;
+  favoriteTrackTitle?: string;
+  favoriteTrackArtist?: string;
+  favoriteTrackUrl?: string;
+  favoriteNovel?: string;
+  interests?: string;
+  avatarUrl?: string;
+  discoverable?: boolean;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
+export interface WallItem {
+  itemId: string;
+  ownerId: string;
+  ownerName: string;
+  visibility: 'public';
+  kind: WallItemKind;
+  title: string;
+  subtitle: string;
+  body: string;
+  mediaUrl: string;
+  accentTone: WallAccentTone;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -30,12 +64,31 @@ export interface Story {
   excerpt: string;
   content: string;
   theme: StoryThemeId;
+  storyFormat?: StoryFormat;
+  releaseCadence?: ReleaseCadence;
+  seriesStatus?: SeriesStatus;
+  chapterCount?: number;
+  lastChapterId?: string;
   promptQuestion: string;
   visibility: StoryVisibility;
   readingMinutes: number;
   resonanceCount: number;
   echoCount: number;
   lastEchoId?: string;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
+export interface Chapter {
+  chapterId: string;
+  storyId: string;
+  authorId: string;
+  storyVisibility: StoryVisibility;
+  chapterNumber: number;
+  title: string;
+  content: string;
+  authorNote: string;
+  readingMinutes: number;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -51,8 +104,18 @@ export interface Echo {
   createdAt: Timestamp | null;
 }
 
+export interface SalonMessage {
+  messageId: string;
+  salonId: StoryThemeId;
+  senderId: string;
+  senderName: string;
+  content: string;
+  createdAt: Timestamp | null;
+}
+
 export interface Exchange {
   exchangeId: string;
+  kind?: ExchangeKind;
   storyId: string;
   storyTitle: string;
   initiatorId: string;
@@ -83,11 +146,25 @@ export const FIELD_LIMITS = {
   displayName: { min: 2, max: 60 },
   bio: { max: 320 },
   listeningNote: { max: 200 },
+  favoriteTrackTitle: { max: 120 },
+  favoriteTrackArtist: { max: 100 },
+  favoriteTrackUrl: { max: 500 },
+  favoriteNovel: { max: 140 },
+  interests: { max: 240 },
+  avatarUrl: { max: 500 },
+  wallTitle: { min: 1, max: 140 },
+  wallSubtitle: { max: 140 },
+  wallBody: { max: 600 },
+  wallMediaUrl: { max: 160000 },
   title: { min: 3, max: 140 },
   excerpt: { min: 10, max: 300 },
   content: { min: 20, max: 8000 },
+  chapterTitle: { min: 2, max: 140 },
+  chapterContent: { min: 20, max: 12000 },
+  chapterNote: { max: 400 },
   promptQuestion: { max: 240 },
-  echoContent: { min: 5, max: 1500 },
+  echoContent: { min: 2, max: 1500 },
+  salonChatContent: { min: 1, max: 1000 },
   messageContent: { min: 1, max: 2000 },
   lastMessagePreview: { max: 160 },
 } as const;

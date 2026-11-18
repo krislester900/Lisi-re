@@ -1,8 +1,23 @@
 import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { BookOpen, Feather, X } from 'lucide-react';
 import { createStory, updateStory } from '../lib/storyService';
-import { estimateReadingMinutes, STORY_THEMES, THEME_MAP } from '../lib/themes';
-import { FIELD_LIMITS, Story, StoryThemeId, StoryVisibility } from '../types/story';
+import {
+  estimateReadingMinutes,
+  RELEASE_CADENCE_LABELS,
+  SERIES_STATUS_LABELS,
+  STORY_FORMAT_LABELS,
+  STORY_THEMES,
+  THEME_MAP,
+} from '../lib/themes';
+import {
+  FIELD_LIMITS,
+  ReleaseCadence,
+  SeriesStatus,
+  Story,
+  StoryFormat,
+  StoryThemeId,
+  StoryVisibility,
+} from '../types/story';
 
 interface StoryComposerModalProps {
   isOpen: boolean;
@@ -13,7 +28,7 @@ interface StoryComposerModalProps {
   initialPrompt?: string;
   initialStarter?: string;
   editingStory?: Story | null;
-  onSaved: (storyId: string, visibility: StoryVisibility) => void;
+  onSaved: (storyId: string, visibility: StoryVisibility, theme: StoryThemeId) => void;
 }
 
 export function StoryComposerModal({
@@ -28,6 +43,9 @@ export function StoryComposerModal({
   onSaved,
 }: StoryComposerModalProps) {
   const [theme, setTheme] = useState<StoryThemeId>(initialTheme);
+  const [storyFormat, setStoryFormat] = useState<StoryFormat>('confession');
+  const [releaseCadence, setReleaseCadence] = useState<ReleaseCadence>('hebdomadaire');
+  const [seriesStatus, setSeriesStatus] = useState<SeriesStatus>('en-cours');
   const [promptQuestion, setPromptQuestion] = useState(
     initialPrompt ?? THEME_MAP[initialTheme].promptQuestion
   );
@@ -43,6 +61,9 @@ export function StoryComposerModal({
     setError(null);
     if (editingStory) {
       setTheme(editingStory.theme);
+      setStoryFormat(editingStory.storyFormat ?? 'confession');
+      setReleaseCadence(editingStory.releaseCadence ?? 'hebdomadaire');
+      setSeriesStatus(editingStory.seriesStatus ?? 'en-cours');
       setPromptQuestion(editingStory.promptQuestion);
       setTitle(editingStory.title);
       setContent(editingStory.content);
@@ -51,6 +72,9 @@ export function StoryComposerModal({
     } else {
       const nextTheme = initialTheme || 'creation';
       setTheme(nextTheme);
+      setStoryFormat('confession');
+      setReleaseCadence('hebdomadaire');
+      setSeriesStatus('en-cours');
       setPromptQuestion(initialPrompt ?? THEME_MAP[nextTheme].promptQuestion);
       setTitle('');
       setContent(initialStarter ?? '');
@@ -92,26 +116,23 @@ export function StoryComposerModal({
 
     setSubmitting(true);
     try {
+      const payload = {
+        title,
+        excerpt,
+        content,
+        theme,
+        storyFormat,
+        releaseCadence: storyFormat === 'confession' ? 'unique' : releaseCadence,
+        seriesStatus: storyFormat === 'confession' ? 'complet' : seriesStatus,
+        promptQuestion,
+        visibility,
+      };
       if (editingStory) {
-        await updateStory(editingStory.storyId, authorName, {
-          title,
-          excerpt,
-          content,
-          theme,
-          promptQuestion,
-          visibility,
-        });
-        onSaved(editingStory.storyId, visibility);
+        await updateStory(editingStory.storyId, authorName, payload);
+        onSaved(editingStory.storyId, visibility, theme);
       } else {
-        const createdId = await createStory(authorId, authorName, {
-          title,
-          excerpt,
-          content,
-          theme,
-          promptQuestion,
-          visibility,
-        });
-        onSaved(createdId, visibility);
+        const createdId = await createStory(authorId, authorName, payload);
+        onSaved(createdId, visibility, theme);
       }
       onClose();
     } catch (err) {
@@ -136,10 +157,12 @@ export function StoryComposerModal({
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
           <div>
             <p className="text-xs uppercase tracking-widest text-stone-500">
-              {editingStory ? 'Modifier un récit' : 'Table d’écriture'}
+              {editingStory ? 'Modifier un texte' : 'Table d’écriture'}
             </p>
             <h2 id="composer-title" className="font-display text-xl font-medium text-stone-900">
-              {editingStory ? 'Relire et ajuster votre texte' : 'Déposer une histoire personnelle'}
+              {editingStory
+                ? 'Relire et ajuster votre publication'
+                : 'Publier une confession ou un roman'}
             </h2>
           </div>
           <button
@@ -153,6 +176,91 @@ export function StoryComposerModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[82vh] overflow-y-auto">
+          {/* Format Selector: Confession vs Serialized Roman */}
+          <div className="space-y-2">
+            <span className="block text-xs uppercase tracking-widest text-stone-500">
+              Format de l’histoire
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(
+                [
+                  { id: 'confession', icon: Feather },
+                  { id: 'roman', icon: BookOpen },
+                ] as const
+              ).map((item) => {
+                const Icon = item.icon;
+                const active = storyFormat === item.id;
+                const meta = STORY_FORMAT_LABELS[item.id];
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setStoryFormat(item.id)}
+                    className={`text-left p-4 rounded-md border transition-colors ${
+                      active
+                        ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
+                        : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon
+                        className={`w-4 h-4 ${active ? 'text-[#1B365D]' : 'text-stone-500'}`}
+                      />
+                      <span className="text-sm font-semibold text-stone-900">{meta.label}</span>
+                    </div>
+                    <p className="text-xs text-stone-600 leading-relaxed">{meta.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {storyFormat === 'roman' && (
+            <div className="bg-white border border-stone-200 rounded-md p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="roman-cadence"
+                  className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                >
+                  Rythme de parution
+                </label>
+                <select
+                  id="roman-cadence"
+                  value={releaseCadence}
+                  onChange={(e) => setReleaseCadence(e.target.value as ReleaseCadence)}
+                  className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                >
+                  {(['hebdomadaire', 'bihebdomadaire', 'libre'] as ReleaseCadence[]).map((cad) => (
+                    <option key={cad} value={cad}>
+                      {RELEASE_CADENCE_LABELS[cad]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="roman-status"
+                  className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                >
+                  Avancement du roman
+                </label>
+                <select
+                  id="roman-status"
+                  value={seriesStatus}
+                  onChange={(e) => setSeriesStatus(e.target.value as SeriesStatus)}
+                  className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                >
+                  {(['en-cours', 'termine'] as SeriesStatus[]).map((st) => (
+                    <option key={st} value={st}>
+                      {SERIES_STATUS_LABELS[st]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           <div>
             <span className="block text-xs uppercase tracking-widest text-stone-500 mb-2">
               Salon de destination
@@ -177,9 +285,7 @@ export function StoryComposerModal({
                           }
                     }
                     className={`min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                      active
-                        ? ''
-                        : 'bg-white text-stone-800 hover:bg-stone-50'
+                      active ? '' : 'bg-white text-stone-800 hover:bg-stone-50'
                     }`}
                   >
                     {item.romanIndex} · {item.salonName}
@@ -221,7 +327,7 @@ export function StoryComposerModal({
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
               <label htmlFor="story-title" className="text-sm font-medium text-stone-800">
-                Titre du récit
+                {storyFormat === 'roman' ? 'Titre du roman' : 'Titre de la confession'}
               </label>
               <span className="text-xs text-stone-500 tabular-nums">
                 {title.length}/{FIELD_LIMITS.title.max}
@@ -234,7 +340,11 @@ export function StoryComposerModal({
               maxLength={FIELD_LIMITS.title.max}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Un titre simple et sincère…"
+              placeholder={
+                storyFormat === 'roman'
+                  ? 'Ex. Les Lettres de novembre…'
+                  : 'Un titre simple et sincère…'
+              }
               className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-md font-display text-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
             />
           </div>
@@ -242,7 +352,7 @@ export function StoryComposerModal({
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
               <label htmlFor="story-content" className="text-sm font-medium text-stone-800">
-                Votre histoire
+                {storyFormat === 'roman' ? 'Chapitre 1 — Ouverture du roman' : 'Votre confession'}
               </label>
               <span className="text-xs text-stone-500 tabular-nums">
                 {content.length}/{FIELD_LIMITS.content.max} · {readingMinutes} min de lecture
@@ -255,7 +365,11 @@ export function StoryComposerModal({
               maxLength={FIELD_LIMITS.content.max}
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Prenez votre temps. Racontez un souvenir, une intention, ce que vous aimeriez partager avec quelqu’un qui saura l’écouter…"
+              placeholder={
+                storyFormat === 'roman'
+                  ? 'Écrivez le premier chapitre de votre roman. Vous pourrez ensuite ajouter les chapitres suivants au rythme choisi…'
+                  : 'Prenez votre temps. Confiez un souvenir, une pensée ou ce que vous aimeriez partager avec quelqu’un qui saura l’écouter…'
+              }
               className="w-full px-4 py-3 bg-white border border-stone-200 rounded-md text-base leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
             />
           </div>
@@ -263,7 +377,9 @@ export function StoryComposerModal({
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
               <label htmlFor="story-excerpt" className="text-sm font-medium text-stone-800">
-                Accroche affichée dans le salon (facultative)
+                {storyFormat === 'roman'
+                  ? 'Synopsis ou accroche affichée dans le salon (facultatif)'
+                  : 'Accroche affichée dans le salon (facultative)'}
               </label>
               <span className="text-xs text-stone-500 tabular-nums">
                 {excerpt.length}/{FIELD_LIMITS.excerpt.max}
@@ -275,7 +391,7 @@ export function StoryComposerModal({
               maxLength={FIELD_LIMITS.excerpt.max}
               value={excerpt}
               onChange={(e) => setExcerpt(e.target.value)}
-              placeholder="Laissée vide, les premières lignes de votre récit seront utilisées."
+              placeholder="Laissé vide, les premières lignes de votre texte seront utilisées."
               className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
             />
           </div>

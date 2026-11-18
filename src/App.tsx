@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, BookOpen, Feather, Heart, MessageCircle, Search, X } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -6,6 +6,7 @@ import { ExchangesView } from './components/ExchangesView';
 import { JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
+import { MembersDirectoryView } from './components/MembersDirectoryView';
 import { SalonEmblem } from './components/SalonEmblem';
 import { SalonRoomView } from './components/SalonRoomView';
 import { StoryComposerModal } from './components/StoryComposerModal';
@@ -14,22 +15,73 @@ import { ThemesView } from './components/ThemesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { db } from './lib/firebase';
 import {
+  buildDirectExchangeId,
+  subscribeToDiscoverableProfiles,
   subscribeToPublicStories,
   subscribeToUserExchanges,
   subscribeToUserStories,
 } from './lib/storyService';
-import { formatFrenchDate, STORY_THEMES, THEME_MAP } from './lib/themes';
-import { Exchange, Story, StoryThemeId } from './types/story';
+import { formatFrenchDate, STORY_FORMAT_LABELS, STORY_THEMES, THEME_MAP } from './lib/themes';
+import { Exchange, PublicProfile, Story, StoryThemeId } from './types/story';
 
-type NavTab = 'recits' | 'themes' | 'passerelles' | 'carnet';
+type NavTab = 'recits' | 'membres' | 'themes' | 'passerelles' | 'carnet';
+
+const VALID_SALON_IDS = new Set<string>(STORY_THEMES.map((t) => t.id));
+
+function parseLocationPath(pathname: string): {
+  tab: NavTab;
+  salonId: StoryThemeId | null;
+  memberId: string | null;
+} {
+  const clean = pathname.replace(/\/+$/, '') || '/';
+  if (clean.startsWith('/salons/')) {
+    const slug = clean.slice('/salons/'.length);
+    if (VALID_SALON_IDS.has(slug)) {
+      return { tab: 'recits', salonId: slug as StoryThemeId, memberId: null };
+    }
+  }
+  if (clean === '/membres') return { tab: 'membres', salonId: null, memberId: null };
+  if (clean.startsWith('/membres/')) {
+    const memberSlug = decodeURIComponent(clean.slice('/membres/'.length));
+    if (memberSlug) {
+      return { tab: 'membres', salonId: null, memberId: memberSlug };
+    }
+  }
+  if (clean === '/themes') return { tab: 'themes', salonId: null, memberId: null };
+  if (clean === '/passerelles') return { tab: 'passerelles', salonId: null, memberId: null };
+  if (clean === '/carnet') return { tab: 'carnet', salonId: null, memberId: null };
+  return { tab: 'recits', salonId: null, memberId: null };
+}
+
+function buildLocationPath(
+  tab: NavTab,
+  salonId: StoryThemeId | null,
+  memberId: string | null = null
+): string {
+  if (tab === 'membres') {
+    return memberId ? `/membres/${encodeURIComponent(memberId)}` : '/membres';
+  }
+  if (tab === 'themes') return '/themes';
+  if (tab === 'passerelles') return '/passerelles';
+  if (tab === 'carnet') return '/carnet';
+  if (salonId) return `/salons/${salonId}`;
+  return '/';
+}
 
 function SalonApp() {
   const { user, profile, authError, signInWithGoogle, clearAuthError } = useAuth();
-  const [activeTab, setActiveTab] = useState<NavTab>('recits');
-  const [activeSalonId, setActiveSalonId] = useState<StoryThemeId | null>(null);
+  const initialRoute = useMemo(() => parseLocationPath(window.location.pathname), []);
+  const [activeTab, setActiveTab] = useState<NavTab>(initialRoute.tab);
+  const [highlightedTab, setHighlightedTab] = useState<NavTab>(initialRoute.tab);
+  const [activeSalonId, setActiveSalonId] = useState<StoryThemeId | null>(initialRoute.salonId);
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(initialRoute.memberId);
+  const [isViewFading, setIsViewFading] = useState(false);
+  const navTimerRef = useRef<number | null>(null);
   const [publicStories, setPublicStories] = useState<Story[]>([]);
   const [myStories, setMyStories] = useState<Story[]>([]);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const [discoverableProfiles, setDiscoverableProfiles] = useState<PublicProfile[]>([]);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [storiesLoaded, setStoriesLoaded] = useState(false);
 
   const [themeFilter, setThemeFilter] = useState<'all' | StoryThemeId>('all');
@@ -39,6 +91,7 @@ function SalonApp() {
 
   const [readingStory, setReadingStory] = useState<Story | null>(null);
   const [selectedExchangeId, setSelectedExchangeId] = useState<string | null>(null);
+  const [pendingDirectRecipientId, setPendingDirectRecipientId] = useState<string | null>(null);
 
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingStory, setEditingStory] = useState<Story | null>(null);
@@ -62,13 +115,20 @@ function SalonApp() {
     if (!user) {
       setMyStories([]);
       setExchanges([]);
+      setDiscoverableProfiles([]);
+      setProfilesLoaded(false);
       return;
     }
     const unsubMyStories = subscribeToUserStories(user.uid, setMyStories);
     const unsubExchanges = subscribeToUserExchanges(user.uid, setExchanges);
+    const unsubProfiles = subscribeToDiscoverableProfiles((profilesList) => {
+      setDiscoverableProfiles(profilesList);
+      setProfilesLoaded(true);
+    });
     return () => {
       unsubMyStories();
       unsubExchanges();
+      unsubProfiles();
     };
   }, [user]);
 
@@ -157,10 +217,126 @@ function SalonApp() {
     return counts;
   }, [publicStories]);
 
+  const applyRouteChangeWithFade = (
+    tab: NavTab,
+    salonId: StoryThemeId | null,
+    memberId: string | null
+  ) => {
+    setHighlightedTab(tab);
+
+    if (navTimerRef.current !== null) {
+      window.clearTimeout(navTimerRef.current);
+      navTimerRef.current = null;
+    }
+
+    const reducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (reducedMotion) {
+      setActiveTab(tab);
+      setActiveSalonId(salonId);
+      setSelectedMemberId(memberId);
+      setIsViewFading(false);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+
+    setIsViewFading(true);
+    navTimerRef.current = window.setTimeout(() => {
+      navTimerRef.current = null;
+      setActiveTab(tab);
+      setActiveSalonId(salonId);
+      setSelectedMemberId(memberId);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      window.requestAnimationFrame(() => {
+        setIsViewFading(false);
+      });
+    }, 135);
+  };
+
+  const navigateTo = (
+    tab: NavTab,
+    salonId: StoryThemeId | null = null,
+    memberId: string | null = null
+  ) => {
+    if (
+      tab === activeTab &&
+      salonId === activeSalonId &&
+      memberId === selectedMemberId &&
+      !isViewFading
+    ) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    const nextPath = buildLocationPath(tab, salonId, memberId);
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState({ tab, salonId, memberId }, '', nextPath);
+    }
+    applyRouteChangeWithFade(tab, salonId, memberId);
+  };
+
+  useEffect(() => {
+    const onPopState = () => {
+      const parsed = parseLocationPath(window.location.pathname);
+      applyRouteChangeWithFade(parsed.tab, parsed.salonId, parsed.memberId);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (navTimerRef.current !== null) {
+        window.clearTimeout(navTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'recits' && activeSalonId) {
+      const salon = THEME_MAP[activeSalonId];
+      document.title = `${salon.salonName} — Lisière`;
+    } else if (activeTab === 'membres') {
+      document.title = selectedMemberId ? 'Mur du membre — Lisière' : 'Membres et murs — Lisière';
+    } else if (activeTab === 'themes') {
+      document.title = 'Thèmes et fils d’écriture — Lisière';
+    } else if (activeTab === 'passerelles') {
+      document.title = 'Passerelles privées — Lisière';
+    } else if (activeTab === 'carnet') {
+      document.title = 'Mon carnet — Lisière';
+    } else {
+      document.title = 'Lisière — Récits personnels et échanges humains';
+    }
+  }, [activeTab, activeSalonId, selectedMemberId]);
+
   const enterSalon = (salonId: StoryThemeId | null) => {
-    setActiveSalonId(salonId);
-    setActiveTab('recits');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateTo('recits', salonId, null);
+  };
+
+  const openMemberWall = (memberId: string) => {
+    setReadingStory(null);
+    navigateTo('membres', null, memberId);
+  };
+
+  const handleStartDirectChat = (member: PublicProfile) => {
+    if (!user) {
+      void signInWithGoogle();
+      return;
+    }
+    const directId = buildDirectExchangeId(user.uid, member.userId);
+    const existing = exchanges.find(
+      (ex) =>
+        ex.exchangeId === directId ||
+        ((ex.kind === 'direct' || ex.storyId === 'direct') &&
+          ((ex.initiatorId === user.uid && ex.recipientId === member.userId) ||
+            (ex.recipientId === user.uid && ex.initiatorId === member.userId)))
+    );
+    if (existing) {
+      setSelectedExchangeId(existing.exchangeId);
+      setPendingDirectRecipientId(null);
+    } else {
+      setPendingDirectRecipientId(member.userId);
+    }
+    navigateTo('passerelles');
   };
 
   const leadStory = filteredPublicStories[0] ?? null;
@@ -182,7 +358,7 @@ function SalonApp() {
             <LisiereLogo className="h-8 w-auto" />
           </button>
 
-          {/* Zone 2: 4 concise single-line text nav links */}
+          {/* Zone 2: 5 concise single-line text nav links */}
           <nav
             aria-label="Navigation principale"
             className="hidden md:flex items-center gap-7 text-sm font-medium"
@@ -191,7 +367,7 @@ function SalonApp() {
               type="button"
               onClick={() => enterSalon(null)}
               className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                activeTab === 'recits'
+                highlightedTab === 'recits'
                   ? 'text-stone-900 border-[#1E3A8A]'
                   : 'text-stone-600 border-transparent hover:text-stone-900'
               }`}
@@ -200,9 +376,20 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('themes')}
+              onClick={() => navigateTo('membres', null, null)}
               className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                activeTab === 'themes'
+                highlightedTab === 'membres'
+                  ? 'text-stone-900 border-[#1E3A8A]'
+                  : 'text-stone-600 border-transparent hover:text-stone-900'
+              }`}
+            >
+              Membres
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('themes')}
+              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
+                highlightedTab === 'themes'
                   ? 'text-stone-900 border-[#1E3A8A]'
                   : 'text-stone-600 border-transparent hover:text-stone-900'
               }`}
@@ -211,9 +398,9 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('passerelles')}
+              onClick={() => navigateTo('passerelles')}
               className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                activeTab === 'passerelles'
+                highlightedTab === 'passerelles'
                   ? 'text-stone-900 border-[#1E3A8A]'
                   : 'text-stone-600 border-transparent hover:text-stone-900'
               }`}
@@ -222,9 +409,9 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('carnet')}
+              onClick={() => navigateTo('carnet')}
               className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                activeTab === 'carnet'
+                highlightedTab === 'carnet'
                   ? 'text-stone-900 border-[#1E3A8A]'
                   : 'text-stone-600 border-transparent hover:text-stone-900'
               }`}
@@ -263,6 +450,7 @@ function SalonApp() {
           {(
             [
               { id: 'recits', label: 'Salons' },
+              { id: 'membres', label: 'Membres' },
               { id: 'themes', label: 'Thèmes' },
               {
                 id: 'passerelles',
@@ -274,15 +462,9 @@ function SalonApp() {
             <button
               key={item.id}
               type="button"
-              onClick={() => {
-                if (item.id === 'recits') {
-                  enterSalon(null);
-                } else {
-                  setActiveTab(item.id);
-                }
-              }}
-              className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 ${
-                activeTab === item.id
+              onClick={() => navigateTo(item.id, null, null)}
+              className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 transition-colors ${
+                highlightedTab === item.id
                   ? 'text-stone-900 border-[#1E3A8A]'
                   : 'text-stone-600 border-transparent'
               }`}
@@ -329,7 +511,11 @@ function SalonApp() {
         </div>
       )}
 
-      <main className="flex-1">
+      <main
+        className={`flex-1 transition-opacity duration-200 ease-out ${
+          isViewFading ? 'opacity-0' : 'opacity-100'
+        }`}
+      >
         {activeTab === 'recits' && activeSalonId !== null && (
           <SalonRoomView
             salonId={activeSalonId}
@@ -340,6 +526,24 @@ function SalonApp() {
             onWriteInSalon={(theme, prompt, starter) =>
               void openComposer({ theme, prompt, starter })
             }
+            onOpenMemberWall={openMemberWall}
+          />
+        )}
+
+        {activeTab === 'membres' && (
+          <MembersDirectoryView
+            profiles={discoverableProfiles}
+            profilesLoaded={profilesLoaded}
+            selectedMemberId={selectedMemberId}
+            publicStories={publicStories}
+            existingExchanges={exchanges}
+            onSelectMember={(memberId) => navigateTo('membres', null, memberId)}
+            onReadStory={(story) => setReadingStory(story)}
+            onOpenExchange={(exchangeId) => {
+              setSelectedExchangeId(exchangeId);
+              navigateTo('passerelles');
+            }}
+            onStartDirectChat={handleStartDirectChat}
           />
         )}
 
@@ -710,7 +914,20 @@ function SalonApp() {
                               {THEME_MAP[leadStory.theme]?.salonName}
                             </button>
                             <span aria-hidden="true">·</span>
-                            <span>Par {leadStory.authorName}</span>
+                            <span className="font-medium text-stone-700">
+                              {STORY_FORMAT_LABELS[leadStory.storyFormat ?? 'confession'].label}
+                              {(leadStory.storyFormat ?? 'confession') === 'roman'
+                                ? ` · ${leadStory.chapterCount ?? 1} chap.`
+                                : ''}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <button
+                              type="button"
+                              onClick={() => openMemberWall(leadStory.authorId)}
+                              className="hover:underline hover:text-stone-900"
+                            >
+                              Par {leadStory.authorName}
+                            </button>
                             <span aria-hidden="true">·</span>
                             <span>{leadStory.readingMinutes} min de lecture</span>
                             <span aria-hidden="true">·</span>
@@ -750,7 +967,7 @@ function SalonApp() {
                               </span>
                               <span className="inline-flex items-center gap-1.5">
                                 <MessageCircle className="w-3.5 h-3.5 text-stone-500" />
-                                {leadStory.echoCount} écho{leadStory.echoCount > 1 ? 's' : ''}
+                                {leadStory.echoCount} commentaire{leadStory.echoCount > 1 ? 's' : ''}
                               </span>
                             </div>
 
@@ -759,7 +976,7 @@ function SalonApp() {
                               onClick={() => setReadingStory(leadStory)}
                               className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
                             >
-                              <span>Lire le récit et répondre</span>
+                              <span>Lire et commenter</span>
                               <ArrowRight className="w-4 h-4" />
                             </button>
                           </div>
@@ -772,6 +989,7 @@ function SalonApp() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {secondaryStories.map((story) => {
                           const salonInfo = THEME_MAP[story.theme];
+                          const format = story.storyFormat ?? 'confession';
                           return (
                             <article
                               key={story.storyId}
@@ -788,7 +1006,18 @@ function SalonApp() {
                                     {salonInfo?.salonName}
                                   </button>
                                   <span aria-hidden="true">·</span>
-                                  <span>{story.authorName}</span>
+                                  <span className="font-medium text-stone-700">
+                                    {STORY_FORMAT_LABELS[format].label}
+                                    {format === 'roman' ? ` · ${story.chapterCount ?? 1} ch.` : ''}
+                                  </span>
+                                  <span aria-hidden="true">·</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => openMemberWall(story.authorId)}
+                                    className="hover:underline hover:text-stone-900"
+                                  >
+                                    {story.authorName}
+                                  </button>
                                   <span aria-hidden="true">·</span>
                                   <span>{story.readingMinutes} min</span>
                                   <span aria-hidden="true">·</span>
@@ -818,7 +1047,7 @@ function SalonApp() {
                                   onClick={() => setReadingStory(story)}
                                   className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
                                 >
-                                  <span>Lire et échanger</span>
+                                  <span>Lire et commenter</span>
                                   <ArrowRight className="w-3.5 h-3.5" />
                                 </button>
                               </div>
@@ -846,9 +1075,13 @@ function SalonApp() {
         {activeTab === 'passerelles' && (
           <ExchangesView
             exchanges={exchanges}
+            discoverableProfiles={discoverableProfiles}
             selectedExchangeId={selectedExchangeId}
+            initialRecipientId={pendingDirectRecipientId}
+            onClearInitialRecipient={() => setPendingDirectRecipientId(null)}
             onSelectExchange={setSelectedExchangeId}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
+            onOpenMemberWall={openMemberWall}
             onExploreStories={() => enterSalon(null)}
           />
         )}
@@ -856,9 +1089,14 @@ function SalonApp() {
         {activeTab === 'carnet' && (
           <JournalView
             myStories={myStories}
+            existingExchanges={exchanges}
             onReadStory={(story) => setReadingStory(story)}
             onEditStory={(story) => void openComposer({ edit: story })}
             onNewStory={() => void openComposer()}
+            onOpenExchange={(exchangeId) => {
+              setSelectedExchangeId(exchangeId);
+              navigateTo('passerelles');
+            }}
           />
         )}
       </main>
@@ -866,7 +1104,7 @@ function SalonApp() {
       <footer className="border-t border-stone-200 bg-[#FBF9F5] mt-12">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500">
           <p>Lisière — Espace de récits personnels et de passerelles humaines</p>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-6">
             <button
               type="button"
               onClick={() => enterSalon(null)}
@@ -876,21 +1114,28 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('themes')}
+              onClick={() => navigateTo('membres', null, null)}
+              className="hover:text-stone-900 transition-colors"
+            >
+              Membres
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('themes')}
               className="hover:text-stone-900 transition-colors"
             >
               Thèmes
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('passerelles')}
+              onClick={() => navigateTo('passerelles')}
               className="hover:text-stone-900 transition-colors"
             >
               Passerelles
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('carnet')}
+              onClick={() => navigateTo('carnet')}
               className="hover:text-stone-900 transition-colors"
             >
               Mon carnet
@@ -906,8 +1151,9 @@ function SalonApp() {
         existingExchanges={exchanges}
         onOpenExchange={(exchangeId) => {
           setSelectedExchangeId(exchangeId);
-          setActiveTab('passerelles');
+          navigateTo('passerelles');
         }}
+        onOpenMemberWall={openMemberWall}
       />
 
       {/* Composer Modal */}
@@ -924,12 +1170,12 @@ function SalonApp() {
           initialPrompt={composerDefaults.prompt}
           initialStarter={composerDefaults.starter}
           editingStory={editingStory}
-          onSaved={(_storyId, visibility) => {
+          onSaved={(_storyId, visibility, savedTheme) => {
             if (visibility === 'public') {
-              setActiveTab('recits');
+              navigateTo('recits', savedTheme);
               showNotice('Votre récit est désormais partagé dans le salon.');
             } else {
-              setActiveTab('carnet');
+              navigateTo('carnet');
               showNotice('Votre brouillon privé a été enregistré dans votre carnet.');
             }
           }}
