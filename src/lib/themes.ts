@@ -30,7 +30,7 @@ export const STORY_THEMES: ThemeDefinition[] = [
     promptQuestion:
       "Quel déclic ou quelle hésitation a orienté votre parcours jusqu'ici ?",
     starterSentence:
-      "Pendant longtemps, je pensais que je ne saurais pas expliquer pourquoi...",
+      "Pendant longtemps, je ne savais pas comment expliquer pourquoi...",
   },
   {
     id: 'rencontres',

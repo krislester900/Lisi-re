@@ -4,6 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExchangesView } from './components/ExchangesView';
 import { JournalView } from './components/JournalView';
+import { LisiereLogo } from './components/LisiereLogo';
 import { StoryComposerModal } from './components/StoryComposerModal';
 import { StoryReaderModal } from './components/StoryReaderModal';
 import { ThemesView } from './components/ThemesView';
@@ -45,7 +46,6 @@ function SalonApp() {
 
   const [toastNotice, setToastNotice] = useState<string | null>(null);
 
-  // Subscribe to public stories
   useEffect(() => {
     const unsub = subscribeToPublicStories((stories) => {
       setPublicStories(stories);
@@ -54,7 +54,6 @@ function SalonApp() {
     return () => unsub();
   }, []);
 
-  // Subscribe to user's own stories and exchanges when signed in
   useEffect(() => {
     if (!user) {
       setMyStories([]);
@@ -69,7 +68,6 @@ function SalonApp() {
     };
   }, [user]);
 
-  // Keep readingStory synced with real-time updates (e.g. resonanceCount / echoCount)
   useEffect(() => {
     if (!readingStory || readingStory.isEditorialSample) return;
     const updated =
@@ -164,9 +162,10 @@ function SalonApp() {
           <button
             type="button"
             onClick={() => setActiveTab('recits')}
-            className="font-display text-2xl font-semibold tracking-tight text-stone-900 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A]"
+            aria-label="Lisière — Retour au salon"
+            className="text-stone-900 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
           >
-            Lisière
+            <LisiereLogo className="h-8 w-auto" />
           </button>
 
           {/* Zone 2: 4 concise single-line text nav links */}
@@ -242,7 +241,7 @@ function SalonApp() {
           </div>
         </div>
 
-        {/* Mobile navigation row (non-sticky so mobile sticky height = 0%) */}
+        {/* Mobile navigation row */}
         <nav
           aria-label="Navigation mobile"
           className="md:hidden border-t border-stone-200 px-6 py-2 flex items-center gap-6 overflow-x-auto text-sm font-medium"
