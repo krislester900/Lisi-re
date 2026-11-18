@@ -1,0 +1,6 @@
+{
+  "name": "Lisière",
+  "description": "Un salon littéraire interactif pour partager des récits personnels, laisser des échos bienveillants et tisser des échanges humains durables.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

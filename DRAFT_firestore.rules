@@ -1,0 +1,416 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidPublicProfile(data) {
+      return data.keys().hasAll(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60
+        && data.bio is string && data.bio.size() <= 320
+        && data.listeningNote is string && data.listeningNote.size() <= 200
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPrivateInfo(data) {
+      return data.keys().hasAll(['userId', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['userId', 'email', 'createdAt', 'updatedAt'])
+        && isValidId(data.userId)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidStory(data) {
+      return data.keys().hasAll([
+          'storyId', 'authorId', 'authorName', 'title', 'excerpt', 'content',
+          'theme', 'promptQuestion', 'visibility', 'readingMinutes',
+          'resonanceCount', 'echoCount', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'storyId', 'authorId', 'authorName', 'title', 'excerpt', 'content',
+          'theme', 'promptQuestion', 'visibility', 'readingMinutes',
+          'resonanceCount', 'echoCount', 'lastEchoId', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.storyId)
+        && isValidId(data.authorId)
+        && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 140
+        && data.excerpt is string && data.excerpt.size() >= 10 && data.excerpt.size() <= 300
+        && data.content is string && data.content.size() >= 20 && data.content.size() <= 8000
+        && data.theme in ['creation', 'rencontres', 'solitudes', 'premiers-elans', 'quotidien']
+        && data.promptQuestion is string && data.promptQuestion.size() <= 240
+        && data.visibility in ['public', 'private']
+        && data.readingMinutes is int && data.readingMinutes >= 1 && data.readingMinutes <= 60
+        && data.resonanceCount is int && data.resonanceCount >= 0
+        && data.echoCount is int && data.echoCount >= 0
+        && (!('lastEchoId' in data) || isValidId(data.lastEchoId))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidResonance(data) {
+      return data.keys().hasAll(['userId', 'storyId', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'storyId', 'createdAt'])
+        && isValidId(data.userId)
+        && isValidId(data.storyId)
+        && data.createdAt is timestamp;
+    }
+
+    function isValidEcho(data) {
+      return data.keys().hasAll([
+          'echoId', 'storyId', 'storyVisibility', 'authorId', 'authorName',
+          'replyType', 'content', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'echoId', 'storyId', 'storyVisibility', 'authorId', 'authorName',
+          'replyType', 'content', 'createdAt'
+        ])
+        && isValidId(data.echoId)
+        && isValidId(data.storyId)
+        && data.storyVisibility == 'public'
+        && isValidId(data.authorId)
+        && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60
+        && data.replyType in ['resonance', 'question', 'experience']
+        && data.content is string && data.content.size() >= 5 && data.content.size() <= 1500
+        && data.createdAt is timestamp;
+    }
+
+    function isValidExchange(data) {
+      return data.keys().hasAll([
+          'exchangeId', 'storyId', 'storyTitle', 'initiatorId', 'initiatorName',
+          'recipientId', 'recipientName', 'participantIds', 'status',
+          'lastMessagePreview', 'lastSenderId', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'exchangeId', 'storyId', 'storyTitle', 'initiatorId', 'initiatorName',
+          'recipientId', 'recipientName', 'participantIds', 'status',
+          'lastMessagePreview', 'lastSenderId', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.exchangeId)
+        && isValidId(data.storyId)
+        && data.storyTitle is string && data.storyTitle.size() >= 1 && data.storyTitle.size() <= 140
+        && isValidId(data.initiatorId)
+        && data.initiatorName is string && data.initiatorName.size() >= 2 && data.initiatorName.size() <= 60
+        && isValidId(data.recipientId)
+        && data.recipientName is string && data.recipientName.size() >= 2 && data.recipientName.size() <= 60
+        && data.initiatorId != data.recipientId
+        && data.participantIds is list
+        && data.participantIds.size() == 2
+        && isValidId(data.participantIds[0])
+        && isValidId(data.participantIds[1])
+        && data.participantIds[0] != data.participantIds[1]
+        && data.status in ['active', 'archived']
+        && data.lastMessagePreview is string && data.lastMessagePreview.size() <= 160
+        && isValidId(data.lastSenderId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll([
+          'messageId', 'exchangeId', 'senderId', 'senderName',
+          'participantIds', 'content', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'messageId', 'exchangeId', 'senderId', 'senderName',
+          'participantIds', 'content', 'createdAt'
+        ])
+        && isValidId(data.messageId)
+        && isValidId(data.exchangeId)
+        && isValidId(data.senderId)
+        && data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 60
+        && data.participantIds is list
+        && data.participantIds.size() == 2
+        && isValidId(data.participantIds[0])
+        && isValidId(data.participantIds[1])
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 2000
+        && data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // Public author cards (no PII, no list scraping)
+    match /publicProfiles/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidPublicProfile(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidPublicProfile(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'bio', 'listeningNote', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Private PII user info
+    match /users/{userId}/private/{docId} {
+      allow get: if isValidId(userId) && docId == 'info' && isOwner(userId);
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && docId == 'info'
+        && isOwner(userId)
+        && isValidPrivateInfo(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && docId == 'info'
+        && isOwner(userId)
+        && isValidPrivateInfo(incoming())
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // Personal stories
+    match /stories/{storyId} {
+      allow get: if isValidId(storyId)
+        && (existing().visibility == 'public' || (isSignedIn() && existing().authorId == request.auth.uid));
+      allow list: if resource.data.visibility == 'public'
+        || (isSignedIn() && resource.data.authorId == request.auth.uid);
+
+      allow create: if isVerifiedUser()
+        && isValidId(storyId)
+        && isValidStory(incoming())
+        && incoming().storyId == storyId
+        && incoming().authorId == request.auth.uid
+        && incoming().resonanceCount == 0
+        && incoming().echoCount == 0
+        && !('lastEchoId' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(storyId)
+        && isValidStory(incoming())
+        && incoming().storyId == existing().storyId
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action A: Author edits story content or visibility
+          (
+            existing().authorId == request.auth.uid
+            && incoming().resonanceCount == existing().resonanceCount
+            && incoming().echoCount == existing().echoCount
+            && (!('lastEchoId' in existing()) ? !('lastEchoId' in incoming()) : ('lastEchoId' in incoming() && incoming().lastEchoId == existing().lastEchoId))
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'authorName', 'title', 'excerpt', 'content', 'theme',
+              'promptQuestion', 'visibility', 'readingMinutes', 'updatedAt'
+            ])
+          )
+          ||
+          // Action B: Atomic resonance toggle on a public story
+          (
+            existing().visibility == 'public'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['resonanceCount', 'updatedAt'])
+            && (
+              (
+                incoming().resonanceCount == existing().resonanceCount + 1
+                && !exists(/databases/$(database)/documents/stories/$(storyId)/resonances/$(request.auth.uid))
+                && existsAfter(/databases/$(database)/documents/stories/$(storyId)/resonances/$(request.auth.uid))
+              )
+              ||
+              (
+                incoming().resonanceCount == existing().resonanceCount - 1
+                && exists(/databases/$(database)/documents/stories/$(storyId)/resonances/$(request.auth.uid))
+                && !existsAfter(/databases/$(database)/documents/stories/$(storyId)/resonances/$(request.auth.uid))
+              )
+            )
+          )
+          ||
+          // Action C: Atomic echo increment on a public story
+          (
+            existing().visibility == 'public'
+            && 'lastEchoId' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['echoCount', 'lastEchoId', 'updatedAt'])
+            && incoming().echoCount == existing().echoCount + 1
+            && !exists(/databases/$(database)/documents/stories/$(storyId)/echoes/$(incoming().lastEchoId))
+            && existsAfter(/databases/$(database)/documents/stories/$(storyId)/echoes/$(incoming().lastEchoId))
+          )
+        );
+
+      allow delete: if isVerifiedUser()
+        && isValidId(storyId)
+        && existing().authorId == request.auth.uid;
+
+      // Story resonances subcollection
+      match /resonances/{userId} {
+        allow get: if isValidId(storyId)
+          && isValidId(userId)
+          && (
+            get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+            || isOwner(userId)
+          );
+        allow list: if false;
+        allow create: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(userId)
+          && isOwner(userId)
+          && isValidResonance(incoming())
+          && incoming().userId == request.auth.uid
+          && incoming().storyId == storyId
+          && incoming().createdAt == request.time
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+          && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount
+             == get(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount + 1;
+        allow update: if false;
+        allow delete: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(userId)
+          && isOwner(userId)
+          && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount
+             == get(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount - 1;
+      }
+
+      // Story echoes subcollection
+      match /echoes/{echoId} {
+        allow get: if isValidId(storyId)
+          && isValidId(echoId)
+          && (
+            get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+            || (isSignedIn() && existing().authorId == request.auth.uid)
+          );
+        allow list: if resource.data.storyVisibility == 'public'
+          || (isSignedIn() && resource.data.authorId == request.auth.uid);
+        allow create: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(echoId)
+          && isValidEcho(incoming())
+          && incoming().echoId == echoId
+          && incoming().storyId == storyId
+          && incoming().authorId == request.auth.uid
+          && incoming().storyVisibility == 'public'
+          && incoming().createdAt == request.time
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+          && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.lastEchoId == echoId;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    // 1-on-1 Exchanges (Passerelles)
+    match /exchanges/{exchangeId} {
+      allow get: if isSignedIn()
+        && isValidId(exchangeId)
+        && request.auth.uid in existing().participantIds;
+      allow list: if isSignedIn()
+        && request.auth.uid in resource.data.participantIds;
+
+      allow create: if isVerifiedUser()
+        && isValidId(exchangeId)
+        && isValidExchange(incoming())
+        && incoming().exchangeId == exchangeId
+        && incoming().initiatorId == request.auth.uid
+        && incoming().recipientId != request.auth.uid
+        && incoming().participantIds[0] == request.auth.uid
+        && incoming().participantIds[1] == incoming().recipientId
+        && incoming().lastSenderId == request.auth.uid
+        && incoming().status == 'active'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/stories/$(incoming().storyId))
+        && get(/databases/$(database)/documents/stories/$(incoming().storyId)).data.visibility == 'public';
+
+      allow update: if isVerifiedUser()
+        && isValidId(exchangeId)
+        && request.auth.uid in existing().participantIds
+        && isValidExchange(incoming())
+        && incoming().exchangeId == existing().exchangeId
+        && incoming().storyId == existing().storyId
+        && incoming().storyTitle == existing().storyTitle
+        && incoming().initiatorId == existing().initiatorId
+        && incoming().initiatorName == existing().initiatorName
+        && incoming().recipientId == existing().recipientId
+        && incoming().recipientName == existing().recipientName
+        && incoming().participantIds == existing().participantIds
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action A: Participant sends a new message
+          (
+            existing().status == 'active'
+            && incoming().lastSenderId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['lastMessagePreview', 'lastSenderId', 'updatedAt'])
+          )
+          ||
+          // Action B: Participant archives or reopens exchange
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+
+      allow delete: if false;
+
+      // Messages inside an exchange
+      match /messages/{messageId} {
+        allow get: if isSignedIn()
+          && isValidId(exchangeId)
+          && isValidId(messageId)
+          && request.auth.uid in get(/databases/$(database)/documents/exchanges/$(exchangeId)).data.participantIds;
+        allow list: if isSignedIn()
+          && request.auth.uid in resource.data.participantIds;
+        allow create: if isVerifiedUser()
+          && isValidId(exchangeId)
+          && isValidId(messageId)
+          && isValidMessage(incoming())
+          && incoming().messageId == messageId
+          && incoming().exchangeId == exchangeId
+          && incoming().senderId == request.auth.uid
+          && incoming().createdAt == request.time
+          && getAfter(/databases/$(database)/documents/exchanges/$(exchangeId)).data.status == 'active'
+          && request.auth.uid in getAfter(/databases/$(database)/documents/exchanges/$(exchangeId)).data.participantIds
+          && incoming().participantIds == getAfter(/databases/$(database)/documents/exchanges/$(exchangeId)).data.participantIds;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+  }
+}

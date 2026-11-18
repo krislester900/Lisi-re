@@ -1,0 +1,399 @@
+{
+  "entities": {
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Public non-PII author card displayed alongside shared stories and exchanges.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 320
+        },
+        "listeningNote": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "displayName", "bio", "listeningNote", "createdAt", "updatedAt"]
+    },
+    "PrivateUserInfo": {
+      "title": "PrivateUserInfo",
+      "description": "Strictly private user account metadata containing PII such as email.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "email", "createdAt", "updatedAt"]
+    },
+    "Story": {
+      "title": "Story",
+      "description": "A personal story shared in the public salon or saved as a private journal draft.",
+      "type": "object",
+      "properties": {
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "title": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 140
+        },
+        "excerpt": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 300
+        },
+        "content": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 8000
+        },
+        "theme": {
+          "type": "string",
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+        },
+        "promptQuestion": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "private"]
+        },
+        "readingMinutes": {
+          "type": "integer"
+        },
+        "resonanceCount": {
+          "type": "integer"
+        },
+        "echoCount": {
+          "type": "integer"
+        },
+        "lastEchoId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "storyId",
+        "authorId",
+        "authorName",
+        "title",
+        "excerpt",
+        "content",
+        "theme",
+        "promptQuestion",
+        "visibility",
+        "readingMinutes",
+        "resonanceCount",
+        "echoCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Resonance": {
+      "title": "Resonance",
+      "description": "A quiet gesture of empathy attached by a reader to a public story.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "storyId", "createdAt"]
+    },
+    "Echo": {
+      "title": "Echo",
+      "description": "A thoughtful written response to a public personal story.",
+      "type": "object",
+      "properties": {
+        "echoId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyVisibility": {
+          "type": "string",
+          "enum": ["public"]
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "replyType": {
+          "type": "string",
+          "enum": ["resonance", "question", "experience"]
+        },
+        "content": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 1500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "echoId",
+        "storyId",
+        "storyVisibility",
+        "authorId",
+        "authorName",
+        "replyType",
+        "content",
+        "createdAt"
+      ]
+    },
+    "Exchange": {
+      "title": "Exchange",
+      "description": "A gentle one-to-one bridge conversation between two members anchored to a shared story.",
+      "type": "object",
+      "properties": {
+        "exchangeId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "initiatorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "initiatorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "recipientId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "recipientName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "participantIds": {
+          "type": "array"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"]
+        },
+        "lastMessagePreview": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "lastSenderId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "exchangeId",
+        "storyId",
+        "storyTitle",
+        "initiatorId",
+        "initiatorName",
+        "recipientId",
+        "recipientName",
+        "participantIds",
+        "status",
+        "lastMessagePreview",
+        "lastSenderId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ExchangeMessage": {
+      "title": "ExchangeMessage",
+      "description": "A direct message inside a one-to-one story-anchored exchange.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "exchangeId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "participantIds": {
+          "type": "array"
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "messageId",
+        "exchangeId",
+        "senderId",
+        "senderName",
+        "participantIds",
+        "content",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/publicProfiles/{userId}": {
+      "schema": {
+        "$ref": "#/entities/PublicProfile"
+      },
+      "description": "Public author profile cards without PII."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": {
+        "$ref": "#/entities/PrivateUserInfo"
+      },
+      "description": "Private user account PII isolated per user."
+    },
+    "/stories/{storyId}": {
+      "schema": {
+        "$ref": "#/entities/Story"
+      },
+      "description": "Personal stories shared in the salon or kept as private drafts."
+    },
+    "/stories/{storyId}/resonances/{userId}": {
+      "schema": {
+        "$ref": "#/entities/Resonance"
+      },
+      "description": "Per-user empathy resonance markers on a public story."
+    },
+    "/stories/{storyId}/echoes/{echoId}": {
+      "schema": {
+        "$ref": "#/entities/Echo"
+      },
+      "description": "Thoughtful replies attached to a public story."
+    },
+    "/exchanges/{exchangeId}": {
+      "schema": {
+        "$ref": "#/entities/Exchange"
+      },
+      "description": "One-to-one story-anchored exchanges between two members."
+    },
+    "/exchanges/{exchangeId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/ExchangeMessage"
+      },
+      "description": "Messages within a one-to-one exchange."
+    }
+  }
+}
