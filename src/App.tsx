@@ -4,6 +4,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExchangesView } from './components/ExchangesView';
 import { JournalView } from './components/JournalView';
+import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
 import { StoryComposerModal } from './components/StoryComposerModal';
 import { StoryReaderModal } from './components/StoryReaderModal';
@@ -762,9 +763,12 @@ function SalonApp() {
 }
 
 export default function App() {
+  const [showIntro, setShowIntro] = useState(true);
+
   return (
     <ErrorBoundary>
       <AuthProvider>
+        {showIntro && <LaunchIntro onComplete={() => setShowIntro(false)} />}
         <SalonApp />
       </AuthProvider>
     </ErrorBoundary>
