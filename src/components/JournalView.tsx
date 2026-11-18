@@ -258,7 +258,7 @@ export function JournalView({
                   <div key={story.storyId} className="p-5 sm:p-6 space-y-3">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
                       <span className="font-medium text-stone-800">
-                        {THEME_MAP[story.theme]?.label}
+                        {THEME_MAP[story.theme]?.salonName}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span className={story.visibility === 'public' ? 'text-[#1E3A8A]' : 'text-stone-600'}>

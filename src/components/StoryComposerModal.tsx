@@ -155,7 +155,7 @@ export function StoryComposerModal({
         <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[82vh] overflow-y-auto">
           <div>
             <span className="block text-xs uppercase tracking-widest text-stone-500 mb-2">
-              Fil thématique
+              Salon de destination
             </span>
             <div className="flex flex-wrap gap-2">
               {STORY_THEMES.map((item) => {
@@ -165,13 +165,24 @@ export function StoryComposerModal({
                     key={item.id}
                     type="button"
                     onClick={() => handleThemeChange(item.id)}
+                    style={
+                      active
+                        ? {
+                            backgroundColor: item.palette.accent,
+                            borderColor: item.palette.accent,
+                            color: '#FFFFFF',
+                          }
+                        : {
+                            borderColor: item.palette.borderTint,
+                          }
+                    }
                     className={`min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
                       active
-                        ? 'bg-[#1E3A8A] text-white border-[#1E3A8A]'
-                        : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                        ? ''
+                        : 'bg-white text-stone-800 hover:bg-stone-50'
                     }`}
                   >
-                    {item.label}
+                    {item.romanIndex} · {item.salonName}
                   </button>
                 );
               })}

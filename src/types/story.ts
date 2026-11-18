@@ -38,7 +38,6 @@ export interface Story {
   lastEchoId?: string;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
-  isEditorialSample?: boolean;
 }
 
 export interface Echo {

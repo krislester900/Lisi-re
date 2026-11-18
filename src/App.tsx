@@ -6,12 +6,13 @@ import { ExchangesView } from './components/ExchangesView';
 import { JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
+import { SalonEmblem } from './components/SalonEmblem';
+import { SalonRoomView } from './components/SalonRoomView';
 import { StoryComposerModal } from './components/StoryComposerModal';
 import { StoryReaderModal } from './components/StoryReaderModal';
 import { ThemesView } from './components/ThemesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { db } from './lib/firebase';
-import { EDITORIAL_OPENING_STORIES } from './lib/foundingStories';
 import {
   subscribeToPublicStories,
   subscribeToUserExchanges,
@@ -25,6 +26,7 @@ type NavTab = 'recits' | 'themes' | 'passerelles' | 'carnet';
 function SalonApp() {
   const { user, profile, authError, signInWithGoogle, clearAuthError } = useAuth();
   const [activeTab, setActiveTab] = useState<NavTab>('recits');
+  const [activeSalonId, setActiveSalonId] = useState<StoryThemeId | null>(null);
   const [publicStories, setPublicStories] = useState<Story[]>([]);
   const [myStories, setMyStories] = useState<Story[]>([]);
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
@@ -33,6 +35,7 @@ function SalonApp() {
   const [themeFilter, setThemeFilter] = useState<'all' | StoryThemeId>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [heroImgFailed, setHeroImgFailed] = useState(false);
+  const [salonImgFailedMap, setSalonImgFailedMap] = useState<Record<string, boolean>>({});
 
   const [readingStory, setReadingStory] = useState<Story | null>(null);
   const [selectedExchangeId, setSelectedExchangeId] = useState<string | null>(null);
@@ -70,7 +73,7 @@ function SalonApp() {
   }, [user]);
 
   useEffect(() => {
-    if (!readingStory || readingStory.isEditorialSample) return;
+    if (!readingStory) return;
     const updated =
       publicStories.find((s) => s.storyId === readingStory.storyId) ??
       myStories.find((s) => s.storyId === readingStory.storyId);
@@ -138,17 +141,27 @@ function SalonApp() {
     });
   }, [publicStories, themeFilter, searchQuery]);
 
-  const filteredOpeningStories = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return EDITORIAL_OPENING_STORIES.filter((story) => {
-      if (themeFilter !== 'all' && story.theme !== themeFilter) return false;
-      if (!q) return true;
-      return (
-        story.title.toLowerCase().includes(q) ||
-        story.excerpt.toLowerCase().includes(q)
-      );
-    });
-  }, [themeFilter, searchQuery]);
+  const storyCountsBySalon = useMemo(() => {
+    const counts: Record<StoryThemeId, number> = {
+      creation: 0,
+      'premiers-elans': 0,
+      rencontres: 0,
+      solitudes: 0,
+      quotidien: 0,
+    };
+    for (const story of publicStories) {
+      if (counts[story.theme] !== undefined) {
+        counts[story.theme] += 1;
+      }
+    }
+    return counts;
+  }, [publicStories]);
+
+  const enterSalon = (salonId: StoryThemeId | null) => {
+    setActiveSalonId(salonId);
+    setActiveTab('recits');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const leadStory = filteredPublicStories[0] ?? null;
   const secondaryStories = filteredPublicStories.slice(1);
@@ -162,8 +175,8 @@ function SalonApp() {
           {/* Zone 1: Brand wordmark */}
           <button
             type="button"
-            onClick={() => setActiveTab('recits')}
-            aria-label="Lisière — Retour au salon"
+            onClick={() => enterSalon(null)}
+            aria-label="Lisière — Retour aux salons"
             className="text-stone-900 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
           >
             <LisiereLogo className="h-8 w-auto" />
@@ -176,14 +189,14 @@ function SalonApp() {
           >
             <button
               type="button"
-              onClick={() => setActiveTab('recits')}
+              onClick={() => enterSalon(null)}
               className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
                 activeTab === 'recits'
                   ? 'text-stone-900 border-[#1E3A8A]'
                   : 'text-stone-600 border-transparent hover:text-stone-900'
               }`}
             >
-              Récits
+              Salons
             </button>
             <button
               type="button"
@@ -249,7 +262,7 @@ function SalonApp() {
         >
           {(
             [
-              { id: 'recits', label: 'Récits' },
+              { id: 'recits', label: 'Salons' },
               { id: 'themes', label: 'Thèmes' },
               {
                 id: 'passerelles',
@@ -261,7 +274,13 @@ function SalonApp() {
             <button
               key={item.id}
               type="button"
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => {
+                if (item.id === 'recits') {
+                  enterSalon(null);
+                } else {
+                  setActiveTab(item.id);
+                }
+              }}
               className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 ${
                 activeTab === item.id
                   ? 'text-stone-900 border-[#1E3A8A]'
@@ -311,14 +330,27 @@ function SalonApp() {
       )}
 
       <main className="flex-1">
-        {activeTab === 'recits' && (
-          <div className="max-w-6xl mx-auto px-6 py-10 sm:py-14 space-y-14">
+        {activeTab === 'recits' && activeSalonId !== null && (
+          <SalonRoomView
+            salonId={activeSalonId}
+            publicStories={publicStories}
+            storiesLoaded={storiesLoaded}
+            onSelectSalon={(id) => enterSalon(id)}
+            onReadStory={(story) => setReadingStory(story)}
+            onWriteInSalon={(theme, prompt, starter) =>
+              void openComposer({ theme, prompt, starter })
+            }
+          />
+        )}
+
+        {activeTab === 'recits' && activeSalonId === null && (
+          <div className="max-w-6xl mx-auto px-6 py-10 sm:py-14 space-y-16">
             {/* Hero 2-column Editorial Split */}
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
               <div className="lg:col-span-7 flex flex-col justify-between space-y-8">
                 <div className="space-y-5">
                   <p className="text-xs uppercase tracking-widest text-stone-500">
-                    Salon littéraire · Échanges personnels
+                    Maison d’édition participative · 5 salons thématiques
                   </p>
                   <h1
                     className="font-display text-4xl sm:text-5xl font-medium text-stone-900 leading-[1.12]"
@@ -327,7 +359,7 @@ function SalonApp() {
                     Créer des histoires qui relient ceux qui peinent parfois à se parler.
                   </h1>
                   <p className="text-base sm:text-lg text-stone-600 leading-relaxed max-w-2xl">
-                    Lisière est un espace calme pour raconter un morceau de votre parcours, déposer un écho bienveillant sous le récit d’une autre personne, ou ouvrir une passerelle en tête-à-tête à partir de mots vrais.
+                    Lisière s’organise en cinq salons aux atmosphères singulières. Visitez chaque pièce à votre rythme, découvrez son univers et sa question d’ouverture, ou déposez votre propre récit pour tisser une passerelle.
                   </p>
                 </div>
 
@@ -336,17 +368,17 @@ function SalonApp() {
                     <button
                       type="button"
                       onClick={() => void openComposer()}
-                      className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                      className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
                     >
                       <Feather className="w-4 h-4" />
                       <span>Partager une histoire</span>
                     </button>
                     <button
                       type="button"
-                      onClick={() => setActiveTab('themes')}
+                      onClick={() => enterSalon(STORY_THEMES[0].id)}
                       className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
                     >
-                      <span>Explorer les fils d’écriture</span>
+                      <span>Faire le tour des salons</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -355,15 +387,15 @@ function SalonApp() {
                   <div className="grid grid-cols-3 gap-6 pt-6 border-t border-stone-200">
                     <div>
                       <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
-                        {publicStories.length}
+                        {STORY_THEMES.length}
                       </p>
-                      <p className="text-xs text-stone-600 mt-1">Récits de la communauté</p>
+                      <p className="text-xs text-stone-600 mt-1">Salons ouverts à la visite</p>
                     </div>
                     <div>
                       <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
-                        {STORY_THEMES.length}
+                        {publicStories.length}
                       </p>
-                      <p className="text-xs text-stone-600 mt-1">Fils de conversation</p>
+                      <p className="text-xs text-stone-600 mt-1">Récits de la communauté</p>
                     </div>
                     <div>
                       <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
@@ -400,254 +432,404 @@ function SalonApp() {
               </figure>
             </section>
 
-            {/* Filter & Search Toolbar */}
+            {/* Predefined Salons Tour Gallery */}
             <section
-              aria-label="Filtrer les récits"
-              className="pt-6 border-t border-stone-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+              id="galerie-salons"
+              aria-labelledby="galerie-salons-title"
+              className="pt-10 border-t border-stone-200 space-y-8"
             >
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setThemeFilter('all')}
-                  className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                    themeFilter === 'all'
-                      ? 'bg-stone-900 text-white border-stone-900'
-                      : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                  }`}
-                >
-                  Tous les récits
-                </button>
-                {STORY_THEMES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setThemeFilter(t.id)}
-                    className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                      themeFilter === t.id
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                    }`}
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-2 max-w-2xl">
+                  <p className="text-xs uppercase tracking-widest text-stone-500">
+                    Architecture des lieux · Parcours thématique
+                  </p>
+                  <h2
+                    id="galerie-salons-title"
+                    className="font-display text-3xl font-medium text-stone-900"
+                    style={{ textWrap: 'balance' }}
                   >
-                    {t.shortLabel}
-                  </button>
-                ))}
-              </div>
-
-              <div className="relative w-full lg:w-72 shrink-0">
-                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Rechercher un titre, un auteur…"
-                  aria-label="Rechercher un récit"
-                  className="w-full min-h-[38px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
-                />
-              </div>
-            </section>
-
-            {/* Salon Feed */}
-            {!storiesLoaded ? (
-              <div className="py-16 text-center text-sm text-stone-500">
-                Ouverture du salon des récits…
-              </div>
-            ) : publicStories.length === 0 ? (
-              <section className="space-y-8" aria-label="Anthologie d’ouverture">
-                <div className="bg-white border border-stone-200 rounded-lg p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-                  <div>
-                    <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
-                      Première page du salon
-                    </p>
-                    <h2 className="font-display text-2xl font-medium text-stone-900 mb-1">
-                      La communauté attend son premier récit publié
-                    </h2>
-                    <p className="text-sm text-stone-600 leading-relaxed max-w-2xl">
-                      En attendant votre propre histoire, parcourez ces trois textes d’ouverture qui posent l’esprit de Lisière.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void openComposer()}
-                    className="min-h-[42px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
-                  >
-                    Publier le premier récit
-                  </button>
+                    Les cinq salons de Lisière
+                  </h2>
+                  <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                    Chaque salon porte une couleur, une ambiance et une question posée sur la table — même avant l’arrivée de sa première histoire.
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {filteredOpeningStories.map((story) => (
+                <button
+                  type="button"
+                  onClick={() => enterSalon(STORY_THEMES[0].id)}
+                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-[#1B365D] bg-white border border-[#1B365D] rounded-md hover:bg-[#1B365D] hover:text-white transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 self-start md:self-auto"
+                >
+                  <span>Commencer la visite au Salon I</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+                {STORY_THEMES.map((salon, index) => {
+                  const count = storyCountsBySalon[salon.id] ?? 0;
+                  const imgFailed = Boolean(salonImgFailedMap[salon.id]);
+                  const colSpanClass = index < 2 ? 'md:col-span-3' : 'md:col-span-2';
+
+                  return (
                     <article
-                      key={story.storyId}
-                      className="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                      key={salon.id}
+                      style={{
+                        borderColor: salon.palette.borderTint,
+                        borderTopColor: salon.palette.swatch,
+                      }}
+                      className={`${colSpanClass} bg-white border border-t-2 rounded-lg overflow-hidden flex flex-col justify-between transition-colors`}
                     >
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 text-xs text-stone-500">
-                          <span className="font-medium text-stone-800">
-                            {THEME_MAP[story.theme].label}
-                          </span>
-                          <span aria-hidden="true">·</span>
-                          <span>{story.readingMinutes} min</span>
-                        </div>
-                        <h3 className="font-display text-xl font-medium text-stone-900 leading-snug">
-                          {story.title}
-                        </h3>
-                        <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
-                      </div>
-                      <div className="pt-4 border-t border-stone-100 flex items-center justify-between">
-                        <span className="text-xs text-stone-500">{story.authorName}</span>
+                      <div>
                         <button
                           type="button"
-                          onClick={() => setReadingStory(story)}
-                          className="text-xs font-medium text-[#1E3A8A] hover:underline inline-flex items-center gap-1 whitespace-nowrap"
+                          onClick={() => enterSalon(salon.id)}
+                          aria-label={`Entrer dans ${salon.salonName}`}
+                          className="block w-full text-left group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B365D]"
                         >
-                          <span>Lire le texte</span>
+                          <div
+                            style={{
+                              backgroundColor:
+                                salon.imageFit === 'contain' ? '#FFFFFF' : salon.palette.softBg,
+                            }}
+                            className="aspect-[4/3] w-full overflow-hidden border-b border-stone-200/80 relative"
+                          >
+                            {!imgFailed ? (
+                              <img
+                                src={salon.imageUrl}
+                                alt={salon.imageAlt}
+                                referrerPolicy="no-referrer"
+                                onError={() =>
+                                  setSalonImgFailedMap((prev) => ({
+                                    ...prev,
+                                    [salon.id]: true,
+                                  }))
+                                }
+                                style={{
+                                  objectPosition: salon.imagePosition ?? 'center',
+                                }}
+                                className={`w-full h-full transition-transform duration-300 group-hover:scale-[1.02] ${
+                                  salon.imageFit === 'contain' ? 'object-contain p-4' : 'object-cover'
+                                }`}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
+                                <SalonEmblem
+                                  type={salon.emblem}
+                                  color={salon.palette.textAccent}
+                                  className="w-9 h-9 mb-2"
+                                />
+                                <p className="font-display text-base text-stone-800">
+                                  {salon.salonName}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </button>
+
+                        <div className="p-6 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-xs text-stone-500 tabular-nums">
+                              Salon {salon.romanIndex} ·{' '}
+                              {count === 0
+                                ? 'Prêt pour un premier récit'
+                                : `${count} récit${count > 1 ? 's' : ''}`}
+                            </p>
+                            <SalonEmblem
+                              type={salon.emblem}
+                              color={salon.palette.textAccent}
+                              className="w-5 h-5 shrink-0"
+                            />
+                          </div>
+
+                          <div>
+                            <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                              <button
+                                type="button"
+                                onClick={() => enterSalon(salon.id)}
+                                className="text-left hover:underline focus-visible:outline-none"
+                              >
+                                {salon.salonName}
+                              </button>
+                            </h3>
+                            <p
+                              style={{ color: salon.palette.textAccent }}
+                              className="text-xs font-medium mt-1"
+                            >
+                              {salon.atmosphere}
+                            </p>
+                          </div>
+
+                          <p className="text-sm text-stone-600 leading-relaxed">
+                            {salon.description}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{ backgroundColor: salon.palette.softBg }}
+                        className="px-6 py-3.5 border-t border-stone-200/70 flex items-center justify-between gap-3"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => enterSalon(salon.id)}
+                          style={{ color: salon.palette.textAccent }}
+                          className="min-h-[38px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                        >
+                          <span>Entrer dans le salon</span>
                           <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void openComposer({
+                              theme: salon.id,
+                              prompt: salon.promptQuestion,
+                              starter: `${salon.starterSentence} `,
+                            })
+                          }
+                          className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 transition-colors whitespace-nowrap shrink-0"
+                        >
+                          Y écrire
                         </button>
                       </div>
                     </article>
-                  ))}
-                </div>
-              </section>
-            ) : filteredPublicStories.length === 0 ? (
-              <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
-                <p className="font-display text-xl text-stone-900">
-                  Aucun récit ne correspond à ce filtre
-                </p>
-                <p className="text-sm text-stone-600">
-                  Essayez un autre mot-clé ou réinitialisez le filtre pour voir tous les récits publiés.
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Community Stories Feed (when stories exist in Firestore) */}
+            {!storiesLoaded ? (
+              <div className="py-10 text-center text-sm text-stone-500">
+                Lecture des récits publiés…
+              </div>
+            ) : publicStories.length === 0 ? (
+              <div className="pt-4 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm text-stone-600">
+                <p>
+                  Aucun récit public n’a encore été déposé — entrez dans l’un des cinq salons ci-dessus pour ouvrir son premier cahier.
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setThemeFilter('all');
-                    setSearchQuery('');
-                  }}
-                  className="min-h-[40px] px-4 py-2 text-sm font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                  onClick={() => void openComposer()}
+                  className="text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap shrink-0 self-start sm:self-auto"
                 >
-                  Afficher tous les récits
+                  Publier le premier récit
                 </button>
               </div>
             ) : (
-              <section className="space-y-12" aria-label="Récits publiés">
-                {/* Tier 1: Lead Story */}
-                {leadStory && (
-                  <article className="bg-white border border-stone-200 rounded-lg p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                    <div className="lg:col-span-8 space-y-4">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                        <span className="uppercase tracking-widest text-[#1E3A8A] font-medium">
-                          À la une · {THEME_MAP[leadStory.theme]?.label}
-                        </span>
-                        <span aria-hidden="true">·</span>
-                        <span>Par {leadStory.authorName}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{leadStory.readingMinutes} min de lecture</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{formatFrenchDate(leadStory.createdAt?.toDate() ?? null)}</span>
-                      </div>
-
-                      <h2
-                        className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
-                        style={{ textWrap: 'balance' }}
+              <div className="pt-8 border-t border-stone-200 space-y-8">
+                {/* Filter & Search Toolbar */}
+                <section
+                  aria-label="Filtrer les récits"
+                  className="flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                >
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setThemeFilter('all')}
+                      className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
+                        themeFilter === 'all'
+                          ? 'bg-stone-900 text-white border-stone-900'
+                          : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                      }`}
+                    >
+                      Tous les récits
+                    </button>
+                    {STORY_THEMES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setThemeFilter(t.id)}
+                        style={
+                          themeFilter === t.id
+                            ? {
+                                backgroundColor: t.palette.accent,
+                                borderColor: t.palette.accent,
+                                color: '#FFFFFF',
+                              }
+                            : undefined
+                        }
+                        className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
+                          themeFilter === t.id
+                            ? ''
+                            : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                        }`}
                       >
-                        {leadStory.title}
-                      </h2>
-
-                      <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
-                        {leadStory.excerpt}
-                      </p>
-                    </div>
-
-                    <div className="lg:col-span-4 lg:border-l lg:border-stone-200 lg:pl-8 flex flex-col justify-between h-full space-y-6">
-                      {leadStory.promptQuestion && (
-                        <div>
-                          <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
-                            Fil d’origine
-                          </p>
-                          <p className="text-sm text-stone-700 italic leading-relaxed">
-                            « {leadStory.promptQuestion} »
-                          </p>
-                        </div>
-                      )}
-
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-5 text-xs text-stone-600 tabular-nums">
-                          <span className="inline-flex items-center gap-1.5">
-                            <Heart className="w-3.5 h-3.5 text-stone-500" />
-                            {leadStory.resonanceCount} résonance
-                            {leadStory.resonanceCount > 1 ? 's' : ''}
-                          </span>
-                          <span className="inline-flex items-center gap-1.5">
-                            <MessageCircle className="w-3.5 h-3.5 text-stone-500" />
-                            {leadStory.echoCount} écho{leadStory.echoCount > 1 ? 's' : ''}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => setReadingStory(leadStory)}
-                          className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap"
-                        >
-                          <span>Lire le récit et répondre</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                )}
-
-                {/* Tier 2: Secondary Stories Grid */}
-                {secondaryStories.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {secondaryStories.map((story) => (
-                      <article
-                        key={story.storyId}
-                        className="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between space-y-5"
-                      >
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                            <span className="font-medium text-stone-800">
-                              {THEME_MAP[story.theme]?.label}
-                            </span>
-                            <span aria-hidden="true">·</span>
-                            <span>{story.authorName}</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{story.readingMinutes} min</span>
-                            <span aria-hidden="true">·</span>
-                            <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
-                          </div>
-
-                          <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
-                            {story.title}
-                          </h3>
-                          <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
-                        </div>
-
-                        <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
-                            <span className="inline-flex items-center gap-1">
-                              <Heart className="w-3.5 h-3.5" />
-                              {story.resonanceCount}
-                            </span>
-                            <span className="inline-flex items-center gap-1">
-                              <MessageCircle className="w-3.5 h-3.5" />
-                              {story.echoCount}
-                            </span>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setReadingStory(story)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1E3A8A] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
-                          >
-                            <span>Lire et échanger</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </article>
+                        {t.shortSalonName}
+                      </button>
                     ))}
                   </div>
+
+                  <div className="relative w-full lg:w-72 shrink-0">
+                    <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Rechercher un titre, un auteur…"
+                      aria-label="Rechercher un récit"
+                      className="w-full min-h-[38px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                    />
+                  </div>
+                </section>
+
+                {filteredPublicStories.length === 0 ? (
+                  <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
+                    <p className="font-display text-xl text-stone-900">
+                      Aucun récit ne correspond à ce filtre
+                    </p>
+                    <p className="text-sm text-stone-600">
+                      Essayez un autre mot-clé ou réinitialisez le filtre pour voir tous les récits publiés.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setThemeFilter('all');
+                        setSearchQuery('');
+                      }}
+                      className="min-h-[40px] px-4 py-2 text-sm font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                    >
+                      Afficher tous les récits
+                    </button>
+                  </div>
+                ) : (
+                  <section className="space-y-10" aria-label="Récits publiés">
+                    {/* Tier 1: Lead Story */}
+                    {leadStory && (
+                      <article className="bg-white border border-stone-200 rounded-lg p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                        <div className="lg:col-span-8 space-y-4">
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                            <button
+                              type="button"
+                              onClick={() => enterSalon(leadStory.theme)}
+                              style={{ color: THEME_MAP[leadStory.theme]?.palette.textAccent }}
+                              className="uppercase tracking-widest font-medium hover:underline"
+                            >
+                              {THEME_MAP[leadStory.theme]?.salonName}
+                            </button>
+                            <span aria-hidden="true">·</span>
+                            <span>Par {leadStory.authorName}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{leadStory.readingMinutes} min de lecture</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{formatFrenchDate(leadStory.createdAt?.toDate() ?? null)}</span>
+                          </div>
+
+                          <h2
+                            className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
+                            style={{ textWrap: 'balance' }}
+                          >
+                            {leadStory.title}
+                          </h2>
+
+                          <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
+                            {leadStory.excerpt}
+                          </p>
+                        </div>
+
+                        <div className="lg:col-span-4 lg:border-l lg:border-stone-200 lg:pl-8 flex flex-col justify-between h-full space-y-6">
+                          {leadStory.promptQuestion && (
+                            <div>
+                              <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
+                                Fil d’origine
+                              </p>
+                              <p className="text-sm text-stone-700 italic leading-relaxed">
+                                « {leadStory.promptQuestion} »
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-5 text-xs text-stone-600 tabular-nums">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Heart className="w-3.5 h-3.5 text-stone-500" />
+                                {leadStory.resonanceCount} résonance
+                                {leadStory.resonanceCount > 1 ? 's' : ''}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5">
+                                <MessageCircle className="w-3.5 h-3.5 text-stone-500" />
+                                {leadStory.echoCount} écho{leadStory.echoCount > 1 ? 's' : ''}
+                              </span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setReadingStory(leadStory)}
+                              className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                            >
+                              <span>Lire le récit et répondre</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    )}
+
+                    {/* Tier 2: Secondary Stories Grid */}
+                    {secondaryStories.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {secondaryStories.map((story) => {
+                          const salonInfo = THEME_MAP[story.theme];
+                          return (
+                            <article
+                              key={story.storyId}
+                              className="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                            >
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                  <button
+                                    type="button"
+                                    onClick={() => enterSalon(story.theme)}
+                                    style={{ color: salonInfo?.palette.textAccent }}
+                                    className="font-medium hover:underline"
+                                  >
+                                    {salonInfo?.salonName}
+                                  </button>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{story.authorName}</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{story.readingMinutes} min</span>
+                                  <span aria-hidden="true">·</span>
+                                  <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                                </div>
+
+                                <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                  {story.title}
+                                </h3>
+                                <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
+                              </div>
+
+                              <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
+                                <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
+                                  <span className="inline-flex items-center gap-1">
+                                    <Heart className="w-3.5 h-3.5" />
+                                    {story.resonanceCount}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <MessageCircle className="w-3.5 h-3.5" />
+                                    {story.echoCount}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setReadingStory(story)}
+                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                                >
+                                  <span>Lire et échanger</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </section>
                 )}
-              </section>
+              </div>
             )}
           </div>
         )}
@@ -657,6 +839,7 @@ function SalonApp() {
             onStartFromTheme={(theme, promptQuestion, starter) => {
               void openComposer({ theme, prompt: promptQuestion, starter });
             }}
+            onVisitSalon={(theme) => enterSalon(theme)}
           />
         )}
 
@@ -666,7 +849,7 @@ function SalonApp() {
             selectedExchangeId={selectedExchangeId}
             onSelectExchange={setSelectedExchangeId}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
-            onExploreStories={() => setActiveTab('recits')}
+            onExploreStories={() => enterSalon(null)}
           />
         )}
 
@@ -686,10 +869,10 @@ function SalonApp() {
           <div className="flex items-center gap-6">
             <button
               type="button"
-              onClick={() => setActiveTab('recits')}
+              onClick={() => enterSalon(null)}
               className="hover:text-stone-900 transition-colors"
             >
-              Récits
+              Salons
             </button>
             <button
               type="button"
@@ -724,12 +907,6 @@ function SalonApp() {
         onOpenExchange={(exchangeId) => {
           setSelectedExchangeId(exchangeId);
           setActiveTab('passerelles');
-        }}
-        onWriteInspired={(sample) => {
-          void openComposer({
-            theme: sample.theme,
-            prompt: sample.promptQuestion,
-          });
         }}
       />
 

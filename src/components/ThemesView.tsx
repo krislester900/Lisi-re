@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { ArrowRight, Feather } from 'lucide-react';
 import { STORY_THEMES } from '../lib/themes';
 import { StoryThemeId } from '../types/story';
+import { SalonEmblem } from './SalonEmblem';
 
 interface ThemesViewProps {
   onStartFromTheme: (theme: StoryThemeId, promptQuestion: string, starter: string) => void;
+  onVisitSalon: (theme: StoryThemeId) => void;
 }
 
-export function ThemesView({ onStartFromTheme }: ThemesViewProps) {
+export function ThemesView({ onStartFromTheme, onVisitSalon }: ThemesViewProps) {
   const [img1Failed, setImg1Failed] = useState(false);
   const [img2Failed, setImg2Failed] = useState(false);
 
@@ -26,14 +28,14 @@ export function ThemesView({ onStartFromTheme }: ThemesViewProps) {
               Des questions simples pour ouvrir la conversation sans malaise
             </h1>
             <p className="text-base text-stone-600 leading-relaxed max-w-xl">
-              Il est parfois plus facile de se raconter à partir d’une question précise que devant une feuille blanche. Choisissez un fil qui vous ressemble et utilisez sa phrase d’élan si vous le souhaitez.
+              Chaque fil correspond à l’un des cinq salons de Lisière. Vous pouvez visiter un salon pour en ressentir l’atmosphère, ou partir directement de sa question d’ouverture.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-6 pt-6 border-t border-stone-200">
             <div>
               <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">5</p>
-              <p className="text-xs text-stone-600 mt-1">Thèmes ouverts à tous les parcours</p>
+              <p className="text-xs text-stone-600 mt-1">Salons et fils ouverts à tous les parcours</p>
             </div>
             <div>
               <p className="font-display text-2xl font-medium text-stone-900">1 à 1</p>
@@ -84,15 +86,25 @@ export function ThemesView({ onStartFromTheme }: ThemesViewProps) {
       </section>
 
       <section className="divide-y divide-stone-200 border-t border-b border-stone-200">
-        {STORY_THEMES.map((theme, idx) => (
+        {STORY_THEMES.map((theme) => (
           <div
             key={theme.id}
             className="py-8 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
           >
-            <div className="lg:col-span-4">
-              <p className="text-xs font-mono text-stone-500 tabular-nums mb-1">
-                0{idx + 1}. {theme.label}
-              </p>
+            <div className="lg:col-span-4 space-y-2">
+              <div className="flex items-center gap-2.5">
+                <SalonEmblem
+                  type={theme.emblem}
+                  color={theme.palette.textAccent}
+                  className="w-5 h-5 shrink-0"
+                />
+                <p
+                  style={{ color: theme.palette.textAccent }}
+                  className="text-xs font-medium tracking-wide"
+                >
+                  Salon {theme.romanIndex} · {theme.salonName}
+                </p>
+              </div>
               <h2 className="font-display text-2xl font-medium text-stone-900">
                 {theme.promptQuestion}
               </h2>
@@ -100,22 +112,36 @@ export function ThemesView({ onStartFromTheme }: ThemesViewProps) {
 
             <div className="lg:col-span-5 space-y-3">
               <p className="text-sm text-stone-600 leading-relaxed">{theme.description}</p>
-              <p className="text-sm text-stone-700 italic bg-white border border-stone-200 rounded-md px-4 py-3">
+              <p
+                style={{
+                  backgroundColor: theme.palette.softBg,
+                  borderColor: theme.palette.borderTint,
+                }}
+                className="text-sm text-stone-800 italic border rounded-md px-4 py-3"
+              >
                 Phrase d’élan : « {theme.starterSentence} »
               </p>
             </div>
 
-            <div className="lg:col-span-3 flex lg:justify-end">
+            <div className="lg:col-span-3 flex flex-wrap lg:flex-col lg:items-end gap-2.5">
               <button
                 type="button"
                 onClick={() =>
                   onStartFromTheme(theme.id, theme.promptQuestion, `${theme.starterSentence} `)
                 }
-                className="min-h-[40px] px-4 py-2 text-sm font-medium text-[#1E3A8A] bg-white border border-[#1E3A8A] rounded-md hover:bg-[#1E3A8A] hover:text-white transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                style={{ backgroundColor: theme.palette.accent }}
+                className="min-h-[40px] px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity inline-flex items-center gap-2 whitespace-nowrap shrink-0"
               >
                 <Feather className="w-4 h-4" />
                 <span>Écrire sur ce fil</span>
-                <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onVisitSalon(theme.id)}
+                className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              >
+                <span>Visiter le salon</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

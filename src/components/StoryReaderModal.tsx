@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Heart, MessageCircle, X } from 'lucide-react';
+import { Heart, MessageCircle, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   addStoryEcho,
@@ -18,7 +18,6 @@ interface StoryReaderModalProps {
   onClose: () => void;
   existingExchanges: Exchange[];
   onOpenExchange: (exchangeId: string) => void;
-  onWriteInspired: (story: Story) => void;
 }
 
 export function StoryReaderModal({
@@ -26,7 +25,6 @@ export function StoryReaderModal({
   onClose,
   existingExchanges,
   onOpenExchange,
-  onWriteInspired,
 }: StoryReaderModalProps) {
   const { user, profile, signInWithGoogle } = useAuth();
   const [echoes, setEchoes] = useState<Echo[]>([]);
@@ -52,7 +50,7 @@ export function StoryReaderModal({
     setBridgeMessage('');
     setBridgeError(null);
 
-    if (story.isEditorialSample || story.visibility !== 'public') {
+    if (story.visibility !== 'public') {
       setEchoes([]);
       setHasResonated(false);
       setAuthorProfile(null);
@@ -80,7 +78,6 @@ export function StoryReaderModal({
 
   if (!story) return null;
 
-  const isSample = Boolean(story.isEditorialSample);
   const isAuthor = Boolean(user && user.uid === story.authorId);
   const theme = THEME_MAP[story.theme];
   const paragraphs = story.content
@@ -89,14 +86,13 @@ export function StoryReaderModal({
     .filter(Boolean);
 
   const existingExchange =
-    user && !isSample && !isAuthor
+    user && !isAuthor
       ? existingExchanges.find(
           (ex) => ex.exchangeId === buildExchangeId(story.storyId, user.uid, story.authorId)
         )
       : undefined;
 
   const handleResonate = async () => {
-    if (isSample) return;
     if (!user) {
       await signInWithGoogle();
       return;
@@ -112,7 +108,6 @@ export function StoryReaderModal({
 
   const handleEchoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSample) return;
     if (!user) {
       await signInWithGoogle();
       return;
@@ -178,7 +173,7 @@ export function StoryReaderModal({
       <div className="w-full max-w-4xl bg-[#FBF9F5] border border-stone-300 rounded-lg my-auto overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
           <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500 min-w-0">
-            <span className="truncate">{theme.label}</span>
+            <span className="truncate">{theme.salonName}</span>
             <span aria-hidden="true">·</span>
             <span className="whitespace-nowrap">{story.readingMinutes} min de lecture</span>
             {story.visibility === 'private' && (
@@ -217,11 +212,7 @@ export function StoryReaderModal({
             <div className="flex flex-wrap items-center gap-2 text-sm text-stone-600 pb-6 border-b border-stone-200 mb-8">
               <span className="font-medium text-stone-900">{story.authorName}</span>
               <span aria-hidden="true">·</span>
-              <span>
-                {isSample
-                  ? 'Texte d’ouverture de la rédaction'
-                  : formatFrenchDate(story.createdAt?.toDate() ?? null)}
-              </span>
+              <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
             </div>
 
             <div className="space-y-5 text-base sm:text-[17px] leading-[1.8] text-stone-800">
@@ -251,86 +242,60 @@ export function StoryReaderModal({
 
             {/* Social Action Bar */}
             <div className="mt-10 pt-6 border-t border-stone-200 flex flex-wrap items-center justify-between gap-4">
-              {isSample ? (
-                <div className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white border border-stone-200 rounded-md p-5">
-                  <div>
-                    <p className="text-sm font-medium text-stone-900">
-                      Ce texte d’ouverture vous parle ?
-                    </p>
-                    <p className="text-xs text-stone-600 mt-0.5">
-                      Partagez votre propre histoire sur ce thème pour ouvrir les échanges avec la communauté.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onWriteInspired(story);
-                    }}
-                    className="min-h-[40px] px-4 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
-                  >
-                    <span>Écrire sur ce thème</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleResonate}
+                  disabled={resonateBusy || story.visibility !== 'public'}
+                  className={`min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                    hasResonated
+                      ? 'bg-[#1E3A8A] text-white border-[#1E3A8A]'
+                      : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
+                  }`}
+                >
+                  <Heart className={`w-4 h-4 ${hasResonated ? 'fill-current' : ''}`} />
+                  <span>Cela résonne</span>
+                  <span className="tabular-nums opacity-80">({story.resonanceCount})</span>
+                </button>
+
+                {!isAuthor && story.visibility === 'public' && (
+                  existingExchange ? (
                     <button
                       type="button"
-                      onClick={handleResonate}
-                      disabled={resonateBusy || story.visibility !== 'public'}
-                      className={`min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
-                        hasResonated
-                          ? 'bg-[#1E3A8A] text-white border-[#1E3A8A]'
-                          : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
-                      }`}
+                      onClick={() => {
+                        onClose();
+                        onOpenExchange(existingExchange.exchangeId);
+                      }}
+                      className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-[#1E3A8A] text-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
                     >
-                      <Heart className={`w-4 h-4 ${hasResonated ? 'fill-current' : ''}`} />
-                      <span>Cela résonne</span>
-                      <span className="tabular-nums opacity-80">({story.resonanceCount})</span>
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Poursuivre la passerelle</span>
                     </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!user) {
+                          await signInWithGoogle();
+                          return;
+                        }
+                        setShowBridgeBox((prev) => !prev);
+                      }}
+                      className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-stone-300 text-stone-800 bg-white hover:border-[#1E3A8A] hover:text-[#1E3A8A] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Ouvrir une passerelle</span>
+                    </button>
+                  )
+                )}
+              </div>
 
-                    {!isAuthor && story.visibility === 'public' && (
-                      existingExchange ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onClose();
-                            onOpenExchange(existingExchange.exchangeId);
-                          }}
-                          className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-[#1E3A8A] text-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          <span>Poursuivre la passerelle</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (!user) {
-                              await signInWithGoogle();
-                              return;
-                            }
-                            setShowBridgeBox((prev) => !prev);
-                          }}
-                          className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-stone-300 text-stone-800 bg-white hover:border-[#1E3A8A] hover:text-[#1E3A8A] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                          <span>Ouvrir une passerelle</span>
-                        </button>
-                      )
-                    )}
-                  </div>
-
-                  <span className="text-xs text-stone-500 tabular-nums">
-                    {echoes.length} écho{echoes.length > 1 ? 's' : ''} déposé{echoes.length > 1 ? 's' : ''}
-                  </span>
-                </>
-              )}
+              <span className="text-xs text-stone-500 tabular-nums">
+                {echoes.length} écho{echoes.length > 1 ? 's' : ''} déposé{echoes.length > 1 ? 's' : ''}
+              </span>
             </div>
 
-            {showBridgeBox && !isSample && !isAuthor && (
+            {showBridgeBox && !isAuthor && (
               <form
                 onSubmit={handleOpenBridge}
                 className="mt-6 bg-white border border-stone-200 rounded-md p-5 space-y-4"
@@ -376,7 +341,7 @@ export function StoryReaderModal({
             )}
 
             {/* Echoes Section */}
-            {!isSample && story.visibility === 'public' && (
+            {story.visibility === 'public' && (
               <section className="mt-10 pt-8 border-t border-stone-200" aria-label="Échos des lecteurs">
                 <h2 className="font-display text-2xl font-medium text-stone-900 mb-2">
                   Échos des lecteurs
