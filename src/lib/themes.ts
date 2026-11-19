@@ -4,6 +4,7 @@ import {
   SeriesStatus,
   StoryFormat,
   StoryThemeId,
+  WallAccentTone,
 } from '../types/story';
 
 export type SalonEmblemType = 'bridge' | 'horizon' | 'chairs' | 'leaf' | 'cup';
@@ -388,3 +389,29 @@ export function formatCumulativeMinutes(totalMinutes: number): string {
   const mins = totalMinutes % 60;
   return mins === 0 ? `${hours} h` : `${hours} h ${mins} min`;
 }
+
+export const ACCENT_TONE_PALETTES: Record<
+  WallAccentTone,
+  SalonPalette & { label: string }
+> = {
+  ink: {
+    label: 'Encre nuit',
+    ...STORY_THEMES[0].palette,
+  },
+  ochre: {
+    label: 'Ocre doux',
+    ...STORY_THEMES[1].palette,
+  },
+  terracotta: {
+    label: 'Terracotta',
+    ...STORY_THEMES[2].palette,
+  },
+  sage: {
+    label: 'Vert sauge',
+    ...STORY_THEMES[3].palette,
+  },
+  sand: {
+    label: 'Lin & terre',
+    ...STORY_THEMES[4].palette,
+  },
+};

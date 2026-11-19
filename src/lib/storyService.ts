@@ -21,6 +21,9 @@ import { handleFirestoreError, OperationType } from './firestoreErrors';
 import { estimateReadingMinutes } from './themes';
 import {
   Chapter,
+  CustomSalon,
+  CustomSalonMessage,
+  CustomSalonVisibility,
   Echo,
   EchoReplyType,
   Exchange,
@@ -30,6 +33,8 @@ import {
   ID_PATTERN,
   PublicProfile,
   ReleaseCadence,
+  SalonMember,
+  SalonMemberStatus,
   SalonMessage,
   SeriesStatus,
   Story,
@@ -370,11 +375,18 @@ export function subscribeToUserStories(
   );
 }
 
+export interface StoryCustomSalonTarget {
+  salonId: string;
+  name: string;
+  visibility: CustomSalonVisibility;
+}
+
 export interface StoryInput {
   title: string;
   excerpt: string;
   content: string;
   theme: StoryThemeId;
+  customSalon?: StoryCustomSalonTarget | null;
   storyFormat?: StoryFormat;
   releaseCadence?: ReleaseCadence;
   seriesStatus?: SeriesStatus;
@@ -414,6 +426,8 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
 
   const promptQuestion = clampString(input.promptQuestion, FIELD_LIMITS.promptQuestion.max);
   const readingMinutes = estimateReadingMinutes(content);
+  const effectiveVisibility: StoryVisibility =
+    input.customSalon?.visibility === 'private' ? 'private' : input.visibility;
 
   return {
     authorName: cleanAuthorName,
@@ -425,7 +439,7 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     releaseCadence,
     seriesStatus,
     promptQuestion,
-    visibility: input.visibility,
+    visibility: effectiveVisibility,
     readingMinutes,
   };
 }
@@ -440,18 +454,27 @@ export async function createStory(
   const fields = buildValidatedStoryFields(input, authorName);
   const path = `stories/${storyId}`;
 
+  const docData: Record<string, unknown> = {
+    storyId,
+    authorId,
+    ...fields,
+    chapterCount: 1,
+    resonanceCount: 0,
+    echoCount: 0,
+    viewCount: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (input.customSalon) {
+    assertValidId(input.customSalon.salonId, 'customSalonId');
+    docData.customSalonId = input.customSalon.salonId;
+    docData.customSalonName = clampString(input.customSalon.name, FIELD_LIMITS.salonName.max);
+    docData.customSalonVisibility = input.customSalon.visibility;
+  }
+
   try {
-    await setDoc(doc(db, 'stories', storyId), {
-      storyId,
-      authorId,
-      ...fields,
-      chapterCount: 1,
-      resonanceCount: 0,
-      echoCount: 0,
-      viewCount: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(doc(db, 'stories', storyId), docData);
     return storyId;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
@@ -492,7 +515,8 @@ export function subscribeToStoryChapters(
   storyVisibility: StoryVisibility,
   userId: string | null,
   authorId: string,
-  onData: (chapters: Chapter[]) => void
+  onData: (chapters: Chapter[]) => void,
+  customSalonVisibility?: CustomSalonVisibility
 ): () => void {
   const path = `stories/${storyId}/chapters`;
   const q =
@@ -502,11 +526,13 @@ export function subscribeToStoryChapters(
           where('storyVisibility', '==', 'public'),
           limit(100)
         )
-      : query(
-          collection(db, 'stories', storyId, 'chapters'),
-          where('authorId', '==', userId || authorId),
-          limit(100)
-        );
+      : customSalonVisibility === 'private'
+        ? query(collection(db, 'stories', storyId, 'chapters'), limit(100))
+        : query(
+            collection(db, 'stories', storyId, 'chapters'),
+            where('authorId', '==', userId || authorId),
+            limit(100)
+          );
   return onSnapshot(
     q,
     (snapshot) => {
@@ -1124,5 +1150,427 @@ export async function updateExchangeStatus(
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+// --- User-Created Community Salons & Admission Rules ---
+
+export interface CustomSalonInput {
+  name: string;
+  description: string;
+  promptQuestion: string;
+  admissionRules: string;
+  visibility: CustomSalonVisibility;
+  accentTone: WallAccentTone;
+}
+
+export function subscribeToCustomSalons(onData: (salons: CustomSalon[]) => void): () => void {
+  const path = 'customSalons';
+  const q = query(
+    collection(db, 'customSalons'),
+    where('visibility', 'in', ['public', 'private']),
+    limit(80)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as CustomSalon);
+      list.sort(
+        (a, b) =>
+          toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt)
+      );
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export function subscribeToSalonMemberRecord(
+  salonId: string,
+  userId: string,
+  onData: (member: SalonMember | null) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  assertValidId(userId, 'userId');
+  const path = `customSalons/${salonId}/members/${userId}`;
+  return onSnapshot(
+    doc(db, 'customSalons', salonId, 'members', userId),
+    (snap) => {
+      onData(snap.exists() ? (snap.data() as SalonMember) : null);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  );
+}
+
+export function subscribeToSalonMembersForOwner(
+  salonId: string,
+  ownerId: string,
+  onData: (members: SalonMember[]) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  assertValidId(ownerId, 'ownerId');
+  const path = `customSalons/${salonId}/members`;
+  const q = query(
+    collection(db, 'customSalons', salonId, 'members'),
+    where('salonOwnerId', '==', ownerId),
+    limit(120)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as SalonMember);
+      list.sort((a, b) => toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+function buildValidatedSalonFields(input: CustomSalonInput, ownerName: string) {
+  const cleanOwnerName = clampString(ownerName, FIELD_LIMITS.displayName.max);
+  const name = clampString(input.name, FIELD_LIMITS.salonName.max);
+  if (name.length < FIELD_LIMITS.salonName.min) {
+    throw new Error('Le nom du salon doit contenir au moins 3 caractères.');
+  }
+
+  const description = clampString(input.description, FIELD_LIMITS.salonDescription.max);
+  if (description.length < FIELD_LIMITS.salonDescription.min) {
+    throw new Error('La présentation du salon doit contenir au moins 10 caractères.');
+  }
+
+  return {
+    name,
+    description,
+    promptQuestion: clampString(input.promptQuestion, FIELD_LIMITS.salonPrompt.max),
+    admissionRules: clampString(input.admissionRules, FIELD_LIMITS.salonAdmissionRules.max),
+    visibility: input.visibility,
+    ownerName: cleanOwnerName.length >= 2 ? cleanOwnerName : 'Auteur',
+    accentTone: input.accentTone,
+  };
+}
+
+export async function createCustomSalon(
+  ownerId: string,
+  ownerName: string,
+  input: CustomSalonInput
+): Promise<string> {
+  assertValidId(ownerId, 'ownerId');
+  const fields = buildValidatedSalonFields(input, ownerName);
+  const salonId = generateSafeId('salon');
+  const salonRef = doc(db, 'customSalons', salonId);
+  const ownerMemberRef = doc(db, 'customSalons', salonId, 'members', ownerId);
+  const path = `customSalons/${salonId}`;
+
+  try {
+    const batch = writeBatch(db);
+    batch.set(salonRef, {
+      salonId,
+      ...fields,
+      ownerId,
+      memberCount: 1,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.set(ownerMemberRef, {
+      userId: ownerId,
+      salonId,
+      salonOwnerId: ownerId,
+      userName: fields.ownerName,
+      requestNote: '',
+      status: 'approved',
+      role: 'owner',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return salonId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateCustomSalon(
+  salonId: string,
+  ownerName: string,
+  input: CustomSalonInput
+): Promise<void> {
+  assertValidId(salonId, 'salonId');
+  const fields = buildValidatedSalonFields(input, ownerName);
+  const path = `customSalons/${salonId}`;
+
+  try {
+    await updateDoc(doc(db, 'customSalons', salonId), {
+      ...fields,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteCustomSalon(salonId: string): Promise<void> {
+  assertValidId(salonId, 'salonId');
+  const path = `customSalons/${salonId}`;
+  try {
+    await deleteDoc(doc(db, 'customSalons', salonId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function joinOrRequestCustomSalon(params: {
+  salon: CustomSalon;
+  userId: string;
+  userName: string;
+  requestNote?: string;
+}): Promise<SalonMemberStatus> {
+  assertValidId(params.salon.salonId, 'salonId');
+  assertValidId(params.userId, 'userId');
+  const cleanUserName = clampString(params.userName, FIELD_LIMITS.displayName.max);
+  const safeUserName = cleanUserName.length >= 2 ? cleanUserName : 'Auteur';
+  const cleanNote = clampString(params.requestNote ?? '', FIELD_LIMITS.salonRequestNote.max);
+
+  const salonRef = doc(db, 'customSalons', params.salon.salonId);
+  const memberRef = doc(db, 'customSalons', params.salon.salonId, 'members', params.userId);
+  const path = `customSalons/${params.salon.salonId}/members/${params.userId}`;
+
+  try {
+    const existingSnap = await getDoc(memberRef);
+
+    if (params.salon.visibility === 'public') {
+      if (existingSnap.exists()) {
+        const existingData = existingSnap.data() as SalonMember;
+        if (existingData.status === 'approved') {
+          return 'approved';
+        }
+        await deleteDoc(memberRef);
+      }
+
+      const batch = writeBatch(db);
+      batch.set(memberRef, {
+        userId: params.userId,
+        salonId: params.salon.salonId,
+        salonOwnerId: params.salon.ownerId,
+        userName: safeUserName,
+        requestNote: cleanNote,
+        status: 'approved',
+        role: 'member',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(salonRef, {
+        memberCount: increment(1),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+      return 'approved';
+    }
+
+    // Private salon admission request
+    if (existingSnap.exists()) {
+      const existingData = existingSnap.data() as SalonMember;
+      if (existingData.status === 'approved') {
+        return 'approved';
+      }
+      await updateDoc(memberRef, {
+        status: 'pending',
+        requestNote: cleanNote,
+        userName: safeUserName,
+        updatedAt: serverTimestamp(),
+      });
+      return 'pending';
+    }
+
+    await setDoc(memberRef, {
+      userId: params.userId,
+      salonId: params.salon.salonId,
+      salonOwnerId: params.salon.ownerId,
+      userName: safeUserName,
+      requestNote: cleanNote,
+      status: 'pending',
+      role: 'member',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return 'pending';
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function respondToSalonMemberRequest(params: {
+  salonId: string;
+  targetUserId: string;
+  decision: 'approved' | 'rejected';
+  previousStatus: SalonMemberStatus;
+}): Promise<void> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.targetUserId, 'targetUserId');
+  const salonRef = doc(db, 'customSalons', params.salonId);
+  const memberRef = doc(db, 'customSalons', params.salonId, 'members', params.targetUserId);
+  const path = `customSalons/${params.salonId}/members/${params.targetUserId}`;
+
+  try {
+    if (params.decision === 'approved' && params.previousStatus !== 'approved') {
+      const batch = writeBatch(db);
+      batch.update(memberRef, {
+        status: 'approved',
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(salonRef, {
+        memberCount: increment(1),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+      return;
+    }
+
+    if (params.decision === 'rejected' && params.previousStatus === 'approved') {
+      const batch = writeBatch(db);
+      batch.update(memberRef, {
+        status: 'rejected',
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(salonRef, {
+        memberCount: increment(-1),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+      return;
+    }
+
+    await updateDoc(memberRef, {
+      status: params.decision,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function leaveOrRemoveSalonMember(params: {
+  salonId: string;
+  targetUserId: string;
+  wasApproved: boolean;
+}): Promise<void> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.targetUserId, 'targetUserId');
+  const salonRef = doc(db, 'customSalons', params.salonId);
+  const memberRef = doc(db, 'customSalons', params.salonId, 'members', params.targetUserId);
+  const path = `customSalons/${params.salonId}/members/${params.targetUserId}`;
+
+  try {
+    if (params.wasApproved) {
+      const batch = writeBatch(db);
+      batch.delete(memberRef);
+      batch.update(salonRef, {
+        memberCount: increment(-1),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+    } else {
+      await deleteDoc(memberRef);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export function subscribeToCustomSalonStories(
+  salonId: string,
+  onData: (stories: Story[]) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  const path = 'stories';
+  const q = query(collection(db, 'stories'), where('customSalonId', '==', salonId), limit(80));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as Story);
+      list.sort(
+        (a, b) =>
+          toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt)
+      );
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export function subscribeToCustomSalonMessages(
+  salonId: string,
+  onData: (messages: CustomSalonMessage[]) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  const path = `customSalons/${salonId}/messages`;
+  const q = query(
+    collection(db, 'customSalons', salonId, 'messages'),
+    where('salonId', '==', salonId),
+    limit(150)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as CustomSalonMessage);
+      list.sort((a, b) => toTimestampMs(a.createdAt) - toTimestampMs(b.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function sendCustomSalonMessage(params: {
+  salonId: string;
+  senderId: string;
+  senderName: string;
+  rawContent: string;
+}): Promise<void> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.senderId, 'senderId');
+
+  const content = clampString(params.rawContent, FIELD_LIMITS.salonChatContent.max);
+  if (content.length < FIELD_LIMITS.salonChatContent.min) {
+    throw new Error('Écrivez un message avant d’envoyer.');
+  }
+
+  const cleanName = clampString(params.senderName, FIELD_LIMITS.displayName.max);
+  const messageId = generateSafeId('csmsg');
+  const path = `customSalons/${params.salonId}/messages/${messageId}`;
+
+  try {
+    await setDoc(doc(db, 'customSalons', params.salonId, 'messages', messageId), {
+      messageId,
+      salonId: params.salonId,
+      senderId: params.senderId,
+      senderName: cleanName.length >= 2 ? cleanName : 'Auteur',
+      content,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function deleteCustomSalonMessage(
+  salonId: string,
+  messageId: string
+): Promise<void> {
+  assertValidId(salonId, 'salonId');
+  assertValidId(messageId, 'messageId');
+  const path = `customSalons/${salonId}/messages/${messageId}`;
+  try {
+    await deleteDoc(doc(db, 'customSalons', salonId, 'messages', messageId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
   }
 }

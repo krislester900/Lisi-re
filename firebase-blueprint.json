@@ -198,6 +198,19 @@
           "type": "string",
           "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
         },
+        "customSalonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customSalonName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "customSalonVisibility": {
+          "type": "string",
+          "enum": ["public", "private"]
+        },
         "storyFormat": {
           "type": "string",
           "enum": ["confession", "roman"]
@@ -628,6 +641,174 @@
         "content",
         "createdAt"
       ]
+    },
+    "CustomSalon": {
+      "title": "CustomSalon",
+      "description": "A user-created literary salon with configurable public or private visibility and custom admission rules.",
+      "type": "object",
+      "properties": {
+        "salonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 80
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 360
+        },
+        "promptQuestion": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "admissionRules": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "private"]
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "accentTone": {
+          "type": "string",
+          "enum": ["ink", "ochre", "terracotta", "sage", "sand"]
+        },
+        "memberCount": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "salonId",
+        "name",
+        "description",
+        "promptQuestion",
+        "admissionRules",
+        "visibility",
+        "ownerId",
+        "ownerName",
+        "accentTone",
+        "memberCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SalonMember": {
+      "title": "SalonMember",
+      "description": "Membership or admission request record for a user-created salon.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "salonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "salonOwnerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "requestNote": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"]
+        },
+        "role": {
+          "type": "string",
+          "enum": ["owner", "member"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "salonId",
+        "salonOwnerId",
+        "userName",
+        "requestNote",
+        "status",
+        "role",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CustomSalonMessage": {
+      "title": "CustomSalonMessage",
+      "description": "A text-only chat message posted inside a user-created salon.",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "salonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["messageId", "salonId", "senderId", "senderName", "content", "createdAt"]
     }
   },
   "firestore": {
@@ -696,6 +877,24 @@
         "$ref": "#/entities/ExchangeMessage"
       },
       "description": "Text messages within a one-to-one private exchange."
+    },
+    "/customSalons/{salonId}": {
+      "schema": {
+        "$ref": "#/entities/CustomSalon"
+      },
+      "description": "User-created public or private literary salons with custom admission rules."
+    },
+    "/customSalons/{salonId}/members/{userId}": {
+      "schema": {
+        "$ref": "#/entities/SalonMember"
+      },
+      "description": "Salon membership and admission requests per user-created salon."
+    },
+    "/customSalons/{salonId}/messages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/CustomSalonMessage"
+      },
+      "description": "Text-only discussion messages inside a user-created salon."
     }
   }
 }

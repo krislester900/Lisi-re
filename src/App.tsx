@@ -1,12 +1,30 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, BookOpen, Feather, Heart, MessageCircle, Search, X } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  Compass,
+  Feather,
+  Globe,
+  Heart,
+  Lock,
+  MessageCircle,
+  Plus,
+  Search,
+  ShieldCheck,
+  Users,
+  X,
+} from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
+import { CustomSalonModal } from './components/CustomSalonModal';
+import { CustomSalonRoomView } from './components/CustomSalonRoomView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExchangesView } from './components/ExchangesView';
 import { JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
 import { MembersDirectoryView } from './components/MembersDirectoryView';
+import { PeleMeleStoriesView } from './components/PeleMeleStoriesView';
+import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { SalonEmblem } from './components/SalonEmblem';
 import { SalonRoomView } from './components/SalonRoomView';
 import { StoryComposerModal } from './components/StoryComposerModal';
@@ -16,54 +34,103 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { db } from './lib/firebase';
 import {
   buildDirectExchangeId,
+  subscribeToCustomSalons,
   subscribeToDiscoverableProfiles,
   subscribeToPublicStories,
   subscribeToUserExchanges,
   subscribeToUserStories,
 } from './lib/storyService';
-import { formatFrenchDate, STORY_FORMAT_LABELS, STORY_THEMES, THEME_MAP } from './lib/themes';
-import { Exchange, PublicProfile, Story, StoryThemeId } from './types/story';
+import {
+  ACCENT_TONE_PALETTES,
+  formatFrenchDate,
+  STORY_FORMAT_LABELS,
+  STORY_THEMES,
+  THEME_MAP,
+} from './lib/themes';
+import { CustomSalon, Exchange, PublicProfile, Story, StoryThemeId } from './types/story';
 
-type NavTab = 'recits' | 'membres' | 'themes' | 'passerelles' | 'carnet';
+type NavTab =
+  | 'recits'
+  | 'pelemele'
+  | 'membres'
+  | 'themes'
+  | 'passerelles'
+  | 'carnet'
+  | 'confidentialite';
 
 const VALID_SALON_IDS = new Set<string>(STORY_THEMES.map((t) => t.id));
 
 function parseLocationPath(pathname: string): {
   tab: NavTab;
   salonId: StoryThemeId | null;
+  customSalonId: string | null;
   memberId: string | null;
 } {
   const clean = pathname.replace(/\/+$/, '') || '/';
   if (clean.startsWith('/salons/')) {
     const slug = clean.slice('/salons/'.length);
     if (VALID_SALON_IDS.has(slug)) {
-      return { tab: 'recits', salonId: slug as StoryThemeId, memberId: null };
+      return {
+        tab: 'recits',
+        salonId: slug as StoryThemeId,
+        customSalonId: null,
+        memberId: null,
+      };
     }
   }
-  if (clean === '/membres') return { tab: 'membres', salonId: null, memberId: null };
+  if (clean.startsWith('/communaute/')) {
+    const customSlug = decodeURIComponent(clean.slice('/communaute/'.length));
+    if (customSlug) {
+      return {
+        tab: 'recits',
+        salonId: null,
+        customSalonId: customSlug,
+        memberId: null,
+      };
+    }
+  }
+  if (clean === '/histoires') {
+    return { tab: 'pelemele', salonId: null, customSalonId: null, memberId: null };
+  }
+  if (clean === '/membres') {
+    return { tab: 'membres', salonId: null, customSalonId: null, memberId: null };
+  }
   if (clean.startsWith('/membres/')) {
     const memberSlug = decodeURIComponent(clean.slice('/membres/'.length));
     if (memberSlug) {
-      return { tab: 'membres', salonId: null, memberId: memberSlug };
+      return { tab: 'membres', salonId: null, customSalonId: null, memberId: memberSlug };
     }
   }
-  if (clean === '/themes') return { tab: 'themes', salonId: null, memberId: null };
-  if (clean === '/passerelles') return { tab: 'passerelles', salonId: null, memberId: null };
-  if (clean === '/carnet') return { tab: 'carnet', salonId: null, memberId: null };
-  return { tab: 'recits', salonId: null, memberId: null };
+  if (clean === '/themes') {
+    return { tab: 'themes', salonId: null, customSalonId: null, memberId: null };
+  }
+  if (clean === '/passerelles') {
+    return { tab: 'passerelles', salonId: null, customSalonId: null, memberId: null };
+  }
+  if (clean === '/carnet') {
+    return { tab: 'carnet', salonId: null, customSalonId: null, memberId: null };
+  }
+  if (clean === '/confidentialite') {
+    return { tab: 'confidentialite', salonId: null, customSalonId: null, memberId: null };
+  }
+  return { tab: 'recits', salonId: null, customSalonId: null, memberId: null };
 }
 
 function buildLocationPath(
   tab: NavTab,
   salonId: StoryThemeId | null,
-  memberId: string | null = null
+  memberId: string | null = null,
+  customSalonId: string | null = null
 ): string {
+  if (tab === 'pelemele') return '/histoires';
   if (tab === 'membres') {
     return memberId ? `/membres/${encodeURIComponent(memberId)}` : '/membres';
   }
   if (tab === 'themes') return '/themes';
   if (tab === 'passerelles') return '/passerelles';
   if (tab === 'carnet') return '/carnet';
+  if (tab === 'confidentialite') return '/confidentialite';
+  if (customSalonId) return `/communaute/${encodeURIComponent(customSalonId)}`;
   if (salonId) return `/salons/${salonId}`;
   return '/';
 }
@@ -74,11 +141,17 @@ function SalonApp() {
   const [activeTab, setActiveTab] = useState<NavTab>(initialRoute.tab);
   const [highlightedTab, setHighlightedTab] = useState<NavTab>(initialRoute.tab);
   const [activeSalonId, setActiveSalonId] = useState<StoryThemeId | null>(initialRoute.salonId);
+  const [activeCustomSalonId, setActiveCustomSalonId] = useState<string | null>(
+    initialRoute.customSalonId
+  );
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(initialRoute.memberId);
   const [isViewFading, setIsViewFading] = useState(false);
   const navTimerRef = useRef<number | null>(null);
   const [publicStories, setPublicStories] = useState<Story[]>([]);
   const [myStories, setMyStories] = useState<Story[]>([]);
+  const [customSalons, setCustomSalons] = useState<CustomSalon[]>([]);
+  const [customSalonsLoaded, setCustomSalonsLoaded] = useState(false);
+  const [customSalonFilter, setCustomSalonFilter] = useState<'all' | 'public' | 'private'>('all');
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [discoverableProfiles, setDiscoverableProfiles] = useState<PublicProfile[]>([]);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
@@ -99,16 +172,27 @@ function SalonApp() {
     theme: StoryThemeId;
     prompt?: string;
     starter?: string;
-  }>({ theme: 'creation' });
+    customSalonId?: string | null;
+  }>({ theme: 'creation', customSalonId: null });
+
+  const [customSalonModalOpen, setCustomSalonModalOpen] = useState(false);
+  const [editingCustomSalon, setEditingCustomSalon] = useState<CustomSalon | null>(null);
 
   const [toastNotice, setToastNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = subscribeToPublicStories((stories) => {
+    const unsubStories = subscribeToPublicStories((stories) => {
       setPublicStories(stories);
       setStoriesLoaded(true);
     });
-    return () => unsub();
+    const unsubSalons = subscribeToCustomSalons((salons) => {
+      setCustomSalons(salons);
+      setCustomSalonsLoaded(true);
+    });
+    return () => {
+      unsubStories();
+      unsubSalons();
+    };
   }, []);
 
   useEffect(() => {
@@ -153,6 +237,7 @@ function SalonApp() {
     theme?: StoryThemeId;
     prompt?: string;
     starter?: string;
+    customSalonId?: string | null;
     edit?: Story | null;
   }) => {
     if (!user) {
@@ -164,8 +249,18 @@ function SalonApp() {
       theme: options?.theme ?? 'creation',
       prompt: options?.prompt,
       starter: options?.starter,
+      customSalonId: options?.customSalonId ?? null,
     });
     setComposerOpen(true);
+  };
+
+  const openCustomSalonModal = async (salonToEdit: CustomSalon | null = null) => {
+    if (!user) {
+      await signInWithGoogle();
+      return;
+    }
+    setEditingCustomSalon(salonToEdit);
+    setCustomSalonModalOpen(true);
   };
 
   const handleOpenStoryById = async (storyId: string) => {
@@ -217,10 +312,24 @@ function SalonApp() {
     return counts;
   }, [publicStories]);
 
+  const activeCustomSalon = useMemo(
+    () =>
+      activeCustomSalonId
+        ? customSalons.find((s) => s.salonId === activeCustomSalonId) ?? null
+        : null,
+    [customSalons, activeCustomSalonId]
+  );
+
+  const filteredCustomSalons = useMemo(() => {
+    if (customSalonFilter === 'all') return customSalons;
+    return customSalons.filter((s) => s.visibility === customSalonFilter);
+  }, [customSalons, customSalonFilter]);
+
   const applyRouteChangeWithFade = (
     tab: NavTab,
     salonId: StoryThemeId | null,
-    memberId: string | null
+    memberId: string | null,
+    customSalonId: string | null = null
   ) => {
     setHighlightedTab(tab);
 
@@ -236,6 +345,7 @@ function SalonApp() {
     if (reducedMotion) {
       setActiveTab(tab);
       setActiveSalonId(salonId);
+      setActiveCustomSalonId(customSalonId);
       setSelectedMemberId(memberId);
       setIsViewFading(false);
       window.scrollTo({ top: 0, behavior: 'auto' });
@@ -247,6 +357,7 @@ function SalonApp() {
       navTimerRef.current = null;
       setActiveTab(tab);
       setActiveSalonId(salonId);
+      setActiveCustomSalonId(customSalonId);
       setSelectedMemberId(memberId);
       window.scrollTo({ top: 0, behavior: 'auto' });
       window.requestAnimationFrame(() => {
@@ -258,11 +369,13 @@ function SalonApp() {
   const navigateTo = (
     tab: NavTab,
     salonId: StoryThemeId | null = null,
-    memberId: string | null = null
+    memberId: string | null = null,
+    customSalonId: string | null = null
   ) => {
     if (
       tab === activeTab &&
       salonId === activeSalonId &&
+      customSalonId === activeCustomSalonId &&
       memberId === selectedMemberId &&
       !isViewFading
     ) {
@@ -270,17 +383,22 @@ function SalonApp() {
       return;
     }
 
-    const nextPath = buildLocationPath(tab, salonId, memberId);
+    const nextPath = buildLocationPath(tab, salonId, memberId, customSalonId);
     if (window.location.pathname !== nextPath) {
-      window.history.pushState({ tab, salonId, memberId }, '', nextPath);
+      window.history.pushState({ tab, salonId, memberId, customSalonId }, '', nextPath);
     }
-    applyRouteChangeWithFade(tab, salonId, memberId);
+    applyRouteChangeWithFade(tab, salonId, memberId, customSalonId);
   };
 
   useEffect(() => {
     const onPopState = () => {
       const parsed = parseLocationPath(window.location.pathname);
-      applyRouteChangeWithFade(parsed.tab, parsed.salonId, parsed.memberId);
+      applyRouteChangeWithFade(
+        parsed.tab,
+        parsed.salonId,
+        parsed.memberId,
+        parsed.customSalonId
+      );
     };
     window.addEventListener('popstate', onPopState);
     return () => {
@@ -292,9 +410,15 @@ function SalonApp() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'recits' && activeSalonId) {
+    if (activeTab === 'recits' && activeCustomSalonId) {
+      document.title = activeCustomSalon
+        ? `${activeCustomSalon.name} — Lisière`
+        : 'Salon communautaire — Lisière';
+    } else if (activeTab === 'recits' && activeSalonId) {
       const salon = THEME_MAP[activeSalonId];
       document.title = `${salon.salonName} — Lisière`;
+    } else if (activeTab === 'pelemele') {
+      document.title = 'Histoires pêle-mêle — Lisière';
     } else if (activeTab === 'membres') {
       document.title = selectedMemberId ? 'Mur du membre — Lisière' : 'Membres et murs — Lisière';
     } else if (activeTab === 'themes') {
@@ -303,13 +427,19 @@ function SalonApp() {
       document.title = 'Passerelles privées — Lisière';
     } else if (activeTab === 'carnet') {
       document.title = 'Mon carnet — Lisière';
+    } else if (activeTab === 'confidentialite') {
+      document.title = 'Politique de confidentialité — Lisière';
     } else {
       document.title = 'Lisière — Récits personnels et échanges humains';
     }
-  }, [activeTab, activeSalonId, selectedMemberId]);
+  }, [activeTab, activeSalonId, activeCustomSalonId, activeCustomSalon, selectedMemberId]);
 
   const enterSalon = (salonId: StoryThemeId | null) => {
-    navigateTo('recits', salonId, null);
+    navigateTo('recits', salonId, null, null);
+  };
+
+  const enterCustomSalon = (customSalonId: string) => {
+    navigateTo('recits', null, null, customSalonId);
   };
 
   const openMemberWall = (memberId: string) => {
@@ -358,10 +488,10 @@ function SalonApp() {
             <LisiereLogo className="h-8 w-auto" />
           </button>
 
-          {/* Zone 2: 5 concise single-line text nav links */}
+          {/* Zone 2: Concise single-line text nav links */}
           <nav
             aria-label="Navigation principale"
-            className="hidden md:flex items-center gap-7 text-sm font-medium"
+            className="hidden md:flex items-center gap-5 lg:gap-7 text-sm font-medium"
           >
             <button
               type="button"
@@ -373,6 +503,17 @@ function SalonApp() {
               }`}
             >
               Salons
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('pelemele')}
+              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
+                highlightedTab === 'pelemele'
+                  ? 'text-stone-900 border-[#1E3A8A]'
+                  : 'text-stone-600 border-transparent hover:text-stone-900'
+              }`}
+            >
+              Pêle-mêle
             </button>
             <button
               type="button"
@@ -450,6 +591,7 @@ function SalonApp() {
           {(
             [
               { id: 'recits', label: 'Salons' },
+              { id: 'pelemele', label: 'Pêle-mêle' },
               { id: 'membres', label: 'Membres' },
               { id: 'themes', label: 'Thèmes' },
               {
@@ -462,7 +604,7 @@ function SalonApp() {
             <button
               key={item.id}
               type="button"
-              onClick={() => navigateTo(item.id, null, null)}
+              onClick={() => navigateTo(item.id, null, null, null)}
               className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 transition-colors ${
                 highlightedTab === item.id
                   ? 'text-stone-900 border-[#1E3A8A]'
@@ -530,6 +672,41 @@ function SalonApp() {
           />
         )}
 
+        {activeTab === 'recits' && activeCustomSalonId !== null && (
+          <CustomSalonRoomView
+            salon={activeCustomSalon}
+            salonsLoaded={customSalonsLoaded}
+            onBackToSalons={() => enterSalon(null)}
+            onEditSalon={(salonToEdit) => void openCustomSalonModal(salonToEdit)}
+            onReadStory={(story) => setReadingStory(story)}
+            onWriteInCustomSalon={(targetSalon) =>
+              void openComposer({
+                theme: 'creation',
+                prompt: targetSalon.promptQuestion || undefined,
+                customSalonId: targetSalon.salonId,
+              })
+            }
+            onOpenMemberWall={openMemberWall}
+          />
+        )}
+
+        {activeTab === 'pelemele' && (
+          <PeleMeleStoriesView
+            publicStories={publicStories}
+            storiesLoaded={storiesLoaded}
+            onReadStory={(story) => setReadingStory(story)}
+            onEnterSalon={(id) => enterSalon(id)}
+            onEnterCustomSalon={(id) => enterCustomSalon(id)}
+            onOpenMemberWall={openMemberWall}
+            onBackToSalons={() => enterSalon(null)}
+            onWriteStory={() => void openComposer()}
+          />
+        )}
+
+        {activeTab === 'confidentialite' && (
+          <PrivacyPolicyView onBackToSalons={() => enterSalon(null)} />
+        )}
+
         {activeTab === 'membres' && (
           <MembersDirectoryView
             profiles={discoverableProfiles}
@@ -547,14 +724,14 @@ function SalonApp() {
           />
         )}
 
-        {activeTab === 'recits' && activeSalonId === null && (
+        {activeTab === 'recits' && activeSalonId === null && activeCustomSalonId === null && (
           <div className="max-w-6xl mx-auto px-6 py-10 sm:py-14 space-y-16">
             {/* Hero 2-column Editorial Split */}
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
               <div className="lg:col-span-7 flex flex-col justify-between space-y-8">
                 <div className="space-y-5">
                   <p className="text-xs uppercase tracking-widest text-stone-500">
-                    Maison d’édition participative · 5 salons thématiques
+                    Maison d’édition participative · Salons & histoires pêle-mêle
                   </p>
                   <h1
                     className="font-display text-4xl sm:text-5xl font-medium text-stone-900 leading-[1.12]"
@@ -563,12 +740,12 @@ function SalonApp() {
                     Créer des histoires qui relient ceux qui peinent parfois à se parler.
                   </h1>
                   <p className="text-base sm:text-lg text-stone-600 leading-relaxed max-w-2xl">
-                    Lisière s’organise en cinq salons aux atmosphères singulières. Visitez chaque pièce à votre rythme, découvrez son univers et sa question d’ouverture, ou déposez votre propre récit pour tisser une passerelle.
+                    Explorez les cinq salons de Lisière, parcourez toutes les histoires pêle-mêle ou créez votre propre salon public ou privé avec vos règles d’admission.
                   </p>
                 </div>
 
                 <div className="space-y-8">
-                  <div className="flex flex-wrap items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
                       onClick={() => void openComposer()}
@@ -579,11 +756,19 @@ function SalonApp() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => enterSalon(STORY_THEMES[0].id)}
+                      onClick={() => navigateTo('pelemele')}
                       className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
                     >
-                      <span>Faire le tour des salons</span>
-                      <ArrowRight className="w-4 h-4" />
+                      <Compass className="w-4 h-4" />
+                      <span>Histoires pêle-mêle</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void openCustomSalonModal(null)}
+                      className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-[#1B365D] bg-white border border-[#1B365D]/40 rounded-md hover:border-[#1B365D] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Créer un salon</span>
                     </button>
                   </div>
 
@@ -804,6 +989,187 @@ function SalonApp() {
               </div>
             </section>
 
+            {/* User-Created Community Salons Section */}
+            <section
+              id="salons-communaute"
+              aria-labelledby="salons-communaute-title"
+              className="pt-10 border-t border-stone-200 space-y-7"
+            >
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div className="space-y-2 max-w-2xl">
+                  <p className="text-xs uppercase tracking-widest text-stone-500">
+                    Cercles fondés par les membres · Publics ou privés
+                  </p>
+                  <h2
+                    id="salons-communaute-title"
+                    className="font-display text-3xl font-medium text-stone-900"
+                    style={{ textWrap: 'balance' }}
+                  >
+                    Salons de la communauté
+                  </h2>
+                  <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                    Chaque membre peut ouvrir son propre salon pour y partager des récits et définir librement ses règles d’admission, en accès public ou sur demande privée.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                  {customSalons.length > 0 && (
+                    <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md">
+                      {(
+                        [
+                          { id: 'all', label: 'Tous' },
+                          { id: 'public', label: 'Publics' },
+                          { id: 'private', label: 'Privés' },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setCustomSalonFilter(opt.id)}
+                          className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap ${
+                            customSalonFilter === opt.id
+                              ? 'bg-white text-stone-900 shadow-sm'
+                              : 'text-stone-600 hover:text-stone-900'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => void openCustomSalonModal(null)}
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Créer un salon</span>
+                  </button>
+                </div>
+              </div>
+
+              {!customSalonsLoaded ? (
+                <div className="py-8 text-center text-sm text-stone-500">
+                  Chargement des salons de la communauté…
+                </div>
+              ) : filteredCustomSalons.length === 0 ? (
+                <div className="bg-white border border-stone-200 rounded-lg p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                  <div className="space-y-1.5 max-w-xl">
+                    <h3 className="font-display text-xl font-medium text-stone-900">
+                      {customSalons.length === 0
+                        ? 'Aucun salon communautaire n’a encore été ouvert'
+                        : 'Aucun salon dans cette catégorie'}
+                    </h3>
+                    <p className="text-sm text-stone-600">
+                      Créez un cercle ouvert à tous ou un salon privé avec vos propres conditions d’admission pour réunir vos lecteurs et vos histoires.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void openCustomSalonModal(null)}
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-[#1B365D] bg-white border border-[#1B365D] rounded-md hover:bg-[#1B365D] hover:text-white transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 self-start sm:self-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Ouvrir le premier salon</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredCustomSalons.map((cs) => {
+                    const pal = ACCENT_TONE_PALETTES[cs.accentTone] ?? ACCENT_TONE_PALETTES.ink;
+                    return (
+                      <article
+                        key={cs.salonId}
+                        style={{
+                          borderColor: pal.borderTint,
+                          borderTopColor: pal.swatch,
+                        }}
+                        className="bg-white border border-t-2 rounded-lg flex flex-col justify-between overflow-hidden"
+                      >
+                        <div className="p-6 space-y-3.5">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span
+                              style={{ color: pal.textAccent }}
+                              className="font-semibold inline-flex items-center gap-1.5"
+                            >
+                              {cs.visibility === 'private' ? (
+                                <>
+                                  <Lock className="w-3.5 h-3.5" />
+                                  <span>Salon privé</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Globe className="w-3.5 h-3.5" />
+                                  <span>Salon public</span>
+                                </>
+                              )}
+                            </span>
+                            <span className="text-stone-500 tabular-nums inline-flex items-center gap-1">
+                              <Users className="w-3.5 h-3.5" />
+                              {cs.memberCount}
+                            </span>
+                          </div>
+
+                          <div>
+                            <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                              <button
+                                type="button"
+                                onClick={() => enterCustomSalon(cs.salonId)}
+                                className="text-left hover:underline focus-visible:outline-none"
+                              >
+                                {cs.name}
+                              </button>
+                            </h3>
+                            <p className="text-xs text-stone-500 mt-1">
+                              Par{' '}
+                              <button
+                                type="button"
+                                onClick={() => openMemberWall(cs.ownerId)}
+                                className="font-medium text-stone-700 hover:underline"
+                              >
+                                {cs.ownerName}
+                              </button>
+                            </p>
+                          </div>
+
+                          <p className="text-sm text-stone-600 leading-relaxed line-clamp-3">
+                            {cs.description}
+                          </p>
+
+                          {cs.admissionRules.trim() && (
+                            <div className="pt-2 border-t border-stone-100 text-xs text-stone-600 flex items-start gap-1.5">
+                              <ShieldCheck className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                              <span className="line-clamp-2">{cs.admissionRules}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div
+                          style={{ backgroundColor: pal.softBg }}
+                          className="px-6 py-3.5 border-t border-stone-200/70 flex items-center justify-between gap-3"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => enterCustomSalon(cs.salonId)}
+                            style={{ color: pal.textAccent }}
+                            className="min-h-[36px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <span>
+                              {cs.visibility === 'private'
+                                ? 'Voir les règles & demander'
+                                : 'Entrer dans le salon'}
+                            </span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
             {/* Community Stories Feed (when stories exist in Firestore) */}
             {!storiesLoaded ? (
               <div className="py-10 text-center text-sm text-stone-500">
@@ -907,11 +1273,15 @@ function SalonApp() {
                           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
                             <button
                               type="button"
-                              onClick={() => enterSalon(leadStory.theme)}
+                              onClick={() =>
+                                leadStory.customSalonId
+                                  ? enterCustomSalon(leadStory.customSalonId)
+                                  : enterSalon(leadStory.theme)
+                              }
                               style={{ color: THEME_MAP[leadStory.theme]?.palette.textAccent }}
                               className="uppercase tracking-widest font-medium hover:underline"
                             >
-                              {THEME_MAP[leadStory.theme]?.salonName}
+                              {leadStory.customSalonName || THEME_MAP[leadStory.theme]?.salonName}
                             </button>
                             <span aria-hidden="true">·</span>
                             <span className="font-medium text-stone-700">
@@ -999,11 +1369,15 @@ function SalonApp() {
                                 <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
                                   <button
                                     type="button"
-                                    onClick={() => enterSalon(story.theme)}
+                                    onClick={() =>
+                                      story.customSalonId
+                                        ? enterCustomSalon(story.customSalonId)
+                                        : enterSalon(story.theme)
+                                    }
                                     style={{ color: salonInfo?.palette.textAccent }}
                                     className="font-medium hover:underline"
                                   >
-                                    {salonInfo?.salonName}
+                                    {story.customSalonName || salonInfo?.salonName}
                                   </button>
                                   <span aria-hidden="true">·</span>
                                   <span className="font-medium text-stone-700">
@@ -1117,6 +1491,13 @@ function SalonApp() {
             </button>
             <button
               type="button"
+              onClick={() => navigateTo('pelemele')}
+              className="hover:text-stone-900 transition-colors"
+            >
+              Pêle-mêle
+            </button>
+            <button
+              type="button"
               onClick={() => navigateTo('membres', null, null)}
               className="hover:text-stone-900 transition-colors"
             >
@@ -1142,6 +1523,13 @@ function SalonApp() {
               className="hover:text-stone-900 transition-colors"
             >
               Mon carnet
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('confidentialite')}
+              className="hover:text-stone-900 transition-colors font-medium text-stone-700"
+            >
+              Politique de confidentialité
             </button>
           </div>
         </div>
@@ -1172,15 +1560,42 @@ function SalonApp() {
           initialTheme={composerDefaults.theme}
           initialPrompt={composerDefaults.prompt}
           initialStarter={composerDefaults.starter}
+          customSalons={customSalons}
+          initialCustomSalonId={composerDefaults.customSalonId ?? null}
           editingStory={editingStory}
-          onSaved={(_storyId, visibility, savedTheme) => {
-            if (visibility === 'public') {
+          onSaved={(_storyId, visibility, savedTheme, savedCustomSalonId) => {
+            if (savedCustomSalonId) {
+              enterCustomSalon(savedCustomSalonId);
+              showNotice('Votre récit a été déposé dans le salon communautaire.');
+            } else if (visibility === 'public') {
               navigateTo('recits', savedTheme);
               showNotice('Votre récit est désormais partagé dans le salon.');
             } else {
               navigateTo('carnet');
               showNotice('Votre brouillon privé a été enregistré dans votre carnet.');
             }
+          }}
+        />
+      )}
+
+      {/* Create / Edit Community Salon Modal */}
+      {user && (
+        <CustomSalonModal
+          isOpen={customSalonModalOpen}
+          onClose={() => {
+            setCustomSalonModalOpen(false);
+            setEditingCustomSalon(null);
+          }}
+          ownerId={user.uid}
+          ownerName={authorDisplayName}
+          editingSalon={editingCustomSalon}
+          onSaved={(salonId, isEdit) => {
+            enterCustomSalon(salonId);
+            showNotice(
+              isEdit
+                ? 'Les règles et informations du salon ont été mises à jour.'
+                : 'Votre salon a été ouvert ! Vous pouvez maintenant y déposer vos histoires.'
+            );
           }}
         />
       )}

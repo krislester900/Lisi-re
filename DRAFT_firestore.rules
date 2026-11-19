@@ -37,6 +37,13 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isApprovedCustomSalonMember(salonId) {
+      return isSignedIn()
+        && isValidId(salonId)
+        && exists(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid)).data.status == 'approved';
+    }
+
     // --- Validation Blueprints ---
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
@@ -103,7 +110,8 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'storyId', 'authorId', 'authorName', 'title', 'excerpt', 'content',
-          'theme', 'storyFormat', 'releaseCadence', 'seriesStatus',
+          'theme', 'customSalonId', 'customSalonName', 'customSalonVisibility',
+          'storyFormat', 'releaseCadence', 'seriesStatus',
           'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility',
           'readingMinutes', 'resonanceCount', 'echoCount', 'lastEchoId',
           'viewCount', 'lastViewId', 'createdAt', 'updatedAt'
@@ -115,6 +123,9 @@ service cloud.firestore {
         && data.excerpt is string && data.excerpt.size() >= 10 && data.excerpt.size() <= 300
         && data.content is string && data.content.size() >= 20 && data.content.size() <= 8000
         && isValidSalonId(data.theme)
+        && (!('customSalonId' in data) || isValidId(data.customSalonId))
+        && (!('customSalonName' in data) || (data.customSalonName is string && data.customSalonName.size() >= 3 && data.customSalonName.size() <= 80))
+        && (!('customSalonVisibility' in data) || data.customSalonVisibility in ['public', 'private'])
         && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
         && (!('releaseCadence' in data) || data.releaseCadence in ['unique', 'hebdomadaire', 'bihebdomadaire', 'libre'])
         && (!('seriesStatus' in data) || data.seriesStatus in ['complet', 'en-cours', 'termine'])
@@ -206,6 +217,66 @@ service cloud.firestore {
         ])
         && isValidId(data.messageId)
         && isValidSalonId(data.salonId)
+        && isValidId(data.senderId)
+        && data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 60
+        && data.content is string && data.content.size() >= 1 && data.content.size() <= 1000
+        && data.createdAt is timestamp;
+    }
+
+    function isValidCustomSalon(data) {
+      return data.keys().hasAll([
+          'salonId', 'name', 'description', 'promptQuestion', 'admissionRules',
+          'visibility', 'ownerId', 'ownerName', 'accentTone', 'memberCount',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'salonId', 'name', 'description', 'promptQuestion', 'admissionRules',
+          'visibility', 'ownerId', 'ownerName', 'accentTone', 'memberCount',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.salonId)
+        && data.name is string && data.name.size() >= 3 && data.name.size() <= 80
+        && data.description is string && data.description.size() >= 10 && data.description.size() <= 360
+        && data.promptQuestion is string && data.promptQuestion.size() <= 240
+        && data.admissionRules is string && data.admissionRules.size() <= 500
+        && data.visibility in ['public', 'private']
+        && isValidId(data.ownerId)
+        && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 60
+        && data.accentTone in ['ink', 'ochre', 'terracotta', 'sage', 'sand']
+        && data.memberCount is int && data.memberCount >= 1
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSalonMember(data) {
+      return data.keys().hasAll([
+          'userId', 'salonId', 'salonOwnerId', 'userName', 'requestNote',
+          'status', 'role', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'salonId', 'salonOwnerId', 'userName', 'requestNote',
+          'status', 'role', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.userId)
+        && isValidId(data.salonId)
+        && isValidId(data.salonOwnerId)
+        && data.userName is string && data.userName.size() >= 2 && data.userName.size() <= 60
+        && data.requestNote is string && data.requestNote.size() <= 300
+        && data.status in ['pending', 'approved', 'rejected']
+        && data.role in ['owner', 'member']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCustomSalonMessage(data) {
+      return data.keys().hasAll([
+          'messageId', 'salonId', 'senderId', 'senderName', 'content', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'messageId', 'salonId', 'senderId', 'senderName', 'content', 'createdAt'
+        ])
+        && isValidId(data.messageId)
+        && isValidId(data.salonId)
         && isValidId(data.senderId)
         && data.senderName is string && data.senderName.size() >= 2 && data.senderName.size() <= 60
         && data.content is string && data.content.size() >= 1 && data.content.size() <= 1000
@@ -356,9 +427,24 @@ service cloud.firestore {
     // Personal stories & serialized novels
     match /stories/{storyId} {
       allow get: if isValidId(storyId)
-        && (existing().visibility == 'public' || (isSignedIn() && existing().authorId == request.auth.uid));
+        && (
+          existing().visibility == 'public'
+          || (isSignedIn() && existing().authorId == request.auth.uid)
+          || (
+            isSignedIn()
+            && 'customSalonId' in existing()
+            && existing().customSalonVisibility == 'private'
+            && isApprovedCustomSalonMember(existing().customSalonId)
+          )
+        );
       allow list: if resource.data.visibility == 'public'
-        || (isSignedIn() && resource.data.authorId == request.auth.uid);
+        || (isSignedIn() && resource.data.authorId == request.auth.uid)
+        || (
+          isSignedIn()
+          && 'customSalonId' in resource.data
+          && resource.data.customSalonVisibility == 'private'
+          && isApprovedCustomSalonMember(resource.data.customSalonId)
+        );
 
       allow create: if isVerifiedUser()
         && isValidId(storyId)
@@ -373,7 +459,28 @@ service cloud.firestore {
         && !('lastViewId' in incoming())
         && (!('chapterCount' in incoming()) || incoming().chapterCount <= 1)
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time;
+        && incoming().updatedAt == request.time
+        && (
+          !('customSalonId' in incoming())
+          || (
+            'customSalonName' in incoming()
+            && 'customSalonVisibility' in incoming()
+            && exists(/databases/$(database)/documents/customSalons/$(incoming().customSalonId))
+            && incoming().customSalonName == get(/databases/$(database)/documents/customSalons/$(incoming().customSalonId)).data.name
+            && incoming().customSalonVisibility == get(/databases/$(database)/documents/customSalons/$(incoming().customSalonId)).data.visibility
+            && (
+              (incoming().customSalonVisibility == 'public')
+              || (
+                incoming().customSalonVisibility == 'private'
+                && incoming().visibility == 'private'
+                && (
+                  get(/databases/$(database)/documents/customSalons/$(incoming().customSalonId)).data.ownerId == request.auth.uid
+                  || isApprovedCustomSalonMember(incoming().customSalonId)
+                )
+              )
+            )
+          )
+        );
 
       allow update: if isVerifiedUser()
         && isValidId(storyId)
@@ -388,6 +495,13 @@ service cloud.firestore {
             existing().authorId == request.auth.uid
             && incoming().resonanceCount == existing().resonanceCount
             && incoming().echoCount == existing().echoCount
+            && ((!('customSalonId' in existing()) && !('customSalonId' in incoming()))
+              || ('customSalonId' in existing() && 'customSalonId' in incoming() && incoming().customSalonId == existing().customSalonId))
+            && ((!('customSalonName' in existing()) && !('customSalonName' in incoming()))
+              || ('customSalonName' in existing() && 'customSalonName' in incoming() && incoming().customSalonName == existing().customSalonName))
+            && ((!('customSalonVisibility' in existing()) && !('customSalonVisibility' in incoming()))
+              || ('customSalonVisibility' in existing() && 'customSalonVisibility' in incoming() && incoming().customSalonVisibility == existing().customSalonVisibility))
+            && (!('customSalonVisibility' in existing()) || existing().customSalonVisibility != 'private' || incoming().visibility == 'private')
             && ((!('viewCount' in existing()) && !('viewCount' in incoming()))
               || ('viewCount' in existing() && 'viewCount' in incoming() && incoming().viewCount == existing().viewCount))
             && ((!('lastViewId' in existing()) && !('lastViewId' in incoming()))
@@ -468,16 +582,28 @@ service cloud.firestore {
         && isValidId(storyId)
         && existing().authorId == request.auth.uid;
 
-      // Story chapters subcollection (for Wattpad-style serialized novels)
+      // Story chapters subcollection
       match /chapters/{chapterId} {
         allow get: if isValidId(storyId)
           && isValidId(chapterId)
           && (
             get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
             || (isSignedIn() && existing().authorId == request.auth.uid)
+            || (
+              isSignedIn()
+              && 'customSalonId' in get(/databases/$(database)/documents/stories/$(storyId)).data
+              && get(/databases/$(database)/documents/stories/$(storyId)).data.customSalonVisibility == 'private'
+              && isApprovedCustomSalonMember(get(/databases/$(database)/documents/stories/$(storyId)).data.customSalonId)
+            )
           );
         allow list: if resource.data.storyVisibility == 'public'
-          || (isSignedIn() && resource.data.authorId == request.auth.uid);
+          || (isSignedIn() && resource.data.authorId == request.auth.uid)
+          || (
+            isSignedIn()
+            && 'customSalonId' in get(/databases/$(database)/documents/stories/$(storyId)).data
+            && get(/databases/$(database)/documents/stories/$(storyId)).data.customSalonVisibility == 'private'
+            && isApprovedCustomSalonMember(get(/databases/$(database)/documents/stories/$(storyId)).data.customSalonId)
+          );
         allow create: if isVerifiedUser()
           && isValidId(storyId)
           && isValidId(chapterId)
@@ -591,7 +717,7 @@ service cloud.firestore {
       }
     }
 
-    // Salon text-only public chat rooms
+    // Built-in Salon text-only public chat rooms
     match /salons/{salonId}/messages/{messageId} {
       allow get: if isSignedIn()
         && isValidSalonId(salonId)
@@ -612,6 +738,199 @@ service cloud.firestore {
         && isValidSalonId(salonId)
         && isValidId(messageId)
         && existing().senderId == request.auth.uid;
+    }
+
+    // User-created community salons with custom admission rules
+    match /customSalons/{salonId} {
+      allow get: if isValidId(salonId);
+      allow list: if resource.data.visibility in ['public', 'private'];
+
+      allow create: if isVerifiedUser()
+        && isValidId(salonId)
+        && isValidCustomSalon(incoming())
+        && incoming().salonId == salonId
+        && incoming().ownerId == request.auth.uid
+        && incoming().memberCount == 1
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid));
+
+      allow update: if isVerifiedUser()
+        && isValidId(salonId)
+        && isValidCustomSalon(incoming())
+        && incoming().salonId == existing().salonId
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action A: Owner edits salon info, admission rules, or visibility
+          (
+            existing().ownerId == request.auth.uid
+            && incoming().memberCount == existing().memberCount
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'description', 'promptQuestion', 'admissionRules',
+              'visibility', 'ownerName', 'accentTone', 'updatedAt'
+            ])
+          )
+          ||
+          // Action B: Atomic memberCount update when joining, leaving, or owner approving/removing
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['memberCount', 'updatedAt'])
+            && (
+              existing().ownerId == request.auth.uid
+              || (
+                existing().visibility == 'public'
+                && incoming().memberCount == existing().memberCount + 1
+                && !exists(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid))
+                && existsAfter(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid))
+              )
+              || (
+                incoming().memberCount == existing().memberCount - 1
+                && exists(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid))
+                && !existsAfter(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid))
+              )
+            )
+          )
+        );
+
+      allow delete: if isVerifiedUser()
+        && isValidId(salonId)
+        && existing().ownerId == request.auth.uid;
+
+      // Membership & admission requests subcollection
+      match /members/{userId} {
+        allow get: if isSignedIn()
+          && isValidId(salonId)
+          && isValidId(userId)
+          && (
+            isOwner(userId)
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || (
+              get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+              && existing().status == 'approved'
+            )
+          );
+        allow list: if isSignedIn()
+          && (
+            resource.data.userId == request.auth.uid
+            || resource.data.salonOwnerId == request.auth.uid
+          );
+
+        allow create: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(userId)
+          && isOwner(userId)
+          && isValidSalonMember(incoming())
+          && incoming().userId == request.auth.uid
+          && incoming().salonId == salonId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && (
+            // Case 1: Creator initializes owner membership atomically with salon creation
+            (
+              incoming().role == 'owner'
+              && incoming().status == 'approved'
+              && incoming().salonOwnerId == request.auth.uid
+              && getAfter(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            )
+            ||
+            // Case 2: Member joins a public salon (instant approved) or requests admission to a private salon (pending)
+            (
+              incoming().role == 'member'
+              && incoming().salonOwnerId == get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId
+              && (
+                (
+                  get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+                  && incoming().status == 'approved'
+                  && getAfter(/databases/$(database)/documents/customSalons/$(salonId)).data.memberCount
+                     == get(/databases/$(database)/documents/customSalons/$(salonId)).data.memberCount + 1
+                )
+                ||
+                (
+                  get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'private'
+                  && incoming().status == 'pending'
+                )
+              )
+            )
+          );
+
+        allow update: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(userId)
+          && isValidSalonMember(incoming())
+          && incoming().userId == existing().userId
+          && incoming().salonId == existing().salonId
+          && incoming().salonOwnerId == existing().salonOwnerId
+          && incoming().role == existing().role
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && existing().role == 'member'
+          && (
+            // Owner approves or rejects admission request
+            (
+              get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+              && incoming().status in ['approved', 'rejected']
+            )
+            ||
+            // Applicant updates request note / retries admission
+            (
+              isOwner(userId)
+              && existing().status != 'approved'
+              && incoming().status == 'pending'
+              && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'requestNote', 'userName', 'updatedAt'])
+            )
+          );
+
+        allow delete: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(userId)
+          && existing().role != 'owner'
+          && (
+            isOwner(userId)
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+          );
+      }
+
+      // Discussion chat inside a custom salon
+      match /messages/{messageId} {
+        allow get: if isSignedIn()
+          && isValidId(salonId)
+          && isValidId(messageId)
+          && (
+            get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isApprovedCustomSalonMember(salonId)
+          );
+        allow list: if isSignedIn()
+          && resource.data.salonId == salonId
+          && (
+            get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isApprovedCustomSalonMember(salonId)
+          );
+        allow create: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(messageId)
+          && isValidCustomSalonMessage(incoming())
+          && incoming().messageId == messageId
+          && incoming().salonId == salonId
+          && incoming().senderId == request.auth.uid
+          && incoming().createdAt == request.time
+          && (
+            get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isApprovedCustomSalonMember(salonId)
+          );
+        allow update: if false;
+        allow delete: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(messageId)
+          && (
+            existing().senderId == request.auth.uid
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+          );
+      }
     }
 
     // 1-on-1 Private Exchanges (story-anchored OR direct member chat)

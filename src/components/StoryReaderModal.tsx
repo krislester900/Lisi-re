@@ -1,6 +1,18 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Heart, MessageCircle, Plus, User as UserIcon, X } from 'lucide-react';
+import {
+  BookOpen,
+  Disc3,
+  Heart,
+  Maximize2,
+  MessageCircle,
+  Minimize2,
+  Music2,
+  Plus,
+  User as UserIcon,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { ReadingMusicPanel, useReadingAudioEngine } from './ReadingMusicPanel';
 import {
   addStoryChapter,
   addStoryEcho,
@@ -74,9 +86,14 @@ export function StoryReaderModal({
   const [markCompleted, setMarkCompleted] = useState(false);
   const [chapterBusy, setChapterBusy] = useState(false);
   const [chapterError, setChapterError] = useState<string | null>(null);
+  const [zenMode, setZenMode] = useState(false);
+  const [showMusicPanel, setShowMusicPanel] = useState(false);
+  const audioController = useReadingAudioEngine(Boolean(story));
 
   useEffect(() => {
     if (!story) return;
+    setZenMode(false);
+    setShowMusicPanel(false);
     setEchoText('');
     setEchoError(null);
     setReplyType('comment');
@@ -98,7 +115,8 @@ export function StoryReaderModal({
             story.visibility,
             user?.uid ?? null,
             story.authorId,
-            setChapters
+            setChapters,
+            story.customSalonVisibility
           )
         : (() => {
             setChapters([]);
@@ -154,6 +172,23 @@ export function StoryReaderModal({
     };
   }, [story?.storyId, story?.visibility, story?.storyFormat, story?.authorId, user]);
 
+  useEffect(() => {
+    if (!story) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showMusicPanel) {
+          setShowMusicPanel(false);
+        } else if (zenMode) {
+          setZenMode(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [story, zenMode, showMusicPanel, onClose]);
+
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
@@ -162,6 +197,14 @@ export function StoryReaderModal({
   const totalChapters = isRoman ? 1 + chapters.length : 1;
   const activeFollowupChapter =
     isRoman && activeChapterIdx > 0 ? chapters[activeChapterIdx - 1] ?? null : null;
+
+  const authorPinnedMusic = authorProfile?.favoriteTrackTitle
+    ? {
+        title: authorProfile.favoriteTrackTitle,
+        artist: authorProfile.favoriteTrackArtist,
+        mediaUrl: authorProfile.favoriteTrackUrl,
+      }
+    : undefined;
 
   const displayedContent = activeFollowupChapter ? activeFollowupChapter.content : story.content;
   const displayedMinutes = activeFollowupChapter
@@ -295,39 +338,163 @@ export function StoryReaderModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/45 p-4 sm:p-6 overflow-y-auto"
+      className={`fixed inset-0 z-50 flex justify-center ${
+        zenMode
+          ? 'items-stretch bg-[#FBF9F5] p-0 overflow-hidden'
+          : 'items-center bg-stone-900/45 p-4 sm:p-6 overflow-y-auto'
+      }`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="reader-story-title"
     >
-      <div className="w-full max-w-4xl bg-[#FBF9F5] border border-stone-300 rounded-lg my-auto overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
-          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-stone-500 min-w-0">
-            <span className="truncate">{theme.salonName}</span>
-            <span aria-hidden="true">·</span>
-            <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
-            <span aria-hidden="true">·</span>
-            <span className="whitespace-nowrap tabular-nums">{displayedMinutes} min de lecture</span>
-            {story.visibility === 'private' && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="text-[#1E3A8A]">Brouillon privé</span>
-              </>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Fermer la lecture"
-            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+      <div
+        className={`bg-[#FBF9F5] overflow-hidden flex flex-col transition-all duration-200 motion-reduce:transition-none ${
+          zenMode
+            ? 'relative w-full h-full max-w-none border-0 rounded-none'
+            : 'w-full max-w-4xl max-h-[92vh] border border-stone-300 rounded-lg my-auto'
+        }`}
+      >
+        {audioController.renderHiddenStreams()}
 
-        <div className="max-h-[84vh] overflow-y-auto px-6 sm:px-12 py-8 sm:py-10">
-          <article className="max-w-prose mx-auto">
-            {story.promptQuestion && (
+        {zenMode ? (
+          <>
+            <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-20 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowMusicPanel((prev) => !prev)}
+                aria-label="Musique de lecture"
+                aria-expanded={showMusicPanel}
+                className={`min-h-[40px] px-3 py-2 rounded-md border backdrop-blur-sm text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 shadow-sm ${
+                  showMusicPanel || audioController.isPlaying
+                    ? 'border-[#1B365D] bg-[#1B365D] text-white'
+                    : 'border-stone-300 bg-[#FBF9F5]/95 text-stone-700 hover:text-stone-900 hover:border-stone-500'
+                }`}
+              >
+                {audioController.isPlaying ? (
+                  <Disc3 className="w-4 h-4 lisiere-disc-spin" />
+                ) : (
+                  <Music2 className="w-4 h-4" />
+                )}
+                <span className="max-w-[140px] truncate">
+                  {audioController.isPlaying && audioController.activeTrack
+                    ? audioController.activeTrack.title
+                    : 'Musique'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setZenMode(false)}
+                aria-label="Quitter le mode zen"
+                aria-pressed={true}
+                className="min-h-[40px] px-3.5 py-2 rounded-md border border-stone-300 bg-[#FBF9F5]/95 backdrop-blur-sm text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-500 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 shadow-sm"
+              >
+                <Minimize2 className="w-4 h-4" />
+                <span>Quitter le mode zen</span>
+              </button>
+            </div>
+
+            {showMusicPanel && (
+              <div className="fixed top-16 right-4 sm:top-20 sm:right-6 z-20 w-[min(92vw,420px)] max-h-[75vh] overflow-y-auto">
+                <ReadingMusicPanel
+                  controller={audioController}
+                  authorName={story.authorName}
+                  authorFavoriteMusic={authorPinnedMusic}
+                  compactPopover={true}
+                  onClose={() => setShowMusicPanel(false)}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-white">
+              <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-stone-500 min-w-0">
+                <span className="truncate">{story.customSalonName || theme.salonName}</span>
+                <span aria-hidden="true">·</span>
+                <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
+                <span aria-hidden="true">·</span>
+                <span className="whitespace-nowrap tabular-nums">{displayedMinutes} min de lecture</span>
+                {story.customSalonVisibility === 'private' ? (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="text-[#1E3A8A]">Salon privé</span>
+                  </>
+                ) : (
+                  story.visibility === 'private' && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span className="text-[#1E3A8A]">Brouillon privé</span>
+                    </>
+                  )
+                )}
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowMusicPanel((prev) => !prev)}
+                  aria-label="Musique de lecture"
+                  aria-expanded={showMusicPanel}
+                  className={`min-h-[40px] px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                    showMusicPanel || audioController.isPlaying
+                      ? 'border-[#1B365D] bg-[#1B365D] text-white'
+                      : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:text-stone-900 hover:border-stone-400'
+                  }`}
+                >
+                  {audioController.isPlaying ? (
+                    <Disc3 className="w-3.5 h-3.5 lisiere-disc-spin" />
+                  ) : (
+                    <Music2 className="w-3.5 h-3.5" />
+                  )}
+                  <span className="max-w-[130px] truncate hidden sm:inline">
+                    {audioController.isPlaying && audioController.activeTrack
+                      ? audioController.activeTrack.title
+                      : 'Musique'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZenMode(true)}
+                  aria-label="Activer le mode zen"
+                  aria-pressed={false}
+                  className="min-h-[40px] px-3 py-1.5 rounded-md border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-400 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                  <span>Mode zen</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Fermer la lecture"
+                  className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {showMusicPanel && (
+              <div className="max-h-[42vh] overflow-y-auto shrink-0">
+                <ReadingMusicPanel
+                  controller={audioController}
+                  authorName={story.authorName}
+                  authorFavoriteMusic={authorPinnedMusic}
+                  onClose={() => setShowMusicPanel(false)}
+                />
+              </div>
+            )}
+          </>
+        )}
+
+        <div
+          className={
+            zenMode
+              ? 'flex-1 min-h-0 overflow-y-auto px-6 sm:px-12 pt-16 pb-24 sm:pt-20 sm:pb-28'
+              : 'flex-1 min-h-0 overflow-y-auto px-6 sm:px-12 py-8 sm:py-10'
+          }
+        >
+          <article className={zenMode ? 'max-w-[68ch] mx-auto' : 'max-w-prose mx-auto'}>
+            {!zenMode && story.promptQuestion && (
               <p className="text-xs text-stone-500 mb-3 italic">
                 En réponse au fil : « {story.promptQuestion} »
               </p>
@@ -335,51 +502,55 @@ export function StoryReaderModal({
 
             <h1
               id="reader-story-title"
-              className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight mb-4"
+              className={`font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight ${
+                zenMode ? 'mb-8 sm:mb-10' : 'mb-4'
+              }`}
               style={{ textWrap: 'balance' }}
             >
               {story.title}
             </h1>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-600 pb-6 border-b border-stone-200 mb-6">
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    onClose();
-                    onOpenMemberWall(story.authorId);
-                  }}
-                  className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
-                >
-                  <UserIcon className="w-3.5 h-3.5 text-stone-500" />
-                  <span>{story.authorName}</span>
-                </button>
-                <span aria-hidden="true">·</span>
-                <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
-                {isRoman && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>{RELEASE_CADENCE_LABELS[story.releaseCadence ?? 'hebdomadaire']}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}</span>
-                  </>
+            {!zenMode && (
+              <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-600 pb-6 border-b border-stone-200 mb-6">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenMemberWall(story.authorId);
+                    }}
+                    className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
+                  >
+                    <UserIcon className="w-3.5 h-3.5 text-stone-500" />
+                    <span>{story.authorName}</span>
+                  </button>
+                  <span aria-hidden="true">·</span>
+                  <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                  {isRoman && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      <span>{RELEASE_CADENCE_LABELS[story.releaseCadence ?? 'hebdomadaire']}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}</span>
+                    </>
+                  )}
+                </div>
+
+                {isRoman && isAuthor && (
+                  <button
+                    type="button"
+                    onClick={() => setShowChapterForm((prev) => !prev)}
+                    className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Publier le chapitre {totalChapters + 1}</span>
+                  </button>
                 )}
               </div>
-
-              {isRoman && isAuthor && (
-                <button
-                  type="button"
-                  onClick={() => setShowChapterForm((prev) => !prev)}
-                  className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  <span>Publier le chapitre {totalChapters + 1}</span>
-                </button>
-              )}
-            </div>
+            )}
 
             {/* Chapter Navigation Rail for Serialized Novels */}
-            {isRoman && (
+            {!zenMode && isRoman && (
               <div className="mb-8 bg-white border border-stone-200 rounded-md p-4 space-y-3">
                 <div className="flex items-center justify-between text-xs text-stone-500">
                   <span className="uppercase tracking-widest inline-flex items-center gap-1.5">
@@ -426,7 +597,7 @@ export function StoryReaderModal({
             )}
 
             {/* Author Next-Chapter Form */}
-            {isRoman && isAuthor && showChapterForm && (
+            {!zenMode && isRoman && isAuthor && showChapterForm && (
               <form
                 onSubmit={handleAddChapter}
                 className="mb-8 bg-white border border-stone-300 rounded-md p-5 space-y-4"
@@ -524,7 +695,13 @@ export function StoryReaderModal({
               </div>
             )}
 
-            <div className="space-y-5 text-base sm:text-[17px] leading-[1.8] text-stone-800">
+            <div
+              className={
+                zenMode
+                  ? 'space-y-6 text-[18px] sm:text-[19px] leading-[1.9] text-stone-800'
+                  : 'space-y-5 text-base sm:text-[17px] leading-[1.8] text-stone-800'
+              }
+            >
               {paragraphs.map((para, idx) => (
                 <p key={idx} className={idx === 0 ? 'editorial-drop-cap' : ''}>
                   {para}
@@ -532,7 +709,7 @@ export function StoryReaderModal({
               ))}
             </div>
 
-            {activeFollowupChapter?.authorNote && (
+            {!zenMode && activeFollowupChapter?.authorNote && (
               <div className="mt-8 p-4 bg-white border border-stone-200 rounded-md text-sm text-stone-700 italic">
                 Note de {story.authorName} : « {activeFollowupChapter.authorNote} »
               </div>
@@ -564,7 +741,7 @@ export function StoryReaderModal({
               </div>
             )}
 
-            {authorProfile && (authorProfile.bio || authorProfile.listeningNote) && (
+            {!zenMode && authorProfile && (authorProfile.bio || authorProfile.listeningNote) && (
               <div className="mt-10 p-5 bg-white border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
@@ -594,61 +771,63 @@ export function StoryReaderModal({
             )}
 
             {/* Social Action Bar */}
-            <div className="mt-10 pt-6 border-t border-stone-200 flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={handleResonate}
-                  disabled={resonateBusy || story.visibility !== 'public'}
-                  className={`min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
-                    hasResonated
-                      ? 'bg-[#1E3A8A] text-white border-[#1E3A8A]'
-                      : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
-                  }`}
-                >
-                  <Heart className={`w-4 h-4 ${hasResonated ? 'fill-current' : ''}`} />
-                  <span>Cela résonne</span>
-                  <span className="tabular-nums opacity-80">({story.resonanceCount})</span>
-                </button>
+            {!zenMode && (
+              <div className="mt-10 pt-6 border-t border-stone-200 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleResonate}
+                    disabled={resonateBusy || story.visibility !== 'public'}
+                    className={`min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                      hasResonated
+                        ? 'bg-[#1E3A8A] text-white border-[#1E3A8A]'
+                        : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
+                    }`}
+                  >
+                    <Heart className={`w-4 h-4 ${hasResonated ? 'fill-current' : ''}`} />
+                    <span>Cela résonne</span>
+                    <span className="tabular-nums opacity-80">({story.resonanceCount})</span>
+                  </button>
 
-                {!isAuthor && story.visibility === 'public' && (
-                  existingExchange ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenExchange(existingExchange.exchangeId);
-                      }}
-                      className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-[#1E3A8A] text-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>Poursuivre en privé</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!user) {
-                          await signInWithGoogle();
-                          return;
-                        }
-                        setShowBridgeBox((prev) => !prev);
-                      }}
-                      className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-stone-300 text-stone-800 bg-white hover:border-[#1E3A8A] hover:text-[#1E3A8A] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>Écrire en privé à l’auteur</span>
-                    </button>
-                  )
-                )}
+                  {!isAuthor && story.visibility === 'public' && (
+                    existingExchange ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenExchange(existingExchange.exchangeId);
+                        }}
+                        className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-[#1E3A8A] text-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Poursuivre en privé</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!user) {
+                            await signInWithGoogle();
+                            return;
+                          }
+                          setShowBridgeBox((prev) => !prev);
+                        }}
+                        className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-stone-300 text-stone-800 bg-white hover:border-[#1E3A8A] hover:text-[#1E3A8A] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>Écrire en privé à l’auteur</span>
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <span className="text-xs text-stone-500 tabular-nums">
+                  {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
+                </span>
               </div>
+            )}
 
-              <span className="text-xs text-stone-500 tabular-nums">
-                {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
-              </span>
-            </div>
-
-            {showBridgeBox && !isAuthor && (
+            {!zenMode && showBridgeBox && !isAuthor && (
               <form
                 onSubmit={handleOpenBridge}
                 className="mt-6 bg-white border border-stone-200 rounded-md p-5 space-y-4"
@@ -694,7 +873,7 @@ export function StoryReaderModal({
             )}
 
             {/* Comments & Echoes Section */}
-            {story.visibility === 'public' && (
+            {!zenMode && story.visibility === 'public' && (
               <section
                 className="mt-10 pt-8 border-t border-stone-200"
                 aria-label="Commentaires et échos des lecteurs"

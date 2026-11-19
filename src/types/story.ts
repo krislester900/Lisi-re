@@ -56,6 +56,12 @@ export interface WallItem {
   updatedAt: Timestamp | null;
 }
 
+export type CustomSalonVisibility = 'public' | 'private';
+
+export type SalonMemberStatus = 'pending' | 'approved' | 'rejected';
+
+export type SalonMemberRole = 'owner' | 'member';
+
 export interface Story {
   storyId: string;
   authorId: string;
@@ -64,6 +70,9 @@ export interface Story {
   excerpt: string;
   content: string;
   theme: StoryThemeId;
+  customSalonId?: string;
+  customSalonName?: string;
+  customSalonVisibility?: CustomSalonVisibility;
   storyFormat?: StoryFormat;
   releaseCadence?: ReleaseCadence;
   seriesStatus?: SeriesStatus;
@@ -79,6 +88,42 @@ export interface Story {
   lastViewId?: string;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
+}
+
+export interface CustomSalon {
+  salonId: string;
+  name: string;
+  description: string;
+  promptQuestion: string;
+  admissionRules: string;
+  visibility: CustomSalonVisibility;
+  ownerId: string;
+  ownerName: string;
+  accentTone: WallAccentTone;
+  memberCount: number;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
+export interface SalonMember {
+  userId: string;
+  salonId: string;
+  salonOwnerId: string;
+  userName: string;
+  requestNote: string;
+  status: SalonMemberStatus;
+  role: SalonMemberRole;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
+export interface CustomSalonMessage {
+  messageId: string;
+  salonId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  createdAt: Timestamp | null;
 }
 
 export interface StoryViewEvent {
@@ -185,4 +230,9 @@ export const FIELD_LIMITS = {
   salonChatContent: { min: 1, max: 1000 },
   messageContent: { min: 1, max: 2000 },
   lastMessagePreview: { max: 160 },
+  salonName: { min: 3, max: 80 },
+  salonDescription: { min: 10, max: 360 },
+  salonPrompt: { max: 240 },
+  salonAdmissionRules: { max: 500 },
+  salonRequestNote: { max: 300 },
 } as const;

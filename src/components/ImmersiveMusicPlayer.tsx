@@ -58,7 +58,8 @@ export function ImmersiveMusicPlayer({
     parsed.type === 'youtube' ||
     parsed.type === 'soundcloud' ||
     parsed.type === 'spotify' ||
-    parsed.type === 'deezer';
+    parsed.type === 'deezer' ||
+    parsed.type === 'apple';
 
   useEffect(() => {
     if (parsed.type !== 'audio' || !audioRef.current) return;
@@ -226,20 +227,22 @@ export function ImmersiveMusicPlayer({
         </div>
       )}
 
-      {/* Spotify / Deezer compact minimal audio strip only while actively listening */}
-      {isActive && (parsed.type === 'spotify' || parsed.type === 'deezer') && parsed.embedUrl && (
-        <div className="rounded-xl overflow-hidden border border-stone-200/80 bg-white mt-2">
-          <iframe
-            title={`Lecteur audio pour ${title}`}
-            src={parsed.embedUrl}
-            width="100%"
-            height={parsed.type === 'spotify' ? 80 : 90}
-            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-            loading="lazy"
-            className="block w-full border-0"
-          />
-        </div>
-      )}
+      {/* Spotify / Deezer / Apple Music compact minimal audio strip only while actively listening */}
+      {isActive &&
+        (parsed.type === 'spotify' || parsed.type === 'deezer' || parsed.type === 'apple') &&
+        parsed.embedUrl && (
+          <div className="rounded-xl overflow-hidden border border-stone-200/80 bg-white mt-2">
+            <iframe
+              title={`Lecteur audio pour ${title}`}
+              src={parsed.embedUrl}
+              width="100%"
+              height={parsed.type === 'spotify' ? 80 : parsed.type === 'apple' ? 150 : 90}
+              allow="autoplay *; clipboard-write; encrypted-media *; fullscreen *; picture-in-picture"
+              loading="lazy"
+              className="block w-full border-0"
+            />
+          </div>
+        )}
     </>
   );
 

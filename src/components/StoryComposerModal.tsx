@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Feather, X } from 'lucide-react';
+import { BookOpen, Feather, Lock, X } from 'lucide-react';
 import { createStory, updateStory } from '../lib/storyService';
 import {
   estimateReadingMinutes,
@@ -10,6 +10,7 @@ import {
   THEME_MAP,
 } from '../lib/themes';
 import {
+  CustomSalon,
   FIELD_LIMITS,
   ReleaseCadence,
   SeriesStatus,
@@ -27,8 +28,15 @@ interface StoryComposerModalProps {
   initialTheme?: StoryThemeId;
   initialPrompt?: string;
   initialStarter?: string;
+  customSalons?: CustomSalon[];
+  initialCustomSalonId?: string | null;
   editingStory?: Story | null;
-  onSaved: (storyId: string, visibility: StoryVisibility, theme: StoryThemeId) => void;
+  onSaved: (
+    storyId: string,
+    visibility: StoryVisibility,
+    theme: StoryThemeId,
+    customSalonId?: string | null
+  ) => void;
 }
 
 export function StoryComposerModal({
@@ -39,6 +47,8 @@ export function StoryComposerModal({
   initialTheme = 'creation',
   initialPrompt,
   initialStarter,
+  customSalons = [],
+  initialCustomSalonId = null,
   editingStory,
   onSaved,
 }: StoryComposerModalProps) {
@@ -53,8 +63,25 @@ export function StoryComposerModal({
   const [content, setContent] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [visibility, setVisibility] = useState<StoryVisibility>('public');
+  const [selectedCustomSalonId, setSelectedCustomSalonId] = useState<string | null>(
+    initialCustomSalonId
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectableCustomSalons = customSalons.filter(
+    (s) =>
+      s.visibility === 'public' ||
+      s.ownerId === authorId ||
+      s.salonId === initialCustomSalonId
+  );
+
+  const selectedCustomSalon =
+    customSalons.find((s) => s.salonId === selectedCustomSalonId) ?? null;
+
+  const isPrivateCustomSalon =
+    editingStory?.customSalonVisibility === 'private' ||
+    selectedCustomSalon?.visibility === 'private';
 
   useEffect(() => {
     if (!isOpen) return;
@@ -69,26 +96,54 @@ export function StoryComposerModal({
       setContent(editingStory.content);
       setExcerpt(editingStory.excerpt);
       setVisibility(editingStory.visibility);
+      setSelectedCustomSalonId(editingStory.customSalonId ?? null);
     } else {
       const nextTheme = initialTheme || 'creation';
+      const initialCs = initialCustomSalonId
+        ? customSalons.find((s) => s.salonId === initialCustomSalonId) ?? null
+        : null;
       setTheme(nextTheme);
       setStoryFormat('confession');
       setReleaseCadence('hebdomadaire');
       setSeriesStatus('en-cours');
-      setPromptQuestion(initialPrompt ?? THEME_MAP[nextTheme].promptQuestion);
+      setPromptQuestion(
+        initialPrompt ?? initialCs?.promptQuestion ?? THEME_MAP[nextTheme].promptQuestion
+      );
       setTitle('');
       setContent(initialStarter ?? '');
       setExcerpt('');
-      setVisibility('public');
+      setSelectedCustomSalonId(initialCustomSalonId ?? null);
+      setVisibility(initialCs?.visibility === 'private' ? 'private' : 'public');
     }
-  }, [isOpen, editingStory, initialTheme, initialPrompt, initialStarter]);
+  }, [isOpen, editingStory, initialTheme, initialPrompt, initialStarter, initialCustomSalonId]);
 
   if (!isOpen) return null;
 
   const handleThemeChange = (nextTheme: StoryThemeId) => {
     setTheme(nextTheme);
-    if (!editingStory && !initialPrompt) {
+    if (!editingStory && !initialPrompt && !selectedCustomSalonId) {
       setPromptQuestion(THEME_MAP[nextTheme].promptQuestion);
+    }
+  };
+
+  const handleCustomSalonSelect = (salonId: string) => {
+    if (!salonId) {
+      setSelectedCustomSalonId(null);
+      setVisibility('public');
+      if (!initialPrompt) {
+        setPromptQuestion(THEME_MAP[theme].promptQuestion);
+      }
+      return;
+    }
+    const found = customSalons.find((s) => s.salonId === salonId);
+    setSelectedCustomSalonId(salonId);
+    if (found) {
+      if (found.visibility === 'private') {
+        setVisibility('private');
+      }
+      if (!initialPrompt && found.promptQuestion) {
+        setPromptQuestion(found.promptQuestion);
+      }
     }
   };
 
@@ -116,23 +171,39 @@ export function StoryComposerModal({
 
     setSubmitting(true);
     try {
+      const effectiveVisibility: StoryVisibility = isPrivateCustomSalon ? 'private' : visibility;
+      const customSalonTarget =
+        !editingStory && selectedCustomSalon
+          ? {
+              salonId: selectedCustomSalon.salonId,
+              name: selectedCustomSalon.name,
+              visibility: selectedCustomSalon.visibility,
+            }
+          : null;
+
       const payload = {
         title,
         excerpt,
         content,
         theme,
+        customSalon: customSalonTarget,
         storyFormat,
         releaseCadence: storyFormat === 'confession' ? 'unique' : releaseCadence,
         seriesStatus: storyFormat === 'confession' ? 'complet' : seriesStatus,
         promptQuestion,
-        visibility,
+        visibility: effectiveVisibility,
       };
       if (editingStory) {
         await updateStory(editingStory.storyId, authorName, payload);
-        onSaved(editingStory.storyId, visibility, theme);
+        onSaved(
+          editingStory.storyId,
+          effectiveVisibility,
+          theme,
+          editingStory.customSalonId ?? null
+        );
       } else {
         const createdId = await createStory(authorId, authorName, payload);
-        onSaved(createdId, visibility, theme);
+        onSaved(createdId, effectiveVisibility, theme, customSalonTarget?.salonId ?? null);
       }
       onClose();
     } catch (err) {
@@ -263,7 +334,7 @@ export function StoryComposerModal({
 
           <div>
             <span className="block text-xs uppercase tracking-widest text-stone-500 mb-2">
-              Salon de destination
+              {selectedCustomSalonId ? 'Thématique associée' : 'Salon de destination'}
             </span>
             <div className="flex flex-wrap gap-2">
               {STORY_THEMES.map((item) => {
@@ -293,6 +364,43 @@ export function StoryComposerModal({
                 );
               })}
             </div>
+
+            {editingStory?.customSalonId ? (
+              <div className="mt-3 px-3.5 py-2.5 bg-white border border-stone-200 rounded-md text-xs text-stone-700 flex items-center gap-2">
+                {editingStory.customSalonVisibility === 'private' && (
+                  <Lock className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                )}
+                <span>
+                  Salon communautaire : <strong>{editingStory.customSalonName}</strong>
+                </span>
+              </div>
+            ) : (
+              selectableCustomSalons.length > 0 && (
+                <div className="mt-3 bg-white border border-stone-200 rounded-md p-3.5 space-y-1.5">
+                  <label
+                    htmlFor="custom-salon-select"
+                    className="block text-xs font-medium text-stone-700"
+                  >
+                    Ou publier dans un salon de la communauté (facultatif)
+                  </label>
+                  <select
+                    id="custom-salon-select"
+                    value={selectedCustomSalonId ?? ''}
+                    onChange={(e) => handleCustomSalonSelect(e.target.value)}
+                    className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                  >
+                    <option value="">
+                      — Publier uniquement dans le salon Lisière sélectionné ci-dessus —
+                    </option>
+                    {selectableCustomSalons.map((cs) => (
+                      <option key={cs.salonId} value={cs.salonId}>
+                        {cs.name} ({cs.visibility === 'private' ? 'Salon privé' : 'Salon public'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )
+            )}
           </div>
 
           <div className="bg-white border border-stone-200 rounded-md p-4">
@@ -397,30 +505,39 @@ export function StoryComposerModal({
           </div>
 
           <div className="pt-2 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2 p-1 bg-stone-100 rounded-md w-fit">
-              <button
-                type="button"
-                onClick={() => setVisibility('public')}
-                className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
-                  visibility === 'public'
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                Partager dans le salon
-              </button>
-              <button
-                type="button"
-                onClick={() => setVisibility('private')}
-                className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
-                  visibility === 'private'
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                Brouillon privé
-              </button>
-            </div>
+            {isPrivateCustomSalon ? (
+              <div className="inline-flex items-center gap-2 px-3 py-2 bg-stone-100 rounded-md text-xs text-stone-700">
+                <Lock className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                <span>
+                  Salon privé : visible uniquement par les membres admis de ce salon.
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 p-1 bg-stone-100 rounded-md w-fit">
+                <button
+                  type="button"
+                  onClick={() => setVisibility('public')}
+                  className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                    visibility === 'public'
+                      ? 'bg-white text-stone-900 shadow-sm'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Partager dans le salon
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibility('private')}
+                  className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                    visibility === 'private'
+                      ? 'bg-white text-stone-900 shadow-sm'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Brouillon privé
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center gap-3">
               <button
@@ -439,9 +556,11 @@ export function StoryComposerModal({
                   ? 'Enregistrement…'
                   : editingStory
                     ? 'Enregistrer les modifications'
-                    : visibility === 'public'
-                      ? 'Publier dans le salon'
-                      : 'Garder dans mon carnet'}
+                    : isPrivateCustomSalon
+                      ? 'Publier dans le salon privé'
+                      : visibility === 'public'
+                        ? 'Publier dans le salon'
+                        : 'Garder dans mon carnet'}
               </button>
             </div>
           </div>
