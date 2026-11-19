@@ -58,6 +58,8 @@ export interface WallItem {
 
 export type CustomSalonVisibility = 'public' | 'private';
 
+export type StoryScope = 'salon' | 'pelemele';
+
 export type SalonMemberStatus = 'pending' | 'approved' | 'rejected';
 
 export type SalonMemberRole = 'owner' | 'member';
@@ -70,6 +72,7 @@ export interface Story {
   excerpt: string;
   content: string;
   theme: StoryThemeId;
+  storyScope?: StoryScope;
   customSalonId?: string;
   customSalonName?: string;
   customSalonVisibility?: CustomSalonVisibility;

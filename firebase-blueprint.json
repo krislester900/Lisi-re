@@ -211,6 +211,10 @@
           "type": "string",
           "enum": ["public", "private"]
         },
+        "storyScope": {
+          "type": "string",
+          "enum": ["salon", "pelemele"]
+        },
         "storyFormat": {
           "type": "string",
           "enum": ["confession", "roman"]

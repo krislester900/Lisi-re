@@ -1290,10 +1290,18 @@ export function ProfileWallView({
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
                       <span
-                        style={{ color: salonInfo?.palette.textAccent }}
+                        style={{
+                          color:
+                            story.storyScope === 'pelemele' && !story.customSalonId
+                              ? '#1B365D'
+                              : salonInfo?.palette.textAccent,
+                        }}
                         className="font-medium"
                       >
-                        {salonInfo?.salonName}
+                        {story.customSalonName ||
+                          (story.storyScope === 'pelemele' && !story.customSalonId
+                            ? 'Hors salon · Pêle-mêle'
+                            : salonInfo?.salonName)}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatLabel}</span>

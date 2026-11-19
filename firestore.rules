@@ -110,7 +110,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'storyId', 'authorId', 'authorName', 'title', 'excerpt', 'content',
-          'theme', 'customSalonId', 'customSalonName', 'customSalonVisibility',
+          'theme', 'customSalonId', 'customSalonName', 'customSalonVisibility', 'storyScope',
           'storyFormat', 'releaseCadence', 'seriesStatus',
           'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility',
           'readingMinutes', 'resonanceCount', 'echoCount', 'lastEchoId',
@@ -126,6 +126,7 @@ service cloud.firestore {
         && (!('customSalonId' in data) || isValidId(data.customSalonId))
         && (!('customSalonName' in data) || (data.customSalonName is string && data.customSalonName.size() >= 3 && data.customSalonName.size() <= 80))
         && (!('customSalonVisibility' in data) || data.customSalonVisibility in ['public', 'private'])
+        && (!('storyScope' in data) || data.storyScope in ['salon', 'pelemele'])
         && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
         && (!('releaseCadence' in data) || data.releaseCadence in ['unique', 'hebdomadaire', 'bihebdomadaire', 'libre'])
         && (!('seriesStatus' in data) || data.seriesStatus in ['complet', 'en-cours', 'termine'])
@@ -513,7 +514,7 @@ service cloud.firestore {
             && ((!('chapterCount' in existing()) && !('chapterCount' in incoming()))
               || ('chapterCount' in existing() && 'chapterCount' in incoming() && incoming().chapterCount == existing().chapterCount))
             && incoming().diff(existing()).affectedKeys().hasOnly([
-              'authorName', 'title', 'excerpt', 'content', 'theme',
+              'authorName', 'title', 'excerpt', 'content', 'theme', 'storyScope',
               'storyFormat', 'releaseCadence', 'seriesStatus',
               'promptQuestion', 'visibility', 'readingMinutes', 'updatedAt'
             ])

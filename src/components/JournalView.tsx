@@ -349,7 +349,11 @@ export function JournalView({
                   <div key={story.storyId} className="p-5 sm:p-6 space-y-3">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
                       <span className="font-medium text-stone-800">
-                        {THEME_MAP[story.theme]?.salonName}
+                        {story.customSalonName
+                          ? story.customSalonName
+                          : story.storyScope === 'pelemele'
+                            ? 'Hors salon · Pêle-mêle'
+                            : THEME_MAP[story.theme]?.salonName}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatLabel}</span>
@@ -366,7 +370,13 @@ export function JournalView({
                       <span
                         className={story.visibility === 'public' ? 'text-[#1E3A8A]' : 'text-stone-600'}
                       >
-                        {story.visibility === 'public' ? 'Publié dans le salon' : 'Brouillon privé'}
+                        {story.customSalonVisibility === 'private'
+                          ? 'Publié (Salon privé)'
+                          : story.visibility === 'public'
+                            ? story.storyScope === 'pelemele' && !story.customSalonId
+                              ? 'Publié dans Pêle-mêle'
+                              : 'Publié dans le salon'
+                            : 'Brouillon privé'}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  ArrowUpRight,
   BookOpen,
   Disc3,
   Heart,
@@ -27,6 +28,7 @@ import {
   toggleStoryResonance,
 } from '../lib/storyService';
 import {
+  ACCENT_TONE_PALETTES,
   ECHO_TYPE_LABELS,
   formatFrenchDate,
   RELEASE_CADENCE_LABELS,
@@ -36,6 +38,7 @@ import {
 } from '../lib/themes';
 import {
   Chapter,
+  CustomSalon,
   Echo,
   EchoReplyType,
   Exchange,
@@ -43,22 +46,31 @@ import {
   PublicProfile,
   SeriesStatus,
   Story,
+  StoryThemeId,
 } from '../types/story';
 
 interface StoryReaderModalProps {
   story: Story | null;
   onClose: () => void;
   existingExchanges: Exchange[];
+  customSalons?: CustomSalon[];
   onOpenExchange: (exchangeId: string) => void;
   onOpenMemberWall: (userId: string) => void;
+  onEnterSalon?: (salonId: StoryThemeId) => void;
+  onEnterCustomSalon?: (customSalonId: string) => void;
+  onOpenPeleMele?: () => void;
 }
 
 export function StoryReaderModal({
   story,
   onClose,
   existingExchanges,
+  customSalons = [],
   onOpenExchange,
   onOpenMemberWall,
+  onEnterSalon,
+  onEnterCustomSalon,
+  onOpenPeleMele,
 }: StoryReaderModalProps) {
   const { user, profile, signInWithGoogle } = useAuth();
   const [echoes, setEchoes] = useState<Echo[]>([]);
@@ -194,6 +206,20 @@ export function StoryReaderModal({
   const isAuthor = Boolean(user && user.uid === story.authorId);
   const isRoman = story.storyFormat === 'roman';
   const theme = THEME_MAP[story.theme];
+  const hasOriginSalon = Boolean(story.customSalonId || story.storyScope !== 'pelemele');
+  const matchedCustomSalon = story.customSalonId
+    ? customSalons.find((cs) => cs.salonId === story.customSalonId)
+    : undefined;
+  const originPalette = matchedCustomSalon
+    ? ACCENT_TONE_PALETTES[matchedCustomSalon.accentTone]
+    : hasOriginSalon
+      ? theme.palette
+      : undefined;
+  const originSalonLabel = story.customSalonName
+    ? story.customSalonName
+    : story.storyScope === 'pelemele'
+      ? 'Hors salon · Pêle-mêle'
+      : theme.salonName;
   const totalChapters = isRoman ? 1 + chapters.length : 1;
   const activeFollowupChapter =
     isRoman && activeChapterIdx > 0 ? chapters[activeChapterIdx - 1] ?? null : null;
@@ -410,7 +436,59 @@ export function StoryReaderModal({
           <>
             <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-white">
               <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-stone-500 min-w-0">
-                <span className="truncate">{story.customSalonName || theme.salonName}</span>
+                {hasOriginSalon ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      if (story.customSalonId && onEnterCustomSalon) {
+                        onEnterCustomSalon(story.customSalonId);
+                      } else if (onEnterSalon) {
+                        onEnterSalon(story.theme);
+                      }
+                    }}
+                    title={`Salon d’origine : ${originSalonLabel} — Cliquer pour ouvrir ce salon`}
+                    aria-label={`Ouvrir le salon d’origine : ${originSalonLabel}`}
+                    style={{
+                      backgroundColor: originPalette?.softBg ?? '#F4F0E8',
+                      borderColor: originPalette?.borderTint ?? '#D6D3D1',
+                      color: originPalette?.textAccent ?? '#1B365D',
+                    }}
+                    className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-medium normal-case tracking-normal hover:brightness-95 transition max-w-full cursor-pointer"
+                  >
+                    <span className="truncate">{originSalonLabel}</span>
+                    <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                    <span
+                      role="tooltip"
+                      className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 top-full mt-1.5 z-30 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
+                    >
+                      Salon d’origine · Cliquer pour y entrer
+                    </span>
+                  </button>
+                ) : onOpenPeleMele ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenPeleMele();
+                    }}
+                    title="Histoire libre publiée hors salon — Voir tout Pêle-mêle"
+                    className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium normal-case tracking-normal hover:border-stone-400 transition max-w-full cursor-pointer"
+                  >
+                    <span className="truncate">{originSalonLabel}</span>
+                    <ArrowUpRight className="w-3 h-3 shrink-0 opacity-75" />
+                    <span
+                      role="tooltip"
+                      className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 top-full mt-1.5 z-30 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
+                    >
+                      Hors salon · Voir Histoires pêle-mêle
+                    </span>
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium normal-case tracking-normal truncate">
+                    {originSalonLabel}
+                  </span>
+                )}
                 <span aria-hidden="true">·</span>
                 <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
                 <span aria-hidden="true">·</span>

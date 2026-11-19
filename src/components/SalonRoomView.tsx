@@ -60,7 +60,13 @@ export function SalonRoomView({
   const nextSalon = STORY_THEMES[(currentIndex + 1) % STORY_THEMES.length];
 
   const allInSalon = useMemo(
-    () => publicStories.filter((story) => story.theme === salonId),
+    () =>
+      publicStories.filter(
+        (story) =>
+          story.theme === salonId &&
+          !story.customSalonId &&
+          story.storyScope !== 'pelemele'
+      ),
     [publicStories, salonId]
   );
 

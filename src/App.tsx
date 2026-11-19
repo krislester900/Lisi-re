@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ArrowUpRight,
   BookOpen,
   Compass,
   Feather,
@@ -170,10 +171,11 @@ function SalonApp() {
   const [editingStory, setEditingStory] = useState<Story | null>(null);
   const [composerDefaults, setComposerDefaults] = useState<{
     theme: StoryThemeId;
+    scope: 'salon' | 'pelemele';
     prompt?: string;
     starter?: string;
     customSalonId?: string | null;
-  }>({ theme: 'creation', customSalonId: null });
+  }>({ theme: 'creation', scope: 'salon', customSalonId: null });
 
   const [customSalonModalOpen, setCustomSalonModalOpen] = useState(false);
   const [editingCustomSalon, setEditingCustomSalon] = useState<CustomSalon | null>(null);
@@ -235,6 +237,7 @@ function SalonApp() {
 
   const openComposer = async (options?: {
     theme?: StoryThemeId;
+    scope?: 'salon' | 'pelemele';
     prompt?: string;
     starter?: string;
     customSalonId?: string | null;
@@ -247,6 +250,7 @@ function SalonApp() {
     setEditingStory(options?.edit ?? null);
     setComposerDefaults({
       theme: options?.theme ?? 'creation',
+      scope: options?.scope ?? 'salon',
       prompt: options?.prompt,
       starter: options?.starter,
       customSalonId: options?.customSalonId ?? null,
@@ -283,9 +287,20 @@ function SalonApp() {
     }
   };
 
+  const openFeedStories = useMemo(() => {
+    const privateCustomIds = new Set(
+      customSalons.filter((cs) => cs.visibility === 'private').map((cs) => cs.salonId)
+    );
+    return publicStories.filter((story) => {
+      if (story.customSalonVisibility === 'private') return false;
+      if (story.customSalonId && privateCustomIds.has(story.customSalonId)) return false;
+      return true;
+    });
+  }, [publicStories, customSalons]);
+
   const filteredPublicStories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return publicStories.filter((story) => {
+    return openFeedStories.filter((story) => {
       if (themeFilter !== 'all' && story.theme !== themeFilter) return false;
       if (!q) return true;
       return (
@@ -294,7 +309,7 @@ function SalonApp() {
         story.authorName.toLowerCase().includes(q)
       );
     });
-  }, [publicStories, themeFilter, searchQuery]);
+  }, [openFeedStories, themeFilter, searchQuery]);
 
   const storyCountsBySalon = useMemo(() => {
     const counts: Record<StoryThemeId, number> = {
@@ -304,13 +319,13 @@ function SalonApp() {
       solitudes: 0,
       quotidien: 0,
     };
-    for (const story of publicStories) {
-      if (counts[story.theme] !== undefined) {
+    for (const story of openFeedStories) {
+      if (!story.customSalonId && story.storyScope !== 'pelemele' && counts[story.theme] !== undefined) {
         counts[story.theme] += 1;
       }
     }
     return counts;
-  }, [publicStories]);
+  }, [openFeedStories]);
 
   const activeCustomSalon = useMemo(
     () =>
@@ -693,13 +708,14 @@ function SalonApp() {
         {activeTab === 'pelemele' && (
           <PeleMeleStoriesView
             publicStories={publicStories}
+            customSalons={customSalons}
             storiesLoaded={storiesLoaded}
             onReadStory={(story) => setReadingStory(story)}
             onEnterSalon={(id) => enterSalon(id)}
             onEnterCustomSalon={(id) => enterCustomSalon(id)}
             onOpenMemberWall={openMemberWall}
             onBackToSalons={() => enterSalon(null)}
-            onWriteStory={() => void openComposer()}
+            onWriteStory={() => void openComposer({ scope: 'pelemele' })}
           />
         )}
 
@@ -1271,18 +1287,57 @@ function SalonApp() {
                       <article className="bg-white border border-stone-200 rounded-lg p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                         <div className="lg:col-span-8 space-y-4">
                           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                leadStory.customSalonId
-                                  ? enterCustomSalon(leadStory.customSalonId)
-                                  : enterSalon(leadStory.theme)
-                              }
-                              style={{ color: THEME_MAP[leadStory.theme]?.palette.textAccent }}
-                              className="uppercase tracking-widest font-medium hover:underline"
-                            >
-                              {leadStory.customSalonName || THEME_MAP[leadStory.theme]?.salonName}
-                            </button>
+                            {(() => {
+                              const leadIsHorsSalon =
+                                leadStory.storyScope === 'pelemele' && !leadStory.customSalonId;
+                              const leadCustomSalon = leadStory.customSalonId
+                                ? customSalons.find((cs) => cs.salonId === leadStory.customSalonId)
+                                : undefined;
+                              const leadPalette = leadIsHorsSalon
+                                ? undefined
+                                : leadCustomSalon
+                                  ? ACCENT_TONE_PALETTES[leadCustomSalon.accentTone]
+                                  : THEME_MAP[leadStory.theme]?.palette;
+                              const leadOriginLabel =
+                                leadStory.customSalonName ||
+                                (leadIsHorsSalon
+                                  ? 'Hors salon · Pêle-mêle'
+                                  : THEME_MAP[leadStory.theme]?.salonName || 'Salon');
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    leadStory.customSalonId
+                                      ? enterCustomSalon(leadStory.customSalonId)
+                                      : leadIsHorsSalon
+                                        ? navigateTo('pelemele')
+                                        : enterSalon(leadStory.theme)
+                                  }
+                                  title={
+                                    leadIsHorsSalon
+                                      ? 'Histoire libre publiée hors salon — Voir tout Pêle-mêle'
+                                      : `Salon d’origine : ${leadOriginLabel} — Cliquer pour y entrer`
+                                  }
+                                  style={{
+                                    backgroundColor: leadPalette?.softBg ?? '#F5F5F4',
+                                    borderColor: leadPalette?.borderTint ?? '#E7E5E4',
+                                    color: leadPalette?.textAccent ?? '#1B365D',
+                                  }}
+                                  className="group relative inline-flex items-center gap-1 px-2.5 py-0.5 rounded border text-[11px] font-medium hover:brightness-95 transition cursor-pointer"
+                                >
+                                  <span>{leadOriginLabel}</span>
+                                  <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                  <span
+                                    role="tooltip"
+                                    className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 bottom-full mb-1.5 z-20 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
+                                  >
+                                    {leadIsHorsSalon
+                                      ? 'Hors salon · Voir Pêle-mêle'
+                                      : 'Salon d’origine · Cliquer pour y entrer'}
+                                  </span>
+                                </button>
+                              );
+                            })()}
                             <span aria-hidden="true">·</span>
                             <span className="font-medium text-stone-700">
                               {STORY_FORMAT_LABELS[leadStory.storyFormat ?? 'confession'].label}
@@ -1359,6 +1414,18 @@ function SalonApp() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {secondaryStories.map((story) => {
                           const salonInfo = THEME_MAP[story.theme];
+                          const customSalonMatch = story.customSalonId
+                            ? customSalons.find((cs) => cs.salonId === story.customSalonId)
+                            : undefined;
+                          const isHorsSalon = story.storyScope === 'pelemele' && !story.customSalonId;
+                          const originPalette = isHorsSalon
+                            ? undefined
+                            : customSalonMatch
+                              ? ACCENT_TONE_PALETTES[customSalonMatch.accentTone]
+                              : salonInfo?.palette;
+                          const originLabel =
+                            story.customSalonName ||
+                            (isHorsSalon ? 'Hors salon · Pêle-mêle' : salonInfo?.salonName || 'Salon');
                           const format = story.storyFormat ?? 'confession';
                           return (
                             <article
@@ -1372,12 +1439,32 @@ function SalonApp() {
                                     onClick={() =>
                                       story.customSalonId
                                         ? enterCustomSalon(story.customSalonId)
-                                        : enterSalon(story.theme)
+                                        : isHorsSalon
+                                          ? navigateTo('pelemele')
+                                          : enterSalon(story.theme)
                                     }
-                                    style={{ color: salonInfo?.palette.textAccent }}
-                                    className="font-medium hover:underline"
+                                    title={
+                                      isHorsSalon
+                                        ? 'Histoire libre publiée hors salon — Voir tout Pêle-mêle'
+                                        : `Salon d’origine : ${originLabel} — Cliquer pour y entrer`
+                                    }
+                                    style={{
+                                      backgroundColor: originPalette?.softBg ?? '#F5F5F4',
+                                      borderColor: originPalette?.borderTint ?? '#E7E5E4',
+                                      color: originPalette?.textAccent ?? '#1B365D',
+                                    }}
+                                    className="group relative inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium hover:brightness-95 transition cursor-pointer"
                                   >
-                                    {story.customSalonName || salonInfo?.salonName}
+                                    <span>{originLabel}</span>
+                                    <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                                    <span
+                                      role="tooltip"
+                                      className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 bottom-full mb-1.5 z-20 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
+                                    >
+                                      {isHorsSalon
+                                        ? 'Hors salon · Voir Pêle-mêle'
+                                        : 'Salon d’origine · Cliquer pour y entrer'}
+                                    </span>
                                   </button>
                                   <span aria-hidden="true">·</span>
                                   <span className="font-medium text-stone-700">
@@ -1540,11 +1627,15 @@ function SalonApp() {
         story={readingStory}
         onClose={() => setReadingStory(null)}
         existingExchanges={exchanges}
+        customSalons={customSalons}
         onOpenExchange={(exchangeId) => {
           setSelectedExchangeId(exchangeId);
           navigateTo('passerelles');
         }}
         onOpenMemberWall={openMemberWall}
+        onEnterSalon={(salonId) => enterSalon(salonId)}
+        onEnterCustomSalon={(customSalonId) => enterCustomSalon(customSalonId)}
+        onOpenPeleMele={() => navigateTo('pelemele')}
       />
 
       {/* Composer Modal */}
@@ -1558,15 +1649,19 @@ function SalonApp() {
           authorId={user.uid}
           authorName={authorDisplayName}
           initialTheme={composerDefaults.theme}
+          initialScope={composerDefaults.scope}
           initialPrompt={composerDefaults.prompt}
           initialStarter={composerDefaults.starter}
           customSalons={customSalons}
           initialCustomSalonId={composerDefaults.customSalonId ?? null}
           editingStory={editingStory}
-          onSaved={(_storyId, visibility, savedTheme, savedCustomSalonId) => {
+          onSaved={(_storyId, visibility, savedTheme, savedCustomSalonId, savedScope) => {
             if (savedCustomSalonId) {
               enterCustomSalon(savedCustomSalonId);
               showNotice('Votre récit a été déposé dans le salon communautaire.');
+            } else if (visibility === 'public' && savedScope === 'pelemele') {
+              navigateTo('pelemele');
+              showNotice('Votre histoire libre a été publiée dans Histoires pêle-mêle.');
             } else if (visibility === 'public') {
               navigateTo('recits', savedTheme);
               showNotice('Votre récit est désormais partagé dans le salon.');

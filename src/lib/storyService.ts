@@ -40,6 +40,7 @@ import {
   Story,
   StoryFormat,
   StoryResonanceEvent,
+  StoryScope,
   StoryThemeId,
   StoryViewEvent,
   StoryVisibility,
@@ -386,6 +387,7 @@ export interface StoryInput {
   excerpt: string;
   content: string;
   theme: StoryThemeId;
+  storyScope?: StoryScope;
   customSalon?: StoryCustomSalonTarget | null;
   storyFormat?: StoryFormat;
   releaseCadence?: ReleaseCadence;
@@ -428,6 +430,7 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
   const readingMinutes = estimateReadingMinutes(content);
   const effectiveVisibility: StoryVisibility =
     input.customSalon?.visibility === 'private' ? 'private' : input.visibility;
+  const storyScope: StoryScope = input.customSalon ? 'salon' : (input.storyScope ?? 'salon');
 
   return {
     authorName: cleanAuthorName,
@@ -435,6 +438,7 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     excerpt,
     content,
     theme: input.theme,
+    storyScope,
     storyFormat,
     releaseCadence,
     seriesStatus,

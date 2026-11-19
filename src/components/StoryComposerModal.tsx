@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Feather, Lock, X } from 'lucide-react';
+import { BookOpen, Compass, Feather, Globe, Lock, X } from 'lucide-react';
 import { createStory, updateStory } from '../lib/storyService';
 import {
+  ACCENT_TONE_PALETTES,
   estimateReadingMinutes,
   RELEASE_CADENCE_LABELS,
   SERIES_STATUS_LABELS,
@@ -16,6 +17,7 @@ import {
   SeriesStatus,
   Story,
   StoryFormat,
+  StoryScope,
   StoryThemeId,
   StoryVisibility,
 } from '../types/story';
@@ -26,6 +28,7 @@ interface StoryComposerModalProps {
   authorId: string;
   authorName: string;
   initialTheme?: StoryThemeId;
+  initialScope?: StoryScope;
   initialPrompt?: string;
   initialStarter?: string;
   customSalons?: CustomSalon[];
@@ -35,7 +38,8 @@ interface StoryComposerModalProps {
     storyId: string,
     visibility: StoryVisibility,
     theme: StoryThemeId,
-    customSalonId?: string | null
+    customSalonId?: string | null,
+    scope?: StoryScope
   ) => void;
 }
 
@@ -45,6 +49,7 @@ export function StoryComposerModal({
   authorId,
   authorName,
   initialTheme = 'creation',
+  initialScope = 'salon',
   initialPrompt,
   initialStarter,
   customSalons = [],
@@ -53,6 +58,7 @@ export function StoryComposerModal({
   onSaved,
 }: StoryComposerModalProps) {
   const [theme, setTheme] = useState<StoryThemeId>(initialTheme);
+  const [storyScope, setStoryScope] = useState<StoryScope>(initialScope);
   const [storyFormat, setStoryFormat] = useState<StoryFormat>('confession');
   const [releaseCadence, setReleaseCadence] = useState<ReleaseCadence>('hebdomadaire');
   const [seriesStatus, setSeriesStatus] = useState<SeriesStatus>('en-cours');
@@ -66,6 +72,7 @@ export function StoryComposerModal({
   const [selectedCustomSalonId, setSelectedCustomSalonId] = useState<string | null>(
     initialCustomSalonId
   );
+  const [showDestinationPicker, setShowDestinationPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,6 +95,9 @@ export function StoryComposerModal({
     setError(null);
     if (editingStory) {
       setTheme(editingStory.theme);
+      setStoryScope(
+        editingStory.customSalonId ? 'salon' : (editingStory.storyScope ?? 'salon')
+      );
       setStoryFormat(editingStory.storyFormat ?? 'confession');
       setReleaseCadence(editingStory.releaseCadence ?? 'hebdomadaire');
       setSeriesStatus(editingStory.seriesStatus ?? 'en-cours');
@@ -97,25 +107,42 @@ export function StoryComposerModal({
       setExcerpt(editingStory.excerpt);
       setVisibility(editingStory.visibility);
       setSelectedCustomSalonId(editingStory.customSalonId ?? null);
+      setShowDestinationPicker(false);
     } else {
       const nextTheme = initialTheme || 'creation';
       const initialCs = initialCustomSalonId
         ? customSalons.find((s) => s.salonId === initialCustomSalonId) ?? null
         : null;
+      const resolvedScope: StoryScope = initialCs ? 'salon' : initialScope;
       setTheme(nextTheme);
+      setStoryScope(resolvedScope);
       setStoryFormat('confession');
       setReleaseCadence('hebdomadaire');
       setSeriesStatus('en-cours');
       setPromptQuestion(
-        initialPrompt ?? initialCs?.promptQuestion ?? THEME_MAP[nextTheme].promptQuestion
+        initialPrompt ??
+          (initialCs
+            ? initialCs.promptQuestion
+            : resolvedScope === 'pelemele'
+              ? ''
+              : THEME_MAP[nextTheme].promptQuestion)
       );
       setTitle('');
       setContent(initialStarter ?? '');
       setExcerpt('');
       setSelectedCustomSalonId(initialCustomSalonId ?? null);
+      setShowDestinationPicker(!initialCustomSalonId);
       setVisibility(initialCs?.visibility === 'private' ? 'private' : 'public');
     }
-  }, [isOpen, editingStory, initialTheme, initialPrompt, initialStarter, initialCustomSalonId]);
+  }, [
+    isOpen,
+    editingStory,
+    initialTheme,
+    initialScope,
+    initialPrompt,
+    initialStarter,
+    initialCustomSalonId,
+  ]);
 
   if (!isOpen) return null;
 
@@ -173,19 +200,21 @@ export function StoryComposerModal({
     try {
       const effectiveVisibility: StoryVisibility = isPrivateCustomSalon ? 'private' : visibility;
       const customSalonTarget =
-        !editingStory && selectedCustomSalon
+        !editingStory && storyScope === 'salon' && selectedCustomSalon
           ? {
               salonId: selectedCustomSalon.salonId,
               name: selectedCustomSalon.name,
               visibility: selectedCustomSalon.visibility,
             }
           : null;
+      const effectiveScope: StoryScope = customSalonTarget ? 'salon' : storyScope;
 
       const payload = {
         title,
         excerpt,
         content,
         theme,
+        storyScope: effectiveScope,
         customSalon: customSalonTarget,
         storyFormat,
         releaseCadence: storyFormat === 'confession' ? 'unique' : releaseCadence,
@@ -199,11 +228,18 @@ export function StoryComposerModal({
           editingStory.storyId,
           effectiveVisibility,
           theme,
-          editingStory.customSalonId ?? null
+          editingStory.customSalonId ?? null,
+          effectiveScope
         );
       } else {
         const createdId = await createStory(authorId, authorName, payload);
-        onSaved(createdId, effectiveVisibility, theme, customSalonTarget?.salonId ?? null);
+        onSaved(
+          createdId,
+          effectiveVisibility,
+          theme,
+          customSalonTarget?.salonId ?? null,
+          effectiveScope
+        );
       }
       onClose();
     } catch (err) {
@@ -334,72 +370,191 @@ export function StoryComposerModal({
 
           <div>
             <span className="block text-xs uppercase tracking-widest text-stone-500 mb-2">
-              {selectedCustomSalonId ? 'Thématique associée' : 'Salon de destination'}
+              Où publier cette histoire ?
             </span>
-            <div className="flex flex-wrap gap-2">
-              {STORY_THEMES.map((item) => {
-                const active = theme === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleThemeChange(item.id)}
-                    style={
-                      active
-                        ? {
-                            backgroundColor: item.palette.accent,
-                            borderColor: item.palette.accent,
-                            color: '#FFFFFF',
-                          }
-                        : {
-                            borderColor: item.palette.borderTint,
-                          }
-                    }
-                    className={`min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                      active ? '' : 'bg-white text-stone-800 hover:bg-stone-50'
-                    }`}
-                  >
-                    {item.romanIndex} · {item.salonName}
-                  </button>
-                );
-              })}
-            </div>
 
             {editingStory?.customSalonId ? (
-              <div className="mt-3 px-3.5 py-2.5 bg-white border border-stone-200 rounded-md text-xs text-stone-700 flex items-center gap-2">
-                {editingStory.customSalonVisibility === 'private' && (
+              <div className="px-4 py-3 bg-white border border-stone-200 rounded-md text-xs text-stone-700 flex items-center gap-2">
+                {editingStory.customSalonVisibility === 'private' ? (
                   <Lock className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                ) : (
+                  <Globe className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
                 )}
                 <span>
                   Salon communautaire : <strong>{editingStory.customSalonName}</strong>
                 </span>
               </div>
+            ) : selectedCustomSalon && !showDestinationPicker ? (
+              (() => {
+                const pal =
+                  ACCENT_TONE_PALETTES[selectedCustomSalon.accentTone] ??
+                  ACCENT_TONE_PALETTES.ink;
+                return (
+                  <div
+                    style={{ backgroundColor: pal.softBg, borderColor: pal.borderTint }}
+                    className="p-4 border rounded-md flex items-center justify-between gap-4"
+                  >
+                    <div className="space-y-0.5">
+                      <p
+                        style={{ color: pal.textAccent }}
+                        className="text-xs font-semibold inline-flex items-center gap-1.5"
+                      >
+                        {selectedCustomSalon.visibility === 'private' ? (
+                          <>
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Salon privé · Réservé aux membres admis</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe className="w-3.5 h-3.5" />
+                            <span>Salon public · Aussi visible dans Pêle-mêle</span>
+                          </>
+                        )}
+                      </p>
+                      <p className="font-display text-lg font-medium text-stone-900">
+                        {selectedCustomSalon.name}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowDestinationPicker(true)}
+                      className="text-xs font-medium text-stone-700 hover:underline shrink-0"
+                    >
+                      Changer
+                    </button>
+                  </div>
+                );
+              })()
             ) : (
-              selectableCustomSalons.length > 0 && (
-                <div className="mt-3 bg-white border border-stone-200 rounded-md p-3.5 space-y-1.5">
-                  <label
-                    htmlFor="custom-salon-select"
-                    className="block text-xs font-medium text-stone-700"
+              <div className="space-y-3">
+                {/* Mode Toggle: Hors salon (Pêle-mêle) vs Dans un salon */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStoryScope('pelemele');
+                      setSelectedCustomSalonId(null);
+                      if (!editingStory && !initialPrompt) {
+                        setPromptQuestion('');
+                      }
+                    }}
+                    className={`text-left p-3.5 rounded-md border transition-colors ${
+                      storyScope === 'pelemele' && !selectedCustomSalonId
+                        ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
+                        : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                    }`}
                   >
-                    Ou publier dans un salon de la communauté (facultatif)
-                  </label>
-                  <select
-                    id="custom-salon-select"
-                    value={selectedCustomSalonId ?? ''}
-                    onChange={(e) => handleCustomSalonSelect(e.target.value)}
-                    className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Compass
+                        className={`w-4 h-4 ${
+                          storyScope === 'pelemele' && !selectedCustomSalonId
+                            ? 'text-[#1B365D]'
+                            : 'text-stone-500'
+                        }`}
+                      />
+                      <span className="text-xs font-semibold text-stone-900">
+                        Hors salon (Pêle-mêle)
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-600">
+                      Histoire libre visible par tout le monde dans Pêle-mêle, sans entrer dans un salon.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStoryScope('salon');
+                      if (!editingStory && !initialPrompt && !selectedCustomSalonId) {
+                        setPromptQuestion(THEME_MAP[theme].promptQuestion);
+                      }
+                    }}
+                    className={`text-left p-3.5 rounded-md border transition-colors ${
+                      storyScope === 'salon' || Boolean(selectedCustomSalonId)
+                        ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
+                        : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                    }`}
                   >
-                    <option value="">
-                      — Publier uniquement dans le salon Lisière sélectionné ci-dessus —
-                    </option>
-                    {selectableCustomSalons.map((cs) => (
-                      <option key={cs.salonId} value={cs.salonId}>
-                        {cs.name} ({cs.visibility === 'private' ? 'Salon privé' : 'Salon public'})
-                      </option>
-                    ))}
-                  </select>
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <Globe
+                        className={`w-4 h-4 ${
+                          storyScope === 'salon' || Boolean(selectedCustomSalonId)
+                            ? 'text-[#1B365D]'
+                            : 'text-stone-500'
+                        }`}
+                      />
+                      <span className="text-xs font-semibold text-stone-900">
+                        Dans un salon
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-600">
+                      Publier dans un salon thématique ou un salon privé/public de la communauté.
+                    </p>
+                  </button>
                 </div>
-              )
+
+                {(storyScope === 'salon' || Boolean(selectedCustomSalonId)) && (
+                  <div className="space-y-3 pt-1">
+                    {!selectedCustomSalonId && (
+                      <div className="flex flex-wrap gap-2">
+                        {STORY_THEMES.map((item) => {
+                          const active = theme === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => handleThemeChange(item.id)}
+                              style={
+                                active
+                                  ? {
+                                      backgroundColor: item.palette.accent,
+                                      borderColor: item.palette.accent,
+                                      color: '#FFFFFF',
+                                    }
+                                  : {
+                                      borderColor: item.palette.borderTint,
+                                    }
+                              }
+                              className={`min-h-[38px] px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
+                                active ? '' : 'bg-white text-stone-800 hover:bg-stone-50'
+                              }`}
+                            >
+                              {item.romanIndex} · {item.salonName}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!editingStory && selectableCustomSalons.length > 0 && (
+                      <div className="bg-white border border-stone-200 rounded-md p-3.5 space-y-1.5">
+                        <label
+                          htmlFor="custom-salon-select"
+                          className="block text-xs font-medium text-stone-700"
+                        >
+                          Salon de la communauté (optionnel)
+                        </label>
+                        <select
+                          id="custom-salon-select"
+                          value={selectedCustomSalonId ?? ''}
+                          onChange={(e) => handleCustomSalonSelect(e.target.value)}
+                          className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                        >
+                          <option value="">
+                            — Publier dans le salon Lisière ci-dessus —
+                          </option>
+                          {selectableCustomSalons.map((cs) => (
+                            <option key={cs.salonId} value={cs.salonId}>
+                              {cs.name} (
+                              {cs.visibility === 'private' ? 'Salon privé' : 'Salon public'})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
