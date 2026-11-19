@@ -44,6 +44,17 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid)).data.status == 'approved';
     }
 
+    function canReadStoryData(storyData) {
+      return storyData.visibility == 'public'
+        || (isSignedIn() && storyData.authorId == request.auth.uid)
+        || (
+          isSignedIn()
+          && 'customSalonId' in storyData
+          && storyData.customSalonVisibility == 'private'
+          && isApprovedCustomSalonMember(storyData.customSalonId)
+        );
+    }
+
     // --- Validation Blueprints ---
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
@@ -98,6 +109,63 @@ service cloud.firestore {
         && data.keys().hasOnly(['userId', 'email', 'createdAt', 'updatedAt'])
         && isValidId(data.userId)
         && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidBookmark(data) {
+      return data.keys().hasAll([
+          'userId', 'storyId', 'storyTitle', 'storyExcerpt', 'storyAuthorId',
+          'storyAuthorName', 'storyTheme', 'readingMinutes', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'storyId', 'storyTitle', 'storyExcerpt', 'storyAuthorId',
+          'storyAuthorName', 'storyTheme', 'customSalonId', 'customSalonName',
+          'storyScope', 'storyFormat', 'readingMinutes', 'createdAt'
+        ])
+        && isValidId(data.userId)
+        && isValidId(data.storyId)
+        && data.storyTitle is string && data.storyTitle.size() >= 1 && data.storyTitle.size() <= 140
+        && data.storyExcerpt is string && data.storyExcerpt.size() <= 300
+        && isValidId(data.storyAuthorId)
+        && data.storyAuthorName is string && data.storyAuthorName.size() >= 2 && data.storyAuthorName.size() <= 60
+        && isValidSalonId(data.storyTheme)
+        && (!('customSalonId' in data) || isValidId(data.customSalonId))
+        && (!('customSalonName' in data) || (data.customSalonName is string && data.customSalonName.size() <= 80))
+        && (!('storyScope' in data) || data.storyScope in ['salon', 'pelemele'])
+        && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
+        && data.readingMinutes is int && data.readingMinutes >= 1 && data.readingMinutes <= 60
+        && data.createdAt is timestamp;
+    }
+
+    function isValidRepost(data) {
+      return data.keys().hasAll([
+          'repostId', 'reposterId', 'reposterName', 'storyId', 'storyTitle',
+          'storyExcerpt', 'storyAuthorId', 'storyAuthorName', 'storyTheme',
+          'readingMinutes', 'note', 'visibility', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'repostId', 'reposterId', 'reposterName', 'storyId', 'storyTitle',
+          'storyExcerpt', 'storyAuthorId', 'storyAuthorName', 'storyTheme',
+          'customSalonId', 'customSalonName', 'storyScope', 'storyFormat',
+          'readingMinutes', 'note', 'visibility', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.repostId)
+        && isValidId(data.reposterId)
+        && data.reposterName is string && data.reposterName.size() >= 2 && data.reposterName.size() <= 60
+        && isValidId(data.storyId)
+        && data.storyTitle is string && data.storyTitle.size() >= 1 && data.storyTitle.size() <= 140
+        && data.storyExcerpt is string && data.storyExcerpt.size() <= 300
+        && isValidId(data.storyAuthorId)
+        && data.storyAuthorName is string && data.storyAuthorName.size() >= 2 && data.storyAuthorName.size() <= 60
+        && isValidSalonId(data.storyTheme)
+        && (!('customSalonId' in data) || isValidId(data.customSalonId))
+        && (!('customSalonName' in data) || (data.customSalonName is string && data.customSalonName.size() <= 80))
+        && (!('storyScope' in data) || data.storyScope in ['salon', 'pelemele'])
+        && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
+        && data.readingMinutes is int && data.readingMinutes >= 1 && data.readingMinutes <= 60
+        && data.note is string && data.note.size() <= 280
+        && data.visibility in ['public', 'private']
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -399,6 +467,73 @@ service cloud.firestore {
           && isOwner(userId)
           && existing().ownerId == request.auth.uid;
       }
+
+      // Reposted / reshared stories on a user's profile / wall
+      match /reposts/{storyId} {
+        allow get: if isValidId(userId)
+          && isValidId(storyId)
+          && (existing().visibility == 'public' || isOwner(userId));
+        allow list: if resource.data.visibility == 'public'
+          || (isSignedIn() && resource.data.reposterId == request.auth.uid);
+        allow create: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(storyId)
+          && isOwner(userId)
+          && isValidRepost(incoming())
+          && incoming().repostId == storyId
+          && incoming().reposterId == request.auth.uid
+          && incoming().storyId == storyId
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/publicProfiles/$(userId))
+          && exists(/databases/$(database)/documents/stories/$(storyId))
+          && canReadStoryData(get(/databases/$(database)/documents/stories/$(storyId)).data)
+          && (
+            incoming().visibility == 'private'
+            || (
+              get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+              && (
+                !('customSalonVisibility' in get(/databases/$(database)/documents/stories/$(storyId)).data)
+                || get(/databases/$(database)/documents/stories/$(storyId)).data.customSalonVisibility != 'private'
+              )
+            )
+          );
+        allow update: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(storyId)
+          && isOwner(userId)
+          && isValidRepost(incoming())
+          && incoming().repostId == existing().repostId
+          && incoming().reposterId == existing().reposterId
+          && incoming().storyId == existing().storyId
+          && incoming().storyTitle == existing().storyTitle
+          && incoming().storyExcerpt == existing().storyExcerpt
+          && incoming().storyAuthorId == existing().storyAuthorId
+          && incoming().storyAuthorName == existing().storyAuthorName
+          && incoming().storyTheme == existing().storyTheme
+          && incoming().readingMinutes == existing().readingMinutes
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'reposterName', 'note', 'visibility', 'updatedAt'
+          ])
+          && (
+            incoming().visibility == 'private'
+            || (
+              exists(/databases/$(database)/documents/stories/$(storyId))
+              && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+              && (
+                !('customSalonVisibility' in get(/databases/$(database)/documents/stories/$(storyId)).data)
+                || get(/databases/$(database)/documents/stories/$(storyId)).data.customSalonVisibility != 'private'
+              )
+            )
+          );
+        allow delete: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(storyId)
+          && isOwner(userId)
+          && existing().reposterId == request.auth.uid;
+      }
     }
 
     // Private PII user info
@@ -423,6 +558,28 @@ service cloud.firestore {
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
       allow delete: if false;
+    }
+
+    // Private saved-for-later story bookmarks
+    match /users/{userId}/bookmarks/{storyId} {
+      allow get: if isValidId(userId) && isValidId(storyId) && isOwner(userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(storyId)
+        && isOwner(userId)
+        && isValidBookmark(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().storyId == storyId
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/stories/$(storyId))
+        && canReadStoryData(get(/databases/$(database)/documents/stories/$(storyId)).data);
+      allow update: if false;
+      allow delete: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(storyId)
+        && isOwner(userId)
+        && existing().userId == request.auth.uid;
     }
 
     // Personal stories & serialized novels

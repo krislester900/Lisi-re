@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   ArrowUpRight,
+  Bookmark,
   BookOpen,
   Compass,
   Feather,
@@ -10,6 +11,7 @@ import {
   Lock,
   MessageCircle,
   Plus,
+  Repeat2,
   Search,
   ShieldCheck,
   Users,
@@ -26,6 +28,7 @@ import { LisiereLogo } from './components/LisiereLogo';
 import { MembersDirectoryView } from './components/MembersDirectoryView';
 import { PeleMeleStoriesView } from './components/PeleMeleStoriesView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
+import { RepostModal } from './components/RepostModal';
 import { SalonEmblem } from './components/SalonEmblem';
 import { SalonRoomView } from './components/SalonRoomView';
 import { StoryComposerModal } from './components/StoryComposerModal';
@@ -37,9 +40,12 @@ import {
   buildDirectExchangeId,
   subscribeToCustomSalons,
   subscribeToDiscoverableProfiles,
+  subscribeToProfileReposts,
   subscribeToPublicStories,
+  subscribeToUserBookmarks,
   subscribeToUserExchanges,
   subscribeToUserStories,
+  toggleStoryBookmark,
 } from './lib/storyService';
 import {
   ACCENT_TONE_PALETTES,
@@ -48,7 +54,15 @@ import {
   STORY_THEMES,
   THEME_MAP,
 } from './lib/themes';
-import { CustomSalon, Exchange, PublicProfile, Story, StoryThemeId } from './types/story';
+import {
+  CustomSalon,
+  Exchange,
+  PublicProfile,
+  Story,
+  StoryBookmark,
+  StoryRepost,
+  StoryThemeId,
+} from './types/story';
 
 type NavTab =
   | 'recits'
@@ -154,6 +168,8 @@ function SalonApp() {
   const [customSalonsLoaded, setCustomSalonsLoaded] = useState(false);
   const [customSalonFilter, setCustomSalonFilter] = useState<'all' | 'public' | 'private'>('all');
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const [bookmarks, setBookmarks] = useState<StoryBookmark[]>([]);
+  const [myReposts, setMyReposts] = useState<StoryRepost[]>([]);
   const [discoverableProfiles, setDiscoverableProfiles] = useState<PublicProfile[]>([]);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [storiesLoaded, setStoriesLoaded] = useState(false);
@@ -164,6 +180,7 @@ function SalonApp() {
   const [salonImgFailedMap, setSalonImgFailedMap] = useState<Record<string, boolean>>({});
 
   const [readingStory, setReadingStory] = useState<Story | null>(null);
+  const [repostingStory, setRepostingStory] = useState<Story | null>(null);
   const [selectedExchangeId, setSelectedExchangeId] = useState<string | null>(null);
   const [pendingDirectRecipientId, setPendingDirectRecipientId] = useState<string | null>(null);
 
@@ -201,12 +218,16 @@ function SalonApp() {
     if (!user) {
       setMyStories([]);
       setExchanges([]);
+      setBookmarks([]);
+      setMyReposts([]);
       setDiscoverableProfiles([]);
       setProfilesLoaded(false);
       return;
     }
     const unsubMyStories = subscribeToUserStories(user.uid, setMyStories);
     const unsubExchanges = subscribeToUserExchanges(user.uid, setExchanges);
+    const unsubBookmarks = subscribeToUserBookmarks(user.uid, setBookmarks);
+    const unsubMyReposts = subscribeToProfileReposts(user.uid, user.uid, setMyReposts);
     const unsubProfiles = subscribeToDiscoverableProfiles((profilesList) => {
       setDiscoverableProfiles(profilesList);
       setProfilesLoaded(true);
@@ -214,6 +235,8 @@ function SalonApp() {
     return () => {
       unsubMyStories();
       unsubExchanges();
+      unsubBookmarks();
+      unsubMyReposts();
       unsubProfiles();
     };
   }, [user]);
@@ -227,6 +250,41 @@ function SalonApp() {
       setReadingStory(updated);
     }
   }, [publicStories, myStories, readingStory?.storyId]);
+
+  const bookmarkedStoryIds = useMemo(
+    () => new Set(bookmarks.map((b) => b.storyId)),
+    [bookmarks]
+  );
+
+  const repostedStoryIds = useMemo(
+    () => new Set(myReposts.map((r) => r.storyId)),
+    [myReposts]
+  );
+
+  const handleToggleBookmark = async (story: Story) => {
+    if (!user) {
+      await signInWithGoogle();
+      return;
+    }
+    try {
+      const added = await toggleStoryBookmark(user.uid, story);
+      showNotice(
+        added
+          ? 'Histoire enregistrée dans « À lire plus tard ».'
+          : 'Histoire retirée de vos favoris.'
+      );
+    } catch {
+      showNotice('Impossible d’enregistrer cette histoire pour le moment.');
+    }
+  };
+
+  const handleOpenRepost = async (story: Story) => {
+    if (!user) {
+      await signInWithGoogle();
+      return;
+    }
+    setRepostingStory(story);
+  };
 
   const showNotice = (msg: string) => {
     setToastNotice(msg);
@@ -678,6 +736,10 @@ function SalonApp() {
             salonId={activeSalonId}
             publicStories={publicStories}
             storiesLoaded={storiesLoaded}
+            bookmarkedStoryIds={bookmarkedStoryIds}
+            repostedStoryIds={repostedStoryIds}
+            onToggleBookmark={(story) => void handleToggleBookmark(story)}
+            onOpenRepost={(story) => void handleOpenRepost(story)}
             onSelectSalon={(id) => enterSalon(id)}
             onReadStory={(story) => setReadingStory(story)}
             onWriteInSalon={(theme, prompt, starter) =>
@@ -691,6 +753,10 @@ function SalonApp() {
           <CustomSalonRoomView
             salon={activeCustomSalon}
             salonsLoaded={customSalonsLoaded}
+            bookmarkedStoryIds={bookmarkedStoryIds}
+            repostedStoryIds={repostedStoryIds}
+            onToggleBookmark={(story) => void handleToggleBookmark(story)}
+            onOpenRepost={(story) => void handleOpenRepost(story)}
             onBackToSalons={() => enterSalon(null)}
             onEditSalon={(salonToEdit) => void openCustomSalonModal(salonToEdit)}
             onReadStory={(story) => setReadingStory(story)}
@@ -710,6 +776,10 @@ function SalonApp() {
             publicStories={publicStories}
             customSalons={customSalons}
             storiesLoaded={storiesLoaded}
+            bookmarkedStoryIds={bookmarkedStoryIds}
+            repostedStoryIds={repostedStoryIds}
+            onToggleBookmark={(story) => void handleToggleBookmark(story)}
+            onOpenRepost={(story) => void handleOpenRepost(story)}
             onReadStory={(story) => setReadingStory(story)}
             onEnterSalon={(id) => enterSalon(id)}
             onEnterCustomSalon={(id) => enterCustomSalon(id)}
@@ -732,6 +802,7 @@ function SalonApp() {
             existingExchanges={exchanges}
             onSelectMember={(memberId) => navigateTo('membres', null, memberId)}
             onReadStory={(story) => setReadingStory(story)}
+            onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onOpenExchange={(exchangeId) => {
               setSelectedExchangeId(exchangeId);
               navigateTo('passerelles');
@@ -1396,14 +1467,56 @@ function SalonApp() {
                               </span>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => setReadingStory(leadStory)}
-                              className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
-                            >
-                              <span>Lire et commenter</span>
-                              <ArrowRight className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setReadingStory(leadStory)}
+                                className="flex-1 min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                              >
+                                <span>Lire et commenter</span>
+                                <ArrowRight className="w-4 h-4" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleBookmark(leadStory)}
+                                title={
+                                  bookmarkedStoryIds.has(leadStory.storyId)
+                                    ? 'Retirer des favoris'
+                                    : 'Enregistrer pour lire plus tard'
+                                }
+                                aria-label="Enregistrer pour lire plus tard"
+                                className={`min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-md border transition-colors shrink-0 ${
+                                  bookmarkedStoryIds.has(leadStory.storyId)
+                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                }`}
+                              >
+                                <Bookmark
+                                  className={`w-4 h-4 ${
+                                    bookmarkedStoryIds.has(leadStory.storyId) ? 'fill-current' : ''
+                                  }`}
+                                />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => void handleOpenRepost(leadStory)}
+                                title={
+                                  repostedStoryIds.has(leadStory.storyId)
+                                    ? 'Repartagé — Modifier'
+                                    : 'Repartager sur mon compte'
+                                }
+                                aria-label="Repartager"
+                                className={`min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-md border transition-colors shrink-0 ${
+                                  repostedStoryIds.has(leadStory.storyId)
+                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                }`}
+                              >
+                                <Repeat2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </article>
@@ -1491,7 +1604,7 @@ function SalonApp() {
                                 <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
                               </div>
 
-                              <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
+                              <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
                                   <span className="inline-flex items-center gap-1">
                                     <Heart className="w-3.5 h-3.5" />
@@ -1503,14 +1616,56 @@ function SalonApp() {
                                   </span>
                                 </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() => setReadingStory(story)}
-                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
-                                >
-                                  <span>Lire et commenter</span>
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleToggleBookmark(story)}
+                                    title={
+                                      bookmarkedStoryIds.has(story.storyId)
+                                        ? 'Retirer des favoris'
+                                        : 'Enregistrer pour lire plus tard'
+                                    }
+                                    aria-label="Enregistrer pour lire plus tard"
+                                    className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                      bookmarkedStoryIds.has(story.storyId)
+                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                        : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                    }`}
+                                  >
+                                    <Bookmark
+                                      className={`w-3.5 h-3.5 ${
+                                        bookmarkedStoryIds.has(story.storyId) ? 'fill-current' : ''
+                                      }`}
+                                    />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleOpenRepost(story)}
+                                    title={
+                                      repostedStoryIds.has(story.storyId)
+                                        ? 'Repartagé — Modifier'
+                                        : 'Repartager sur mon compte'
+                                    }
+                                    aria-label="Repartager"
+                                    className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                      repostedStoryIds.has(story.storyId)
+                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                        : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                    }`}
+                                  >
+                                    <Repeat2 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setReadingStory(story)}
+                                    className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
+                                  >
+                                    <span>Lire et commenter</span>
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             </article>
                           );
@@ -1551,7 +1706,10 @@ function SalonApp() {
           <JournalView
             myStories={myStories}
             existingExchanges={exchanges}
+            bookmarks={bookmarks}
+            reposts={myReposts}
             onReadStory={(story) => setReadingStory(story)}
+            onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onEditStory={(story) => void openComposer({ edit: story })}
             onNewStory={() => void openComposer()}
             onOpenExchange={(exchangeId) => {
@@ -1628,6 +1786,10 @@ function SalonApp() {
         onClose={() => setReadingStory(null)}
         existingExchanges={exchanges}
         customSalons={customSalons}
+        isBookmarked={Boolean(readingStory && bookmarkedStoryIds.has(readingStory.storyId))}
+        isReposted={Boolean(readingStory && repostedStoryIds.has(readingStory.storyId))}
+        onToggleBookmark={(story) => void handleToggleBookmark(story)}
+        onOpenRepost={(story) => void handleOpenRepost(story)}
         onOpenExchange={(exchangeId) => {
           setSelectedExchangeId(exchangeId);
           navigateTo('passerelles');
@@ -1636,6 +1798,29 @@ function SalonApp() {
         onEnterSalon={(salonId) => enterSalon(salonId)}
         onEnterCustomSalon={(customSalonId) => enterCustomSalon(customSalonId)}
         onOpenPeleMele={() => navigateTo('pelemele')}
+      />
+
+      {/* Repost Modal */}
+      <RepostModal
+        story={repostingStory}
+        existingRepost={
+          repostingStory
+            ? myReposts.find((r) => r.storyId === repostingStory.storyId) ?? null
+            : null
+        }
+        userProfile={profile}
+        onClose={() => setRepostingStory(null)}
+        onSaved={(vis, removed) => {
+          if (removed) {
+            showNotice('Repartage retiré de votre compte.');
+          } else {
+            showNotice(
+              vis === 'public'
+                ? 'Histoire repartagée publiquement sur votre mur.'
+                : 'Histoire repartagée en privé sur votre compte.'
+            );
+          }
+        }}
       />
 
       {/* Composer Modal */}

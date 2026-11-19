@@ -133,7 +133,9 @@ export function parseMusicSource(rawUrl: string): ParsedMusicSource {
   const lower = url.toLowerCase();
   if (
     /\.(mp3|wav|ogg|m4a|aac|flac)(\?|$)/i.test(lower) ||
-    /\/v1\/tracks\/[^/]+\/stream/i.test(lower)
+    /\/v1\/tracks\/[^/]+\/stream/i.test(lower) ||
+    /dzcdn\.net\//i.test(lower) ||
+    /audio-ssl\.itunes\.apple\.com\//i.test(lower)
   ) {
     return { type: 'audio', originalUrl: url };
   }

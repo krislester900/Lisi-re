@@ -2,11 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Bookmark,
   BookOpen,
   Feather,
   Heart,
   MessageCircle,
   MessageSquare,
+  Repeat2,
   Search,
 } from 'lucide-react';
 import {
@@ -26,6 +28,10 @@ interface SalonRoomViewProps {
   salonId: StoryThemeId;
   publicStories: Story[];
   storiesLoaded: boolean;
+  bookmarkedStoryIds?: Set<string>;
+  repostedStoryIds?: Set<string>;
+  onToggleBookmark?: (story: Story) => void;
+  onOpenRepost?: (story: Story) => void;
   onSelectSalon: (salonId: StoryThemeId | null) => void;
   onReadStory: (story: Story) => void;
   onWriteInSalon: (theme: StoryThemeId, promptQuestion?: string, starter?: string) => void;
@@ -36,6 +42,10 @@ export function SalonRoomView({
   salonId,
   publicStories,
   storiesLoaded,
+  bookmarkedStoryIds,
+  repostedStoryIds,
+  onToggleBookmark,
+  onOpenRepost,
   onSelectSalon,
   onReadStory,
   onWriteInSalon,
@@ -588,15 +598,61 @@ export function SalonRoomView({
                           </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => onReadStory(leadStory)}
-                          style={{ backgroundColor: salon.palette.accent }}
-                          className="w-full min-h-[42px] px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-[opacity,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
-                        >
-                          <span>Lire le récit et répondre</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onReadStory(leadStory)}
+                            style={{ backgroundColor: salon.palette.accent }}
+                            className="flex-1 min-h-[42px] px-4 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-[opacity,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                          >
+                            <span>Lire le récit et répondre</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+
+                          {onToggleBookmark && (
+                            <button
+                              type="button"
+                              onClick={() => onToggleBookmark(leadStory)}
+                              title={
+                                bookmarkedStoryIds?.has(leadStory.storyId)
+                                  ? 'Retirer des favoris'
+                                  : 'Enregistrer pour lire plus tard'
+                              }
+                              aria-label="Enregistrer pour lire plus tard"
+                              className={`min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-md border transition-colors shrink-0 ${
+                                bookmarkedStoryIds?.has(leadStory.storyId)
+                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                  : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                              }`}
+                            >
+                              <Bookmark
+                                className={`w-4 h-4 ${
+                                  bookmarkedStoryIds?.has(leadStory.storyId) ? 'fill-current' : ''
+                                }`}
+                              />
+                            </button>
+                          )}
+
+                          {onOpenRepost && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenRepost(leadStory)}
+                              title={
+                                repostedStoryIds?.has(leadStory.storyId)
+                                  ? 'Repartagé — Modifier'
+                                  : 'Repartager sur mon compte'
+                              }
+                              aria-label="Repartager"
+                              className={`min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-md border transition-colors shrink-0 ${
+                                repostedStoryIds?.has(leadStory.storyId)
+                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                  : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                              }`}
+                            >
+                              <Repeat2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </article>
@@ -645,7 +701,7 @@ export function SalonRoomView({
                           <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
                         </div>
 
-                        <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
+                        <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
                             <span className="inline-flex items-center gap-1">
                               <Heart className="w-3.5 h-3.5" />
@@ -657,15 +713,59 @@ export function SalonRoomView({
                             </span>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => onReadStory(story)}
-                            style={{ color: salon.palette.textAccent }}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
-                          >
-                            <span>Lire et commenter</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {onToggleBookmark && (
+                              <button
+                                type="button"
+                                onClick={() => onToggleBookmark(story)}
+                                title={
+                                  bookmarkedStoryIds?.has(story.storyId)
+                                    ? 'Retirer des favoris'
+                                    : 'Enregistrer pour lire plus tard'
+                                }
+                                aria-label="Enregistrer pour lire plus tard"
+                                className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                  bookmarkedStoryIds?.has(story.storyId)
+                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                    : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                }`}
+                              >
+                                <Bookmark
+                                  className={`w-3.5 h-3.5 ${
+                                    bookmarkedStoryIds?.has(story.storyId) ? 'fill-current' : ''
+                                  }`}
+                                />
+                              </button>
+                            )}
+                            {onOpenRepost && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenRepost(story)}
+                                title={
+                                  repostedStoryIds?.has(story.storyId)
+                                    ? 'Repartagé — Modifier'
+                                    : 'Repartager sur mon compte'
+                                }
+                                aria-label="Repartager"
+                                className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                  repostedStoryIds?.has(story.storyId)
+                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                    : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                }`}
+                              >
+                                <Repeat2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onReadStory(story)}
+                              style={{ color: salon.palette.textAccent }}
+                              className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
+                            >
+                              <span>Lire et commenter</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </article>
                     ))}

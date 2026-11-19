@@ -1,19 +1,32 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Bookmark,
   BookOpen,
   Camera,
   Edit3,
   Eye,
   EyeOff,
+  Globe,
   LayoutGrid,
+  Lock,
   LogOut,
+  Music2,
   Plus,
+  Repeat2,
   Trash2,
   User as UserIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { compressAvatarForProfile } from '../lib/storageService';
-import { deleteStory, updatePublicProfile, updateStory } from '../lib/storyService';
+import {
+  deleteStory,
+  deleteStoryRepost,
+  removeStoryBookmark,
+  syncUserRepostsVisibility,
+  updatePublicProfile,
+  updateRepostVisibility,
+  updateStory,
+} from '../lib/storyService';
 import {
   formatCumulativeMinutes,
   formatFrenchDate,
@@ -21,25 +34,38 @@ import {
   STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
-import { Exchange, FIELD_LIMITS, Story } from '../types/story';
+import {
+  Exchange,
+  FIELD_LIMITS,
+  Story,
+  StoryBookmark,
+  StoryRepost,
+} from '../types/story';
+import { MusicCatalogPicker } from './MusicCatalogPicker';
 import { ProfileWallView } from './ProfileWallView';
 import { StoryAnalyticsChart } from './StoryAnalyticsChart';
 
 interface JournalViewProps {
   myStories: Story[];
   existingExchanges: Exchange[];
+  bookmarks?: StoryBookmark[];
+  reposts?: StoryRepost[];
   onReadStory: (story: Story) => void;
+  onOpenStoryById?: (storyId: string) => void;
   onEditStory: (story: Story) => void;
   onNewStory: () => void;
   onOpenExchange: (exchangeId: string) => void;
 }
 
-type JournalSubTab = 'wall' | 'stories' | 'profile';
+type JournalSubTab = 'wall' | 'stories' | 'bookmarks' | 'reposts' | 'profile';
 
 export function JournalView({
   myStories,
   existingExchanges,
+  bookmarks = [],
+  reposts = [],
   onReadStory,
+  onOpenStoryById,
   onEditStory,
   onNewStory,
   onOpenExchange,
@@ -56,9 +82,11 @@ export function JournalView({
   const [favoriteTrackTitle, setFavoriteTrackTitle] = useState('');
   const [favoriteTrackArtist, setFavoriteTrackArtist] = useState('');
   const [favoriteTrackUrl, setFavoriteTrackUrl] = useState('');
+  const [showMusicSearch, setShowMusicSearch] = useState(false);
   const [favoriteNovel, setFavoriteNovel] = useState('');
   const [interests, setInterests] = useState('');
   const [discoverable, setDiscoverable] = useState(true);
+  const [syncRepostsOnSave, setSyncRepostsOnSave] = useState(true);
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -66,6 +94,9 @@ export function JournalView({
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busyStoryId, setBusyStoryId] = useState<string | null>(null);
+  const [busyBookmarkId, setBusyBookmarkId] = useState<string | null>(null);
+  const [busyRepostId, setBusyRepostId] = useState<string | null>(null);
+  const [repostActionError, setRepostActionError] = useState<string | null>(null);
 
   useEffect(() => {
     setAvatarPreviewFailed(false);
@@ -145,6 +176,7 @@ export function JournalView({
     setProfileMessage(null);
     setSavingProfile(true);
     try {
+      const wasDiscoverable = profile?.discoverable !== false;
       await updatePublicProfile(user.uid, {
         displayName,
         avatarUrl,
@@ -157,13 +189,76 @@ export function JournalView({
         interests,
         discoverable,
       });
-      setProfileMessage('Votre carte, votre photo de profil et vos préférences ont bien été enregistrées.');
+
+      let syncNote = '';
+      if (syncRepostsOnSave && (wasDiscoverable !== discoverable || reposts.length > 0)) {
+        const { updated, keptPrivate } = await syncUserRepostsVisibility(
+          user.uid,
+          discoverable ? 'public' : 'private'
+        );
+        if (updated > 0) {
+          syncNote = discoverable
+            ? ` ${updated} repartage${updated > 1 ? 's' : ''} passé${updated > 1 ? 's' : ''} en public.`
+            : ` ${updated} repartage${updated > 1 ? 's' : ''} passé${updated > 1 ? 's' : ''} en privé.`;
+        }
+        if (keptPrivate > 0) {
+          syncNote += ` (${keptPrivate} issu${keptPrivate > 1 ? 's' : ''} de salons privés conservé${keptPrivate > 1 ? 's' : ''} en privé.)`;
+        }
+      }
+
+      setProfileMessage(
+        `Votre carte, votre musique et vos réglages de confidentialité ont bien été enregistrés.${syncNote}`
+      );
     } catch (err) {
       setProfileError(
         err instanceof Error ? err.message : 'Impossible d’enregistrer votre présentation.'
       );
     } finally {
       setSavingProfile(false);
+    }
+  };
+
+  const handleRemoveBookmark = async (storyId: string) => {
+    if (!user || busyBookmarkId) return;
+    setBusyBookmarkId(storyId);
+    try {
+      await removeStoryBookmark(user.uid, storyId);
+    } finally {
+      setBusyBookmarkId(null);
+    }
+  };
+
+  const handleToggleRepostVisibility = async (repost: StoryRepost) => {
+    if (!user || busyRepostId) return;
+    setRepostActionError(null);
+    setBusyRepostId(repost.storyId);
+    try {
+      await updateRepostVisibility(
+        user.uid,
+        repost.storyId,
+        repost.visibility === 'public' ? 'private' : 'public'
+      );
+    } catch (err) {
+      setRepostActionError(
+        err instanceof Error ? err.message : 'Impossible de modifier la visibilité de ce repartage.'
+      );
+    } finally {
+      setBusyRepostId(null);
+    }
+  };
+
+  const handleDeleteRepost = async (storyId: string) => {
+    if (!user || busyRepostId) return;
+    setRepostActionError(null);
+    setBusyRepostId(storyId);
+    try {
+      await deleteStoryRepost(user.uid, storyId);
+    } catch (err) {
+      setRepostActionError(
+        err instanceof Error ? err.message : 'Impossible de retirer ce repartage.'
+      );
+    } finally {
+      setBusyRepostId(null);
     }
   };
 
@@ -286,7 +381,9 @@ export function JournalView({
         {(
           [
             { id: 'wall', label: 'Mon mur', icon: LayoutGrid },
-            { id: 'stories', label: `Mes récits & romans (${myStories.length})`, icon: BookOpen },
+            { id: 'stories', label: `Mes récits (${myStories.length})`, icon: BookOpen },
+            { id: 'bookmarks', label: `À lire plus tard (${bookmarks.length})`, icon: Bookmark },
+            { id: 'reposts', label: `Repartages (${reposts.length})`, icon: Repeat2 },
             { id: 'profile', label: 'Identité & bio', icon: UserIcon },
           ] as const
         ).map((tab) => {
@@ -297,7 +394,7 @@ export function JournalView({
               key={tab.id}
               type="button"
               onClick={() => setSubTab(tab.id)}
-              className={`min-h-[38px] px-4 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
+              className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                 active
                   ? 'bg-white text-stone-900 shadow-sm'
                   : 'text-stone-600 hover:text-stone-900'
@@ -317,6 +414,7 @@ export function JournalView({
           memberStories={myStories}
           existingExchanges={existingExchanges}
           onReadStory={onReadStory}
+          onOpenStoryById={onOpenStoryById}
           onOpenExchange={onOpenExchange}
           embedded
         />
@@ -470,6 +568,200 @@ export function JournalView({
         </section>
       )}
 
+      {/* Tab 3: Bookmarks ("À lire plus tard") */}
+      {subTab === 'bookmarks' && (
+        <section aria-label="Histoires enregistrées à lire plus tard" className="space-y-5">
+          {bookmarks.length === 0 ? (
+            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-2">
+              <Bookmark className="w-6 h-6 text-stone-400 mx-auto" />
+              <p className="font-display text-xl text-stone-900">
+                Aucune histoire enregistrée pour le moment
+              </p>
+              <p className="text-sm text-stone-600 max-w-md mx-auto">
+                Cliquez sur l’icône « Enregistrer » sur n’importe quelle histoire pour la retrouver ici et la lire à tête reposée.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+              {bookmarks.map((bm) => {
+                const salonInfo = THEME_MAP[bm.storyTheme];
+                const isBusy = busyBookmarkId === bm.storyId;
+                return (
+                  <div key={bm.storyId} className="p-5 sm:p-6 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                      <span className="font-medium text-stone-800">
+                        {bm.customSalonName ||
+                          (bm.storyScope === 'pelemele' && !bm.customSalonId
+                            ? 'Hors salon · Pêle-mêle'
+                            : salonInfo?.salonName)}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                      <span>{STORY_FORMAT_LABELS[bm.storyFormat ?? 'confession']?.label}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>Par {bm.storyAuthorName}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">{bm.readingMinutes} min de lecture</span>
+                      <span aria-hidden="true">·</span>
+                      <span>Enregistré le {formatFrenchDate(bm.createdAt?.toDate() ?? null)}</span>
+                    </div>
+
+                    <h3 className="font-display text-xl font-medium text-stone-900">
+                      {bm.storyTitle}
+                    </h3>
+                    <p className="text-sm text-stone-600 leading-relaxed">{bm.storyExcerpt}</p>
+
+                    <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOpenStoryById?.(bm.storyId)}
+                        className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Lire maintenant</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => void handleRemoveBookmark(bm.storyId)}
+                        className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Retirer des favoris</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Tab 4: Reposts ("Histoires repartagées") */}
+      {subTab === 'reposts' && (
+        <section aria-label="Vos histoires repartagées" className="space-y-4">
+          {repostActionError && (
+            <div
+              role="alert"
+              className="bg-red-50 border border-red-200 rounded-md px-4 py-2.5 text-xs text-red-800"
+            >
+              {repostActionError}
+            </div>
+          )}
+
+          {reposts.length === 0 ? (
+            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-2">
+              <Repeat2 className="w-6 h-6 text-stone-400 mx-auto" />
+              <p className="font-display text-xl text-stone-900">
+                Aucun repartage pour le moment
+              </p>
+              <p className="text-sm text-stone-600 max-w-md mx-auto">
+                Lorsque vous repartagez un récit, il s’affiche ici et sur votre mur en public ou en privé selon le réglage de votre profil.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+              {reposts.map((repost) => {
+                const salonInfo = THEME_MAP[repost.storyTheme];
+                const isPrivate = repost.visibility === 'private';
+                const isBusy = busyRepostId === repost.storyId;
+
+                return (
+                  <div key={repost.repostId} className="p-5 sm:p-6 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-stone-800">
+                          {repost.customSalonName ||
+                            (repost.storyScope === 'pelemele' && !repost.customSalonId
+                              ? 'Hors salon · Pêle-mêle'
+                              : salonInfo?.salonName)}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>Par {repost.storyAuthorName}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formatFrenchDate((repost.updatedAt || repost.createdAt)?.toDate() ?? null)}</span>
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded border text-[11px] font-medium ${
+                          isPrivate
+                            ? 'border-stone-300 bg-stone-100 text-stone-700'
+                            : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D]'
+                        }`}
+                      >
+                        {isPrivate ? (
+                          <>
+                            <Lock className="w-3 h-3" />
+                            <span>Privé · Compte seul</span>
+                          </>
+                        ) : (
+                          <>
+                            <Globe className="w-3 h-3" />
+                            <span>Public · Sur votre mur</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+
+                    {repost.note && (
+                      <p className="text-xs text-stone-700 italic bg-[#FBF9F5] border-l-2 border-[#1B365D] pl-3 py-1.5 rounded-r">
+                        « {repost.note} »
+                      </p>
+                    )}
+
+                    <h3 className="font-display text-xl font-medium text-stone-900">
+                      {repost.storyTitle}
+                    </h3>
+                    <p className="text-sm text-stone-600 leading-relaxed">{repost.storyExcerpt}</p>
+
+                    <div className="pt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onOpenStoryById?.(repost.storyId)}
+                        className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <BookOpen className="w-3.5 h-3.5" />
+                        <span>Lire</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => void handleToggleRepostVisibility(repost)}
+                        className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        {isPrivate ? (
+                          <>
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Passer en public</span>
+                          </>
+                        ) : (
+                          <>
+                            <EyeOff className="w-3.5 h-3.5" />
+                            <span>Passer en privé</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBusy}
+                        onClick={() => void handleDeleteRepost(repost.storyId)}
+                        className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 ml-auto whitespace-nowrap"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Retirer</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Tab 3: Profile, Favorite Song & Reading Preferences */}
       {subTab === 'profile' && (
         <section className="max-w-3xl bg-white border border-stone-200 rounded-lg p-6 sm:p-8">
@@ -599,14 +891,43 @@ export function JournalView({
             </div>
 
             <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md space-y-4">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-stone-500">
-                  Musique préférée épinglée sur votre mur
-                </p>
-                <p className="text-xs text-stone-600 mt-0.5">
-                  Collez un lien Spotify, YouTube, SoundCloud ou audio : votre mur affichera uniquement le titre et une icône de lecture musicale discrète.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-stone-500">
+                    Musique préférée épinglée sur votre mur
+                  </p>
+                  <p className="text-xs text-stone-600 mt-0.5">
+                    Cherchez sur Audius (gratuit), Spotify, Apple Music, Deezer ou collez un lien audio.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMusicSearch((prev) => !prev)}
+                  className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] bg-white border border-[#1B365D]/40 rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 self-start sm:self-center"
+                >
+                  <Music2 className="w-3.5 h-3.5" />
+                  <span>{showMusicSearch ? 'Masquer le catalogue' : 'Chercher / Connecter un service'}</span>
+                </button>
               </div>
+
+              {showMusicSearch && (
+                <div className="pt-2 border-t border-stone-200">
+                  <MusicCatalogPicker
+                    selectedUrl={favoriteTrackUrl}
+                    selectedTitle={favoriteTrackTitle}
+                    maxUrlLength={FIELD_LIMITS.favoriteTrackUrl.max}
+                    onSelectTrack={(picked) => {
+                      setFavoriteTrackTitle(picked.title);
+                      setFavoriteTrackArtist(picked.artist);
+                      setFavoriteTrackUrl(picked.mediaUrl);
+                      setProfileMessage(null);
+                    }}
+                    onManualUrlChange={(url) => setFavoriteTrackUrl(url)}
+                  />
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label
@@ -648,7 +969,7 @@ export function JournalView({
                   htmlFor="profile-track-url"
                   className="block text-xs font-medium text-stone-700 mb-1"
                 >
-                  Lien d’écoute (Spotify, YouTube, SoundCloud, Deezer ou MP3)
+                  Lien audio enregistré (Audius, Spotify, Apple Music, Deezer ou MP3)
                 </label>
                 <input
                   id="profile-track-url"
@@ -700,17 +1021,68 @@ export function JournalView({
               </div>
             </div>
 
-            <label className="flex items-center gap-2.5 text-xs text-stone-700 pt-1">
-              <input
-                type="checkbox"
-                checked={discoverable}
-                onChange={(e) => setDiscoverable(e.target.checked)}
-                className="rounded border-stone-300"
-              />
-              <span>
-                Apparaître dans l’annuaire des membres pour que d’autres puissent visiter mon mur et m’écrire en privé
-              </span>
-            </label>
+            <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md space-y-3">
+              <div>
+                <p className="text-xs uppercase tracking-widest text-stone-500">
+                  Confidentialité du profil & des repartages
+                </p>
+                <p className="text-xs text-stone-600 mt-0.5">
+                  Choisissez si votre compte et vos histoires repartagées apparaissent en public ou restent privés.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDiscoverable(true)}
+                  className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
+                    discoverable
+                      ? 'border-[#1B365D] bg-[#F3F6FA]'
+                      : 'border-stone-200 bg-white hover:border-stone-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-xs font-semibold text-stone-900">
+                    <Globe className="w-4 h-4 text-[#1B365D]" />
+                    <span>Profil public</span>
+                  </div>
+                  <p className="text-[11px] text-stone-600 leading-relaxed">
+                    Apparaît dans l’annuaire des membres. Vos repartages sont publics sur votre mur par défaut.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDiscoverable(false)}
+                  className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
+                    !discoverable
+                      ? 'border-[#1B365D] bg-[#F3F6FA]'
+                      : 'border-stone-200 bg-white hover:border-stone-400'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 text-xs font-semibold text-stone-900">
+                    <Lock className="w-4 h-4 text-[#1B365D]" />
+                    <span>Profil privé</span>
+                  </div>
+                  <p className="text-[11px] text-stone-600 leading-relaxed">
+                    Masqué de l’annuaire. Vos repartages restent privés sur votre compte par défaut.
+                  </p>
+                </button>
+              </div>
+
+              {reposts.length > 0 && (
+                <label className="flex items-center gap-2 text-xs text-stone-700 pt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncRepostsOnSave}
+                    onChange={(e) => setSyncRepostsOnSave(e.target.checked)}
+                    className="rounded border-stone-300 text-[#1B365D] focus:ring-[#1B365D]"
+                  />
+                  <span>
+                    Mettre mes {reposts.length} histoire{reposts.length > 1 ? 's' : ''} déjà repartagée{reposts.length > 1 ? 's' : ''} en mode {discoverable ? 'public' : 'privé'} lors de l’enregistrement
+                  </span>
+                </label>
+              )}
+            </div>
 
             {profileError && (
               <p role="alert" className="text-xs text-red-700">

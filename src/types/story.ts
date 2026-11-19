@@ -206,6 +206,43 @@ export interface ExchangeMessage {
   createdAt: Timestamp | null;
 }
 
+export interface StoryBookmark {
+  userId: string;
+  storyId: string;
+  storyTitle: string;
+  storyExcerpt: string;
+  storyAuthorId: string;
+  storyAuthorName: string;
+  storyTheme: StoryThemeId;
+  customSalonId?: string;
+  customSalonName?: string;
+  storyScope?: StoryScope;
+  storyFormat?: StoryFormat;
+  readingMinutes: number;
+  createdAt: Timestamp | null;
+}
+
+export interface StoryRepost {
+  repostId: string;
+  reposterId: string;
+  reposterName: string;
+  storyId: string;
+  storyTitle: string;
+  storyExcerpt: string;
+  storyAuthorId: string;
+  storyAuthorName: string;
+  storyTheme: StoryThemeId;
+  customSalonId?: string;
+  customSalonName?: string;
+  storyScope?: StoryScope;
+  storyFormat?: StoryFormat;
+  readingMinutes: number;
+  note: string;
+  visibility: StoryVisibility;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
 export const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export const FIELD_LIMITS = {
@@ -238,4 +275,5 @@ export const FIELD_LIMITS = {
   salonPrompt: { max: 240 },
   salonAdmissionRules: { max: 500 },
   salonRequestNote: { max: 300 },
+  repostNote: { max: 280 },
 } as const;

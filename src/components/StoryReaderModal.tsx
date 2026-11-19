@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowUpRight,
+  Bookmark,
   BookOpen,
   Disc3,
   Heart,
@@ -9,6 +10,7 @@ import {
   Minimize2,
   Music2,
   Plus,
+  Repeat2,
   User as UserIcon,
   X,
 } from 'lucide-react';
@@ -54,6 +56,10 @@ interface StoryReaderModalProps {
   onClose: () => void;
   existingExchanges: Exchange[];
   customSalons?: CustomSalon[];
+  isBookmarked?: boolean;
+  isReposted?: boolean;
+  onToggleBookmark?: (story: Story) => void;
+  onOpenRepost?: (story: Story) => void;
   onOpenExchange: (exchangeId: string) => void;
   onOpenMemberWall: (userId: string) => void;
   onEnterSalon?: (salonId: StoryThemeId) => void;
@@ -66,6 +72,10 @@ export function StoryReaderModal({
   onClose,
   existingExchanges,
   customSalons = [],
+  isBookmarked = false,
+  isReposted = false,
+  onToggleBookmark,
+  onOpenRepost,
   onOpenExchange,
   onOpenMemberWall,
   onEnterSalon,
@@ -865,6 +875,34 @@ export function StoryReaderModal({
                     <Heart className={`w-4 h-4 ${hasResonated ? 'fill-current' : ''}`} />
                     <span>Cela résonne</span>
                     <span className="tabular-nums opacity-80">({story.resonanceCount})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onToggleBookmark?.(story)}
+                    aria-pressed={isBookmarked}
+                    className={`min-h-[40px] px-3.5 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                      isBookmarked
+                        ? 'bg-[#F3F6FA] text-[#1B365D] border-[#1B365D]'
+                        : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
+                    }`}
+                  >
+                    <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
+                    <span>{isBookmarked ? 'Enregistré' : 'Lire plus tard'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenRepost?.(story)}
+                    aria-pressed={isReposted}
+                    className={`min-h-[40px] px-3.5 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
+                      isReposted
+                        ? 'bg-[#F3F6FA] text-[#1B365D] border-[#1B365D]'
+                        : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
+                    }`}
+                  >
+                    <Repeat2 className="w-4 h-4" />
+                    <span>{isReposted ? 'Repartagé' : 'Repartager'}</span>
                   </button>
 
                   {!isAuthor && story.visibility === 'public' && (

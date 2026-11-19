@@ -3,11 +3,16 @@ import {
   ArrowLeft,
   BookOpen,
   Camera,
+  Eye,
+  EyeOff,
   Feather,
+  Globe,
   Image as ImageIcon,
+  Lock,
   MessageCircle,
   Music2,
   Plus,
+  Repeat2,
   Send,
   Trash2,
   User as UserIcon,
@@ -18,11 +23,14 @@ import { compressAvatarForProfile, compressPhotoForWall } from '../lib/storageSe
 import {
   createDirectExchangeWithFirstMessage,
   createWallItem,
+  deleteStoryRepost,
   deleteWallItem,
   ensureUserProfiles,
+  subscribeToProfileReposts,
   subscribeToPublicProfile,
   subscribeToWallItems,
   updatePublicProfile,
+  updateRepostVisibility,
 } from '../lib/storyService';
 import { formatFrenchDate, STORY_FORMAT_LABELS, THEME_MAP } from '../lib/themes';
 import {
@@ -30,11 +38,13 @@ import {
   FIELD_LIMITS,
   PublicProfile,
   Story,
+  StoryRepost,
   WallAccentTone,
   WallItem,
   WallItemKind,
 } from '../types/story';
 import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
+import { MusicCatalogPicker } from './MusicCatalogPicker';
 
 interface ProfileWallViewProps {
   memberId: string;
@@ -42,6 +52,7 @@ interface ProfileWallViewProps {
   existingExchanges: Exchange[];
   onBack?: () => void;
   onReadStory: (story: Story) => void;
+  onOpenStoryById?: (storyId: string) => void;
   onOpenExchange: (exchangeId: string) => void;
   embedded?: boolean;
 }
@@ -106,12 +117,15 @@ export function ProfileWallView({
   existingExchanges,
   onBack,
   onReadStory,
+  onOpenStoryById,
   onOpenExchange,
   embedded = false,
 }: ProfileWallViewProps) {
   const { user, profile: myProfile, signInWithGoogle } = useAuth();
   const [memberProfile, setMemberProfile] = useState<PublicProfile | null>(null);
   const [wallItems, setWallItems] = useState<WallItem[]>([]);
+  const [reposts, setReposts] = useState<StoryRepost[]>([]);
+  const [repostBusyId, setRepostBusyId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
@@ -169,12 +183,14 @@ export function ProfileWallView({
       setLoaded(true);
     });
     const unsubWall = subscribeToWallItems(memberId, setWallItems);
+    const unsubReposts = subscribeToProfileReposts(memberId, user?.uid ?? null, setReposts);
 
     return () => {
       unsubProfile();
       unsubWall();
+      unsubReposts();
     };
-  }, [memberId]);
+  }, [memberId, user?.uid]);
 
   useEffect(() => {
     if (loaded && isOwner && !memberProfile && user) {
@@ -435,6 +451,37 @@ export function ProfileWallView({
       setDmError(formatReadableWallError(err, 'Impossible d’ouvrir la conversation.'));
     } finally {
       setDmBusy(false);
+    }
+  };
+
+  const handleToggleRepostVisibility = async (repost: StoryRepost) => {
+    if (!isOwner || !user || repostBusyId) return;
+    setWallActionError(null);
+    setRepostBusyId(repost.storyId);
+    try {
+      const nextVis = repost.visibility === 'public' ? 'private' : 'public';
+      await updateRepostVisibility(user.uid, repost.storyId, nextVis);
+    } catch (err) {
+      setWallActionError(
+        formatReadableWallError(err, 'Impossible de modifier la visibilité de ce repartage.')
+      );
+    } finally {
+      setRepostBusyId(null);
+    }
+  };
+
+  const handleDeleteRepost = async (storyId: string) => {
+    if (!isOwner || !user || repostBusyId) return;
+    setWallActionError(null);
+    setRepostBusyId(storyId);
+    try {
+      await deleteStoryRepost(user.uid, storyId);
+    } catch (err) {
+      setWallActionError(
+        formatReadableWallError(err, 'Impossible de retirer ce repartage.')
+      );
+    } finally {
+      setRepostBusyId(null);
     }
   };
 
@@ -909,10 +956,10 @@ export function ProfileWallView({
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-stone-900">
-                      Épingler votre musique préférée
+                      Choisir ou connecter votre musique préférée
                     </p>
                     <p className="text-xs text-stone-600">
-                      Spotify, YouTube, SoundCloud ou lien audio (sans logo vidéo)
+                      Recherchez sur Audius (gratuit), Spotify, Apple Music, Deezer ou SoundCloud
                     </p>
                   </div>
                 </button>
@@ -1340,6 +1387,160 @@ export function ProfileWallView({
         </section>
       )}
 
+      {/* Member's Reposted Stories (respects public / private profile visibility) */}
+      {reposts.length > 0 && (
+        <section
+          aria-label="Histoires repartagées"
+          className="pt-4 border-t border-stone-200 space-y-5"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <h2 className="font-display text-2xl font-medium text-stone-900 inline-flex items-center gap-2">
+                <Repeat2 className="w-5 h-5 text-[#1B365D]" />
+                <span>Histoires repartagées</span>
+              </h2>
+              <p className="text-xs text-stone-500 mt-1">
+                {isOwner
+                  ? 'Vos repartages publics apparaissent sur votre mur ; vos repartages privés restent visibles uniquement pour vous.'
+                  : `Récits partagés publiquement par ${memberProfile.displayName} sur son mur.`}
+              </p>
+            </div>
+            <span className="text-xs text-stone-500 tabular-nums">
+              {reposts.length} histoire{reposts.length > 1 ? 's' : ''}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {reposts.map((repost) => {
+              const salonInfo = THEME_MAP[repost.storyTheme];
+              const formatLabel =
+                STORY_FORMAT_LABELS[repost.storyFormat ?? 'confession']?.label ?? 'Confession';
+              const isPrivate = repost.visibility === 'private';
+              const isBusy = repostBusyId === repost.storyId;
+
+              return (
+                <article
+                  key={repost.repostId}
+                  className="bg-white border border-stone-200 rounded-lg p-5 flex flex-col justify-between space-y-4"
+                >
+                  <div className="space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span
+                          style={{
+                            color:
+                              repost.storyScope === 'pelemele' && !repost.customSalonId
+                                ? '#1B365D'
+                                : salonInfo?.palette.textAccent,
+                          }}
+                          className="font-medium"
+                        >
+                          {repost.customSalonName ||
+                            (repost.storyScope === 'pelemele' && !repost.customSalonId
+                              ? 'Hors salon · Pêle-mêle'
+                              : salonInfo?.salonName)}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formatLabel}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>Par {repost.storyAuthorName}</span>
+                      </div>
+
+                      {isOwner && (
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium ${
+                            isPrivate
+                              ? 'border-stone-300 bg-stone-100 text-stone-700'
+                              : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D]'
+                          }`}
+                        >
+                          {isPrivate ? (
+                            <>
+                              <Lock className="w-3 h-3" />
+                              <span>Privé</span>
+                            </>
+                          ) : (
+                            <>
+                              <Globe className="w-3 h-3" />
+                              <span>Public</span>
+                            </>
+                          )}
+                        </span>
+                      )}
+                    </div>
+
+                    {repost.note && (
+                      <p className="text-xs text-stone-700 italic bg-[#FBF9F5] border-l-2 border-[#1B365D] pl-3 py-1.5 rounded-r">
+                        « {repost.note} »
+                      </p>
+                    )}
+
+                    <h3 className="font-display text-xl font-medium text-stone-900">
+                      {repost.storyTitle}
+                    </h3>
+                    <p className="text-sm text-stone-600 leading-relaxed line-clamp-3">
+                      {repost.storyExcerpt}
+                    </p>
+                  </div>
+
+                  <div className="pt-3 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {isOwner && (
+                        <>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => void handleToggleRepostVisibility(repost)}
+                            className="min-h-[32px] px-2.5 py-1 text-[11px] font-medium text-stone-700 bg-[#FBF9F5] border border-stone-200 rounded hover:border-stone-400 inline-flex items-center gap-1 whitespace-nowrap"
+                          >
+                            {isPrivate ? (
+                              <>
+                                <Eye className="w-3 h-3" />
+                                <span>Rendre public</span>
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="w-3 h-3" />
+                                <span>Passer en privé</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => void handleDeleteRepost(repost.storyId)}
+                            aria-label={`Retirer le repartage de ${repost.storyTitle}`}
+                            className="min-h-[32px] px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 rounded inline-flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Retirer</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const match = memberStories.find((s) => s.storyId === repost.storyId);
+                        if (match) {
+                          onReadStory(match);
+                        } else if (onOpenStoryById) {
+                          onOpenStoryById(repost.storyId);
+                        }
+                      }}
+                      className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap ml-auto"
+                    >
+                      Lire l’histoire
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Owner's Unified Wall Composer Modal (always visible front-and-center) */}
       {isOwner && composerOpen && (
         <div
@@ -1463,30 +1664,29 @@ export function ProfileWallView({
               )}
 
               {kind === 'music' && (
-                <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-lg space-y-3">
-                  <p className="text-xs text-stone-700 leading-relaxed">
-                    Collez un lien <strong>Spotify</strong>, <strong>YouTube</strong>,{' '}
-                    <strong>SoundCloud</strong>, <strong>Deezer</strong> ou audio. Sur votre mur,
-                    seule notre carte musicale épurée et l’onde sonore animée apparaîtront pour
-                    préserver l’ambiance.
-                  </p>
+                <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-lg space-y-4">
                   <div>
-                    <label
-                      htmlFor="wall-music-url"
-                      className="block text-xs font-medium text-stone-700 mb-1"
-                    >
-                      Lien du morceau (Spotify, YouTube, SoundCloud, MP3…)
-                    </label>
-                    <input
-                      id="wall-music-url"
-                      type="text"
-                      maxLength={1000}
-                      value={mediaUrl}
-                      onChange={(e) => setMediaUrl(e.target.value)}
-                      placeholder="https://open.spotify.com/track/… ou https://youtu.be/…"
-                      className="w-full px-3.5 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1B365D]"
-                    />
+                    <p className="text-xs font-semibold text-stone-900">
+                      Rechercher un titre ou connecter votre service musical
+                    </p>
+                    <p className="text-xs text-stone-600 mt-0.5 leading-relaxed">
+                      Choisissez un morceau sur <strong>Audius</strong> (gratuit, morceaux complets),{' '}
+                      <strong>Spotify</strong>, <strong>Apple Music</strong>, <strong>Deezer</strong> ou via un lien. Il jouera directement sur votre mur et dans le mode zen.
+                    </p>
                   </div>
+
+                  <MusicCatalogPicker
+                    selectedUrl={mediaUrl}
+                    selectedTitle={title}
+                    maxUrlLength={FIELD_LIMITS.favoriteTrackUrl.max}
+                    onSelectTrack={(picked) => {
+                      setTitle(picked.title);
+                      setSubtitle(picked.artist);
+                      setMediaUrl(picked.mediaUrl);
+                      setItemError(null);
+                    }}
+                    onManualUrlChange={(url) => setMediaUrl(url)}
+                  />
 
                   <label className="flex items-center gap-2 text-xs text-stone-700 pt-1 cursor-pointer">
                     <input

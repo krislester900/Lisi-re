@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  Bookmark,
   BookOpen,
   Check,
   Clock,
@@ -12,6 +13,7 @@ import {
   MessageCircle,
   MessageSquare,
   Pencil,
+  Repeat2,
   Search,
   Send,
   ShieldCheck,
@@ -51,6 +53,10 @@ import {
 interface CustomSalonRoomViewProps {
   salon: CustomSalon | null;
   salonsLoaded: boolean;
+  bookmarkedStoryIds?: Set<string>;
+  repostedStoryIds?: Set<string>;
+  onToggleBookmark?: (story: Story) => void;
+  onOpenRepost?: (story: Story) => void;
   onBackToSalons: () => void;
   onEditSalon: (salon: CustomSalon) => void;
   onReadStory: (story: Story) => void;
@@ -61,6 +67,10 @@ interface CustomSalonRoomViewProps {
 export function CustomSalonRoomView({
   salon,
   salonsLoaded,
+  bookmarkedStoryIds,
+  repostedStoryIds,
+  onToggleBookmark,
+  onOpenRepost,
   onBackToSalons,
   onEditSalon,
   onReadStory,
@@ -745,7 +755,7 @@ export function CustomSalonRoomView({
                         <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
                       </div>
 
-                      <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
+                      <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
                           <span className="inline-flex items-center gap-1">
                             <Heart className="w-3.5 h-3.5" />
@@ -757,15 +767,59 @@ export function CustomSalonRoomView({
                           </span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => onReadStory(story)}
-                          style={{ color: palette.textAccent }}
-                          className="min-h-[36px] px-3 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                          <span>Lire</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {onToggleBookmark && (
+                            <button
+                              type="button"
+                              onClick={() => onToggleBookmark(story)}
+                              title={
+                                bookmarkedStoryIds?.has(story.storyId)
+                                  ? 'Retirer des favoris'
+                                  : 'Enregistrer pour lire plus tard'
+                              }
+                              aria-label="Enregistrer pour lire plus tard"
+                              className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                bookmarkedStoryIds?.has(story.storyId)
+                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                  : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                              }`}
+                            >
+                              <Bookmark
+                                className={`w-3.5 h-3.5 ${
+                                  bookmarkedStoryIds?.has(story.storyId) ? 'fill-current' : ''
+                                }`}
+                              />
+                            </button>
+                          )}
+                          {onOpenRepost && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenRepost(story)}
+                              title={
+                                repostedStoryIds?.has(story.storyId)
+                                  ? 'Repartagé — Modifier'
+                                  : 'Repartager sur mon compte'
+                              }
+                              aria-label="Repartager"
+                              className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                repostedStoryIds?.has(story.storyId)
+                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                  : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                              }`}
+                            >
+                              <Repeat2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onReadStory(story)}
+                            style={{ color: palette.textAccent }}
+                            className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <span>Lire</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
                     </article>
                   ))}

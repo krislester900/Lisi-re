@@ -38,7 +38,9 @@ import {
   SalonMessage,
   SeriesStatus,
   Story,
+  StoryBookmark,
   StoryFormat,
+  StoryRepost,
   StoryResonanceEvent,
   StoryScope,
   StoryThemeId,
@@ -1574,6 +1576,323 @@ export async function deleteCustomSalonMessage(
   const path = `customSalons/${salonId}/messages/${messageId}`;
   try {
     await deleteDoc(doc(db, 'customSalons', salonId, 'messages', messageId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- Bookmarks ("À lire plus tard") & Reposts ("Repartages") ---
+
+function buildStorySnapshotFields(story: Story): {
+  storyTitle: string;
+  storyExcerpt: string;
+  storyAuthorId: string;
+  storyAuthorName: string;
+  storyTheme: StoryThemeId;
+  readingMinutes: number;
+  customSalonId?: string;
+  customSalonName?: string;
+  storyScope?: StoryScope;
+  storyFormat?: StoryFormat;
+} {
+  assertValidId(story.storyId, 'storyId');
+  assertValidId(story.authorId, 'storyAuthorId');
+  const cleanTitle = clampString(story.title, FIELD_LIMITS.title.max) || 'Récit';
+  const cleanExcerpt = clampString(story.excerpt, FIELD_LIMITS.excerpt.max);
+  const rawAuthor = clampString(story.authorName, FIELD_LIMITS.displayName.max);
+  const cleanAuthor = rawAuthor.length >= FIELD_LIMITS.displayName.min ? rawAuthor : 'Auteur';
+  const readingMinutes = Math.min(60, Math.max(1, Math.round(story.readingMinutes || 1)));
+
+  const snapshot: {
+    storyTitle: string;
+    storyExcerpt: string;
+    storyAuthorId: string;
+    storyAuthorName: string;
+    storyTheme: StoryThemeId;
+    readingMinutes: number;
+    customSalonId?: string;
+    customSalonName?: string;
+    storyScope?: StoryScope;
+    storyFormat?: StoryFormat;
+  } = {
+    storyTitle: cleanTitle,
+    storyExcerpt: cleanExcerpt,
+    storyAuthorId: story.authorId,
+    storyAuthorName: cleanAuthor,
+    storyTheme: story.theme,
+    readingMinutes,
+  };
+
+  if (story.customSalonId && ID_PATTERN.test(story.customSalonId)) {
+    snapshot.customSalonId = story.customSalonId.slice(0, 128);
+  }
+  if (story.customSalonName && story.customSalonName.trim()) {
+    snapshot.customSalonName = clampString(story.customSalonName, FIELD_LIMITS.salonName.max);
+  }
+  if (story.storyScope === 'salon' || story.storyScope === 'pelemele') {
+    snapshot.storyScope = story.storyScope;
+  }
+  if (story.storyFormat === 'confession' || story.storyFormat === 'roman') {
+    snapshot.storyFormat = story.storyFormat;
+  }
+  return snapshot;
+}
+
+export function subscribeToUserBookmarks(
+  userId: string,
+  onData: (bookmarks: StoryBookmark[]) => void
+): () => void {
+  assertValidId(userId, 'userId');
+  const path = `users/${userId}/bookmarks`;
+  const q = query(
+    collection(db, 'users', userId, 'bookmarks'),
+    where('userId', '==', userId),
+    limit(200)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as StoryBookmark);
+      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function toggleStoryBookmark(userId: string, story: Story): Promise<boolean> {
+  assertValidId(userId, 'userId');
+  assertValidId(story.storyId, 'storyId');
+  const path = `users/${userId}/bookmarks/${story.storyId}`;
+  const bookmarkRef = doc(db, 'users', userId, 'bookmarks', story.storyId);
+
+  try {
+    const existing = await getDoc(bookmarkRef);
+    if (existing.exists()) {
+      await deleteDoc(bookmarkRef);
+      return false;
+    }
+    const snapshotFields = buildStorySnapshotFields(story);
+    await setDoc(bookmarkRef, {
+      userId,
+      storyId: story.storyId,
+      ...snapshotFields,
+      createdAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function removeStoryBookmark(userId: string, storyId: string): Promise<void> {
+  assertValidId(userId, 'userId');
+  assertValidId(storyId, 'storyId');
+  const path = `users/${userId}/bookmarks/${storyId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'bookmarks', storyId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export function subscribeToProfileReposts(
+  memberId: string,
+  viewerUserId: string | null,
+  onData: (reposts: StoryRepost[]) => void
+): () => void {
+  assertValidId(memberId, 'memberId');
+  const path = `publicProfiles/${memberId}/reposts`;
+  const isOwner = Boolean(viewerUserId && viewerUserId === memberId);
+  const q = isOwner
+    ? query(
+        collection(db, 'publicProfiles', memberId, 'reposts'),
+        where('reposterId', '==', memberId),
+        limit(120)
+      )
+    : query(
+        collection(db, 'publicProfiles', memberId, 'reposts'),
+        where('visibility', '==', 'public'),
+        limit(120)
+      );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as StoryRepost);
+      list.sort(
+        (a, b) =>
+          toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt)
+      );
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function upsertStoryRepost(params: {
+  userId: string;
+  reposterName: string;
+  story: Story;
+  note: string;
+  visibility: StoryVisibility;
+}): Promise<StoryVisibility> {
+  assertValidId(params.userId, 'userId');
+  assertValidId(params.story.storyId, 'storyId');
+  const path = `publicProfiles/${params.userId}/reposts/${params.story.storyId}`;
+  const repostRef = doc(db, 'publicProfiles', params.userId, 'reposts', params.story.storyId);
+
+  const isSourceRestricted =
+    params.story.visibility !== 'public' || params.story.customSalonVisibility === 'private';
+  const effectiveVisibility: StoryVisibility = isSourceRestricted ? 'private' : params.visibility;
+
+  const rawReposter = clampString(params.reposterName, FIELD_LIMITS.displayName.max);
+  const cleanReposter = rawReposter.length >= FIELD_LIMITS.displayName.min ? rawReposter : 'Auteur';
+  const cleanNote = clampString(params.note, FIELD_LIMITS.repostNote.max);
+
+  try {
+    const existing = await getDoc(repostRef);
+    if (existing.exists()) {
+      await updateDoc(repostRef, {
+        reposterName: cleanReposter,
+        note: cleanNote,
+        visibility: effectiveVisibility,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      const snapshotFields = buildStorySnapshotFields(params.story);
+      await setDoc(repostRef, {
+        repostId: params.story.storyId,
+        reposterId: params.userId,
+        reposterName: cleanReposter,
+        storyId: params.story.storyId,
+        ...snapshotFields,
+        note: cleanNote,
+        visibility: effectiveVisibility,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    return effectiveVisibility;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function updateRepostVisibility(
+  userId: string,
+  storyId: string,
+  nextVisibility: StoryVisibility
+): Promise<StoryVisibility> {
+  assertValidId(userId, 'userId');
+  assertValidId(storyId, 'storyId');
+  const path = `publicProfiles/${userId}/reposts/${storyId}`;
+
+  try {
+    if (nextVisibility === 'public') {
+      const storySnap = await getDoc(doc(db, 'stories', storyId));
+      if (!storySnap.exists()) {
+        throw new Error('Ce récit d’origine n’existe plus.');
+      }
+      const storyData = storySnap.data() as Partial<Story>;
+      if (storyData.visibility !== 'public' || storyData.customSalonVisibility === 'private') {
+        throw new Error(
+          'Ce récit est privé ou provient d’un salon privé : son repartage reste uniquement privé.'
+        );
+      }
+    }
+
+    await updateDoc(doc(db, 'publicProfiles', userId, 'reposts', storyId), {
+      visibility: nextVisibility,
+      updatedAt: serverTimestamp(),
+    });
+    return nextVisibility;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('salon privé')) {
+      throw error;
+    }
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function syncUserRepostsVisibility(
+  userId: string,
+  nextVisibility: StoryVisibility
+): Promise<{ updated: number; keptPrivate: number }> {
+  assertValidId(userId, 'userId');
+  const path = `publicProfiles/${userId}/reposts`;
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, 'publicProfiles', userId, 'reposts'),
+        where('reposterId', '==', userId),
+        limit(120)
+      )
+    );
+    const docsToProcess = snap.docs.filter((d) => {
+      const data = d.data() as StoryRepost;
+      return data.visibility !== nextVisibility;
+    });
+
+    if (docsToProcess.length === 0) {
+      return { updated: 0, keptPrivate: 0 };
+    }
+
+    let keptPrivate = 0;
+    const updatableIds: string[] = [];
+
+    if (nextVisibility === 'private') {
+      for (const d of docsToProcess) {
+        updatableIds.push(d.id);
+      }
+    } else {
+      const checks = await Promise.all(
+        docsToProcess.map(async (d) => {
+          const data = d.data() as StoryRepost;
+          try {
+            const storySnap = await getDoc(doc(db, 'stories', data.storyId));
+            if (!storySnap.exists()) return { id: d.id, allowed: false };
+            const s = storySnap.data() as Partial<Story>;
+            const allowed = s.visibility === 'public' && s.customSalonVisibility !== 'private';
+            return { id: d.id, allowed };
+          } catch {
+            return { id: d.id, allowed: false };
+          }
+        })
+      );
+      for (const item of checks) {
+        if (item.allowed) updatableIds.push(item.id);
+        else keptPrivate += 1;
+      }
+    }
+
+    if (updatableIds.length > 0) {
+      const batch = writeBatch(db);
+      for (const id of updatableIds) {
+        batch.update(doc(db, 'publicProfiles', userId, 'reposts', id), {
+          visibility: nextVisibility,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+
+    return { updated: updatableIds.length, keptPrivate };
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteStoryRepost(userId: string, storyId: string): Promise<void> {
+  assertValidId(userId, 'userId');
+  assertValidId(storyId, 'storyId');
+  const path = `publicProfiles/${userId}/reposts/${storyId}`;
+  try {
+    await deleteDoc(doc(db, 'publicProfiles', userId, 'reposts', storyId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

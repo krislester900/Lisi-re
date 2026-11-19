@@ -813,6 +813,183 @@
         }
       },
       "required": ["messageId", "salonId", "senderId", "senderName", "content", "createdAt"]
+    },
+    "StoryBookmark": {
+      "title": "StoryBookmark",
+      "description": "A private saved-for-later bookmark attaching a story to a user's personal reading list.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "storyExcerpt": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "storyAuthorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyAuthorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "storyTheme": {
+          "type": "string",
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+        },
+        "customSalonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customSalonName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "storyScope": {
+          "type": "string",
+          "enum": ["salon", "pelemele"]
+        },
+        "storyFormat": {
+          "type": "string",
+          "enum": ["confession", "roman"]
+        },
+        "readingMinutes": {
+          "type": "integer"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "userId",
+        "storyId",
+        "storyTitle",
+        "storyExcerpt",
+        "storyAuthorId",
+        "storyAuthorName",
+        "storyTheme",
+        "readingMinutes",
+        "createdAt"
+      ]
+    },
+    "StoryRepost": {
+      "title": "StoryRepost",
+      "description": "A story reshared onto a user's account/wall with public or private visibility matching the user's profile choice.",
+      "type": "object",
+      "properties": {
+        "repostId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reposterId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reposterName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "storyExcerpt": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "storyAuthorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyAuthorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "storyTheme": {
+          "type": "string",
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+        },
+        "customSalonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customSalonName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "storyScope": {
+          "type": "string",
+          "enum": ["salon", "pelemele"]
+        },
+        "storyFormat": {
+          "type": "string",
+          "enum": ["confession", "roman"]
+        },
+        "readingMinutes": {
+          "type": "integer"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "private"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "repostId",
+        "reposterId",
+        "reposterName",
+        "storyId",
+        "storyTitle",
+        "storyExcerpt",
+        "storyAuthorId",
+        "storyAuthorName",
+        "storyTheme",
+        "readingMinutes",
+        "note",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -828,11 +1005,23 @@
       },
       "description": "Yope-style profile wall cards (photos, music, novels, notes) per member."
     },
+    "/publicProfiles/{userId}/reposts/{storyId}": {
+      "schema": {
+        "$ref": "#/entities/StoryRepost"
+      },
+      "description": "Stories reshared onto a user's account/wall with public or private visibility."
+    },
     "/users/{userId}/private/{docId}": {
       "schema": {
         "$ref": "#/entities/PrivateUserInfo"
       },
       "description": "Private user account PII isolated per user."
+    },
+    "/users/{userId}/bookmarks/{storyId}": {
+      "schema": {
+        "$ref": "#/entities/StoryBookmark"
+      },
+      "description": "Private saved-for-later story bookmarks per user."
     },
     "/stories/{storyId}": {
       "schema": {

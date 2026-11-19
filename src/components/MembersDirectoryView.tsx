@@ -12,6 +12,7 @@ interface MembersDirectoryViewProps {
   existingExchanges: Exchange[];
   onSelectMember: (userId: string | null) => void;
   onReadStory: (story: Story) => void;
+  onOpenStoryById?: (storyId: string) => void;
   onOpenExchange: (exchangeId: string) => void;
   onStartDirectChat: (member: PublicProfile) => void;
 }
@@ -24,6 +25,7 @@ export function MembersDirectoryView({
   existingExchanges,
   onSelectMember,
   onReadStory,
+  onOpenStoryById,
   onOpenExchange,
   onStartDirectChat,
 }: MembersDirectoryViewProps) {
@@ -61,6 +63,7 @@ export function MembersDirectoryView({
         existingExchanges={existingExchanges}
         onBack={() => onSelectMember(null)}
         onReadStory={onReadStory}
+        onOpenStoryById={onOpenStoryById}
         onOpenExchange={onOpenExchange}
       />
     );
