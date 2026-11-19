@@ -240,6 +240,14 @@
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
+        "viewCount": {
+          "type": "integer"
+        },
+        "lastViewId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -348,12 +356,55 @@
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$"
         },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
         }
       },
       "required": ["userId", "storyId", "createdAt"]
+    },
+    "StoryView": {
+      "title": "StoryView",
+      "description": "A recorded view event when a reader opens a public story, enabling daily reading analytics.",
+      "type": "object",
+      "properties": {
+        "viewId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "viewerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "dateKey": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["viewId", "storyId", "authorId", "viewerId", "dateKey", "createdAt"]
     },
     "Echo": {
       "title": "Echo",
@@ -615,6 +666,12 @@
         "$ref": "#/entities/Resonance"
       },
       "description": "Per-user empathy resonance markers on a public story."
+    },
+    "/stories/{storyId}/views/{viewId}": {
+      "schema": {
+        "$ref": "#/entities/StoryView"
+      },
+      "description": "Recorded reading view events per story for author reading statistics."
     },
     "/stories/{storyId}/echoes/{echoId}": {
       "schema": {

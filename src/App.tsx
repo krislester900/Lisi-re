@@ -1103,7 +1103,10 @@ function SalonApp() {
 
       <footer className="border-t border-stone-200 bg-[#FBF9F5] mt-12">
         <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500">
-          <p>Lisière — Espace de récits personnels et de passerelles humaines</p>
+          <div className="space-y-1">
+            <p>Lisière — Espace de récits personnels et de passerelles humaines</p>
+            <p className="text-stone-700 font-medium">Créé par Kris Ivan N’dri</p>
+          </div>
           <div className="flex flex-wrap items-center gap-6">
             <button
               type="button"

@@ -1,0 +1,467 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { BarChart3, Eye, Heart, RefreshCw } from 'lucide-react';
+import { fetchAuthorReadingTimeline, formatLocalDateKey } from '../lib/storyService';
+import { Story, StoryResonanceEvent, StoryViewEvent } from '../types/story';
+
+interface StoryAnalyticsChartProps {
+  authorId: string;
+  myStories: Story[];
+}
+
+type DayRange = 7 | 14 | 30;
+type ChartMode = 'daily' | 'by-story';
+
+interface DailyPoint {
+  dateKey: string;
+  label: string;
+  fullDate: string;
+  vues: number;
+  resonances: number;
+}
+
+interface StoryBarPoint {
+  storyId: string;
+  name: string;
+  fullTitle: string;
+  vues: number;
+  resonances: number;
+}
+
+const FRENCH_SHORT_DATE = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+});
+
+const FRENCH_FULL_DATE = new Intl.DateTimeFormat('fr-FR', {
+  weekday: 'short',
+  day: 'numeric',
+  month: 'long',
+});
+
+function ChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: DailyPoint | StoryBarPoint }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const row = payload[0]?.payload;
+  if (!row) return null;
+
+  const heading = 'fullDate' in row ? row.fullDate : row.fullTitle;
+  return (
+    <div className="bg-white border border-stone-200 rounded-md shadow-sm px-3.5 py-2.5 text-xs space-y-1.5 max-w-[240px]">
+      <p className="font-medium text-stone-900 capitalize truncate">{heading}</p>
+      <div className="space-y-1 tabular-nums">
+        <div className="flex items-center justify-between gap-4 text-stone-700">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#1B365D]" aria-hidden="true" />
+            Vues
+          </span>
+          <span className="font-semibold text-stone-900">{row.vues}</span>
+        </div>
+        <div className="flex items-center justify-between gap-4 text-stone-700">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#9A3B29]" aria-hidden="true" />
+            Résonances
+          </span>
+          <span className="font-semibold text-stone-900">{row.resonances}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function StoryAnalyticsChart({ authorId, myStories }: StoryAnalyticsChartProps) {
+  const [dayRange, setDayRange] = useState<DayRange>(14);
+  const [chartMode, setChartMode] = useState<ChartMode>('daily');
+  const [selectedStoryId, setSelectedStoryId] = useState<string>('all');
+
+  const [views, setViews] = useState<StoryViewEvent[]>([]);
+  const [resonances, setResonances] = useState<StoryResonanceEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  const publicStories = useMemo(
+    () => myStories.filter((s) => s.visibility === 'public'),
+    [myStories]
+  );
+
+  const storySyncSignature = useMemo(
+    () =>
+      publicStories
+        .map((s) => `${s.storyId}:${s.viewCount ?? 0}:${s.resonanceCount ?? 0}`)
+        .join('|'),
+    [publicStories]
+  );
+
+  useEffect(() => {
+    if (selectedStoryId !== 'all' && !publicStories.some((s) => s.storyId === selectedStoryId)) {
+      setSelectedStoryId('all');
+    }
+  }, [publicStories, selectedStoryId]);
+
+  useEffect(() => {
+    let active = true;
+    if (publicStories.length === 0) {
+      setViews([]);
+      setResonances([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    void fetchAuthorReadingTimeline(authorId, publicStories)
+      .then((res) => {
+        if (!active) return;
+        setViews(res.views);
+        setResonances(res.resonances);
+      })
+      .catch(() => {
+        if (!active) return;
+        setError('Impossible de charger l’historique journalier de lecture.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [authorId, storySyncSignature, reloadTick]);
+
+  const dailySeries = useMemo<DailyPoint[]>(() => {
+    const viewByDay: Record<string, number> = {};
+    const resonanceByDay: Record<string, number> = {};
+
+    for (const v of views) {
+      if (selectedStoryId !== 'all' && v.storyId !== selectedStoryId) continue;
+      const key =
+        v.dateKey ||
+        (v.createdAt ? formatLocalDateKey(v.createdAt.toDate()) : '');
+      if (key) viewByDay[key] = (viewByDay[key] || 0) + 1;
+    }
+
+    for (const r of resonances) {
+      if (selectedStoryId !== 'all' && r.storyId !== selectedStoryId) continue;
+      const key = r.createdAt ? formatLocalDateKey(r.createdAt.toDate()) : '';
+      if (key) resonanceByDay[key] = (resonanceByDay[key] || 0) + 1;
+    }
+
+    const points: DailyPoint[] = [];
+    const today = new Date();
+    for (let i = dayRange - 1; i >= 0; i -= 1) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      const key = formatLocalDateKey(d);
+      points.push({
+        dateKey: key,
+        label: FRENCH_SHORT_DATE.format(d),
+        fullDate: FRENCH_FULL_DATE.format(d),
+        vues: viewByDay[key] || 0,
+        resonances: resonanceByDay[key] || 0,
+      });
+    }
+    return points;
+  }, [views, resonances, dayRange, selectedStoryId]);
+
+  const storyBarSeries = useMemo<StoryBarPoint[]>(() => {
+    return publicStories.slice(0, 8).map((s) => ({
+      storyId: s.storyId,
+      name: s.title.length > 18 ? `${s.title.slice(0, 17).trim()}…` : s.title,
+      fullTitle: s.title,
+      vues: s.viewCount ?? 0,
+      resonances: s.resonanceCount ?? 0,
+    }));
+  }, [publicStories]);
+
+  const filteredStories = useMemo(
+    () =>
+      selectedStoryId === 'all'
+        ? publicStories
+        : publicStories.filter((s) => s.storyId === selectedStoryId),
+    [publicStories, selectedStoryId]
+  );
+
+  const totalViewsAllTime = useMemo(
+    () => filteredStories.reduce((sum, s) => sum + (s.viewCount ?? 0), 0),
+    [filteredStories]
+  );
+
+  const totalResonancesAllTime = useMemo(
+    () => filteredStories.reduce((sum, s) => sum + (s.resonanceCount ?? 0), 0),
+    [filteredStories]
+  );
+
+  const periodViews = useMemo(
+    () => dailySeries.reduce((sum, d) => sum + d.vues, 0),
+    [dailySeries]
+  );
+
+  const periodResonances = useMemo(
+    () => dailySeries.reduce((sum, d) => sum + d.resonances, 0),
+    [dailySeries]
+  );
+
+  return (
+    <section
+      aria-label="Statistiques de lecture de vos récits"
+      className="bg-white border border-stone-200 rounded-lg p-5 sm:p-6 space-y-5"
+    >
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-stone-200">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500">
+            <BarChart3 className="w-3.5 h-3.5 text-[#1B365D]" />
+            <span>Statistiques de lecture</span>
+          </div>
+          <h2 className="font-display text-2xl font-medium text-stone-900">
+            Vues et résonances par jour
+          </h2>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Mode toggle */}
+          <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md">
+            <button
+              type="button"
+              onClick={() => setChartMode('daily')}
+              className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                chartMode === 'daily'
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Par jour
+            </button>
+            <button
+              type="button"
+              onClick={() => setChartMode('by-story')}
+              className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                chartMode === 'by-story'
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Par récit
+            </button>
+          </div>
+
+          {chartMode === 'daily' && (
+            <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md">
+              {([7, 14, 30] as DayRange[]).map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setDayRange(days)}
+                  className={`min-h-[34px] px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 tabular-nums ${
+                    dayRange === days
+                      ? 'bg-white text-stone-900 shadow-sm'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  {days} j
+                </button>
+              ))}
+            </div>
+          )}
+
+          {chartMode === 'daily' && publicStories.length > 1 && (
+            <select
+              aria-label="Filtrer par récit"
+              value={selectedStoryId}
+              onChange={(e) => setSelectedStoryId(e.target.value)}
+              className="min-h-[38px] max-w-[220px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+            >
+              <option value="all">Tous mes récits ({publicStories.length})</option>
+              {publicStories.map((s) => (
+                <option key={s.storyId} value={s.storyId}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setReloadTick((n) => n + 1)}
+            disabled={loading}
+            aria-label="Actualiser les statistiques"
+            className="min-h-[38px] px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 disabled:opacity-50 inline-flex items-center justify-center"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* Period & Total KPI Row + Legend */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="flex items-center gap-2.5">
+            <Eye className="w-4 h-4 text-[#1B365D] shrink-0" />
+            <div>
+              <p className="text-xs text-stone-500">
+                Vues {chartMode === 'daily' ? `(${dayRange} j)` : '(total)'}
+              </p>
+              <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+                {chartMode === 'daily' ? periodViews : totalViewsAllTime}
+                {chartMode === 'daily' && totalViewsAllTime !== periodViews && (
+                  <span className="text-xs font-sans font-normal text-stone-500 ml-1.5">
+                    / {totalViewsAllTime} au total
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <Heart className="w-4 h-4 text-[#9A3B29] shrink-0" />
+            <div>
+              <p className="text-xs text-stone-500">
+                Résonances {chartMode === 'daily' ? `(${dayRange} j)` : '(total)'}
+              </p>
+              <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+                {chartMode === 'daily' ? periodResonances : totalResonancesAllTime}
+                {chartMode === 'daily' && totalResonancesAllTime !== periodResonances && (
+                  <span className="text-xs font-sans font-normal text-stone-500 ml-1.5">
+                    / {totalResonancesAllTime} au total
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-5 text-xs text-stone-600">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#1B365D]" aria-hidden="true" />
+            <span>Nombre de vues</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#9A3B29]" aria-hidden="true" />
+            <span>Résonances par jour</span>
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+          {error}
+        </p>
+      )}
+
+      {publicStories.length === 0 ? (
+        <div className="py-10 px-4 text-center bg-[#FBF9F5] border border-stone-200 rounded-md space-y-1.5">
+          <p className="font-display text-lg text-stone-900">
+            Aucun récit publié pour le moment
+          </p>
+          <p className="text-xs text-stone-600 max-w-md mx-auto">
+            Publiez votre premier récit dans un salon pour suivre ici les lectures quotidiennes et les résonances de la communauté.
+          </p>
+        </div>
+      ) : (
+        <div className="w-full h-[270px] pt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            {chartMode === 'daily' ? (
+              <AreaChart
+                data={dailySeries}
+                margin={{ top: 10, right: 12, left: -16, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="lisiereViewsGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#1B365D" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="#1B365D" stopOpacity={0.01} />
+                  </linearGradient>
+                  <linearGradient id="lisiereResonancesGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#9A3B29" stopOpacity={0.22} />
+                    <stop offset="95%" stopColor="#9A3B29" stopOpacity={0.01} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid stroke="#E7E5E4" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: '#78716C' }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#E7E5E4' }}
+                  minTickGap={18}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 11, fill: '#78716C' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="vues"
+                  name="Vues"
+                  stroke="#1B365D"
+                  strokeWidth={2}
+                  fill="url(#lisiereViewsGrad)"
+                  activeDot={{ r: 4, fill: '#1B365D', stroke: '#FFFFFF', strokeWidth: 2 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="resonances"
+                  name="Résonances"
+                  stroke="#9A3B29"
+                  strokeWidth={2}
+                  fill="url(#lisiereResonancesGrad)"
+                  activeDot={{ r: 4, fill: '#9A3B29', stroke: '#FFFFFF', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            ) : (
+              <BarChart
+                data={storyBarSeries}
+                margin={{ top: 10, right: 12, left: -16, bottom: 0 }}
+              >
+                <CartesianGrid stroke="#E7E5E4" strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: '#78716C' }}
+                  tickLine={false}
+                  axisLine={{ stroke: '#E7E5E4' }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 11, fill: '#78716C' }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<ChartTooltip />} />
+                <Bar dataKey="vues" name="Vues" fill="#1B365D" radius={[4, 4, 0, 0]} maxBarSize={36} />
+                <Bar
+                  dataKey="resonances"
+                  name="Résonances"
+                  fill="#9A3B29"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={36}
+                />
+              </BarChart>
+            )}
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {publicStories.length > 0 && !loading && totalViewsAllTime === 0 && totalResonancesAllTime === 0 && (
+        <p className="text-xs text-stone-500">
+          Les courbes se rempliront automatiquement au fil des lectures et des résonances déposées sur vos récits publiés.
+        </p>
+      )}
+    </section>
+  );
+}

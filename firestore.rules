@@ -106,7 +106,7 @@ service cloud.firestore {
           'theme', 'storyFormat', 'releaseCadence', 'seriesStatus',
           'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility',
           'readingMinutes', 'resonanceCount', 'echoCount', 'lastEchoId',
-          'createdAt', 'updatedAt'
+          'viewCount', 'lastViewId', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.storyId)
         && isValidId(data.authorId)
@@ -126,6 +126,8 @@ service cloud.firestore {
         && data.resonanceCount is int && data.resonanceCount >= 0
         && data.echoCount is int && data.echoCount >= 0
         && (!('lastEchoId' in data) || isValidId(data.lastEchoId))
+        && (!('viewCount' in data) || (data.viewCount is int && data.viewCount >= 0))
+        && (!('lastViewId' in data) || isValidId(data.lastViewId))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -156,9 +158,23 @@ service cloud.firestore {
 
     function isValidResonance(data) {
       return data.keys().hasAll(['userId', 'storyId', 'createdAt'])
-        && data.keys().hasOnly(['userId', 'storyId', 'createdAt'])
+        && data.keys().hasOnly(['userId', 'storyId', 'authorId', 'createdAt'])
         && isValidId(data.userId)
         && isValidId(data.storyId)
+        && (!('authorId' in data) || isValidId(data.authorId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidStoryView(data) {
+      return data.keys().hasAll(['viewId', 'storyId', 'authorId', 'viewerId', 'dateKey', 'createdAt'])
+        && data.keys().hasOnly(['viewId', 'storyId', 'authorId', 'viewerId', 'dateKey', 'createdAt'])
+        && isValidId(data.viewId)
+        && isValidId(data.storyId)
+        && isValidId(data.authorId)
+        && isValidId(data.viewerId)
+        && data.dateKey is string
+        && data.dateKey.size() == 10
+        && data.dateKey.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
         && data.createdAt is timestamp;
     }
 
@@ -351,8 +367,10 @@ service cloud.firestore {
         && incoming().authorId == request.auth.uid
         && incoming().resonanceCount == 0
         && incoming().echoCount == 0
+        && (!('viewCount' in incoming()) || incoming().viewCount == 0)
         && !('lastEchoId' in incoming())
         && !('lastChapterId' in incoming())
+        && !('lastViewId' in incoming())
         && (!('chapterCount' in incoming()) || incoming().chapterCount <= 1)
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
@@ -370,6 +388,10 @@ service cloud.firestore {
             existing().authorId == request.auth.uid
             && incoming().resonanceCount == existing().resonanceCount
             && incoming().echoCount == existing().echoCount
+            && ((!('viewCount' in existing()) && !('viewCount' in incoming()))
+              || ('viewCount' in existing() && 'viewCount' in incoming() && incoming().viewCount == existing().viewCount))
+            && ((!('lastViewId' in existing()) && !('lastViewId' in incoming()))
+              || ('lastViewId' in existing() && 'lastViewId' in incoming() && incoming().lastViewId == existing().lastViewId))
             && ((!('lastEchoId' in existing()) && !('lastEchoId' in incoming()))
               || ('lastEchoId' in existing() && 'lastEchoId' in incoming() && incoming().lastEchoId == existing().lastEchoId))
             && ((!('lastChapterId' in existing()) && !('lastChapterId' in incoming()))
@@ -427,6 +449,19 @@ service cloud.firestore {
             && !exists(/databases/$(database)/documents/stories/$(storyId)/chapters/$(incoming().lastChapterId))
             && existsAfter(/databases/$(database)/documents/stories/$(storyId)/chapters/$(incoming().lastChapterId))
           )
+          ||
+          // Action E: Atomic view increment on a public story
+          (
+            existing().visibility == 'public'
+            && 'lastViewId' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['viewCount', 'lastViewId', 'updatedAt'])
+            && (
+              ('viewCount' in existing() && incoming().viewCount == existing().viewCount + 1)
+              || (!('viewCount' in existing()) && incoming().viewCount == 1)
+            )
+            && !exists(/databases/$(database)/documents/stories/$(storyId)/views/$(incoming().lastViewId))
+            && existsAfter(/databases/$(database)/documents/stories/$(storyId)/views/$(incoming().lastViewId))
+          )
         );
 
       allow delete: if isVerifiedUser()
@@ -483,7 +518,8 @@ service cloud.firestore {
             get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
             || isOwner(userId)
           );
-        allow list: if false;
+        allow list: if isSignedIn()
+          && resource.data.authorId == request.auth.uid;
         allow create: if isVerifiedUser()
           && isValidId(storyId)
           && isValidId(userId)
@@ -491,8 +527,10 @@ service cloud.firestore {
           && isValidResonance(incoming())
           && incoming().userId == request.auth.uid
           && incoming().storyId == storyId
+          && 'authorId' in incoming()
           && incoming().createdAt == request.time
           && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+          && incoming().authorId == get(/databases/$(database)/documents/stories/$(storyId)).data.authorId
           && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount
              == get(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount + 1;
         allow update: if false;
@@ -502,6 +540,29 @@ service cloud.firestore {
           && isOwner(userId)
           && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount
              == get(/databases/$(database)/documents/stories/$(storyId)).data.resonanceCount - 1;
+      }
+
+      // Story views subcollection (for daily reading statistics)
+      match /views/{viewId} {
+        allow get: if isSignedIn()
+          && isValidId(storyId)
+          && isValidId(viewId)
+          && (existing().viewerId == request.auth.uid || existing().authorId == request.auth.uid);
+        allow list: if isSignedIn()
+          && resource.data.authorId == request.auth.uid;
+        allow create: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(viewId)
+          && isValidStoryView(incoming())
+          && incoming().viewId == viewId
+          && incoming().storyId == storyId
+          && incoming().viewerId == request.auth.uid
+          && incoming().createdAt == request.time
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+          && incoming().authorId == get(/databases/$(database)/documents/stories/$(storyId)).data.authorId
+          && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.lastViewId == viewId;
+        allow update: if false;
+        allow delete: if false;
       }
 
       // Story comments & echoes subcollection

@@ -7,6 +7,8 @@ import {
   buildExchangeId,
   createExchangeWithFirstMessage,
   fetchPublicProfile,
+  formatLocalDateKey,
+  recordStoryView,
   subscribeToStoryChapters,
   subscribeToStoryEchoes,
   subscribeToUserResonance,
@@ -125,12 +127,32 @@ export function StoryReaderModal({
       .then((p) => setAuthorProfile(p))
       .catch(() => setAuthorProfile(null));
 
+    if (user && user.emailVerified) {
+      const storageKey = `lisiere_view_${story.storyId}_${user.uid}_${formatLocalDateKey()}`;
+      let alreadyViewedToday = false;
+      try {
+        alreadyViewedToday = window.sessionStorage.getItem(storageKey) === '1';
+      } catch {
+        alreadyViewedToday = false;
+      }
+      if (!alreadyViewedToday) {
+        try {
+          window.sessionStorage.setItem(storageKey, '1');
+        } catch {
+          // Ignore storage unavailability
+        }
+        void recordStoryView(story.storyId, story.authorId, user.uid).catch((err) => {
+          console.warn('Impossible d’enregistrer la vue de lecture:', err);
+        });
+      }
+    }
+
     return () => {
       unsubChapters();
       unsubEchoes();
       if (unsubResonance) unsubResonance();
     };
-  }, [story?.storyId, story?.visibility, story?.storyFormat, user]);
+  }, [story?.storyId, story?.visibility, story?.storyFormat, story?.authorId, user]);
 
   if (!story) return null;
 
@@ -166,7 +188,7 @@ export function StoryReaderModal({
     if (resonateBusy) return;
     setResonateBusy(true);
     try {
-      await toggleStoryResonance(story.storyId, user.uid);
+      await toggleStoryResonance(story.storyId, user.uid, story.authorId);
     } finally {
       setResonateBusy(false);
     }

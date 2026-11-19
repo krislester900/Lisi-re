@@ -4,6 +4,7 @@ import {
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
   increment,
   limit,
   onSnapshot,
@@ -33,7 +34,9 @@ import {
   SeriesStatus,
   Story,
   StoryFormat,
+  StoryResonanceEvent,
   StoryThemeId,
+  StoryViewEvent,
   StoryVisibility,
   WallAccentTone,
   WallItem,
@@ -445,6 +448,7 @@ export async function createStory(
       chapterCount: 1,
       resonanceCount: 0,
       echoCount: 0,
+      viewCount: 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -596,9 +600,21 @@ export function subscribeToUserResonance(
   );
 }
 
-export async function toggleStoryResonance(storyId: string, userId: string): Promise<boolean> {
+export function formatLocalDateKey(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export async function toggleStoryResonance(
+  storyId: string,
+  userId: string,
+  authorId: string
+): Promise<boolean> {
   assertValidId(storyId, 'storyId');
   assertValidId(userId, 'userId');
+  assertValidId(authorId, 'authorId');
   const resonanceRef = doc(db, 'stories', storyId, 'resonances', userId);
   const storyRef = doc(db, 'stories', storyId);
   const path = `stories/${storyId}/resonances/${userId}`;
@@ -618,6 +634,7 @@ export async function toggleStoryResonance(storyId: string, userId: string): Pro
       batch.set(resonanceRef, {
         userId,
         storyId,
+        authorId,
         createdAt: serverTimestamp(),
       });
       batch.update(storyRef, {
@@ -630,6 +647,88 @@ export async function toggleStoryResonance(storyId: string, userId: string): Pro
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
+}
+
+export async function recordStoryView(
+  storyId: string,
+  authorId: string,
+  viewerId: string
+): Promise<void> {
+  assertValidId(storyId, 'storyId');
+  assertValidId(authorId, 'authorId');
+  assertValidId(viewerId, 'viewerId');
+
+  const viewId = generateSafeId('view');
+  const dateKey = formatLocalDateKey();
+  const viewRef = doc(db, 'stories', storyId, 'views', viewId);
+  const storyRef = doc(db, 'stories', storyId);
+  const path = `stories/${storyId}/views/${viewId}`;
+
+  try {
+    const batch = writeBatch(db);
+    batch.set(viewRef, {
+      viewId,
+      storyId,
+      authorId,
+      viewerId,
+      dateKey,
+      createdAt: serverTimestamp(),
+    });
+    batch.update(storyRef, {
+      viewCount: increment(1),
+      lastViewId: viewId,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function fetchAuthorReadingTimeline(
+  authorId: string,
+  stories: Story[]
+): Promise<{ views: StoryViewEvent[]; resonances: StoryResonanceEvent[] }> {
+  assertValidId(authorId, 'authorId');
+  const publicStories = stories.filter((s) => s.visibility === 'public' && s.authorId === authorId);
+  if (publicStories.length === 0) {
+    return { views: [], resonances: [] };
+  }
+
+  const perStoryResults = await Promise.all(
+    publicStories.map(async (story) => {
+      try {
+        const [viewsSnap, resonancesSnap] = await Promise.all([
+          getDocs(
+            query(
+              collection(db, 'stories', story.storyId, 'views'),
+              where('authorId', '==', authorId),
+              limit(250)
+            )
+          ),
+          getDocs(
+            query(
+              collection(db, 'stories', story.storyId, 'resonances'),
+              where('authorId', '==', authorId),
+              limit(250)
+            )
+          ),
+        ]);
+        return {
+          views: viewsSnap.docs.map((d) => d.data() as StoryViewEvent),
+          resonances: resonancesSnap.docs.map((d) => d.data() as StoryResonanceEvent),
+        };
+      } catch (err) {
+        console.warn(`Impossible de charger les statistiques pour ${story.storyId}:`, err);
+        return { views: [] as StoryViewEvent[], resonances: [] as StoryResonanceEvent[] };
+      }
+    })
+  );
+
+  return {
+    views: perStoryResults.flatMap((r) => r.views),
+    resonances: perStoryResults.flatMap((r) => r.resonances),
+  };
 }
 
 export function subscribeToStoryEchoes(

@@ -410,10 +410,14 @@ export function LaunchIntro({ onComplete }: LaunchIntroProps) {
         </svg>
       </div>
 
+      <p className="mt-6 text-xs text-stone-500 tracking-wide">
+        Créé par Kris Ivan N’dri
+      </p>
+
       <button
         type="button"
         onClick={handleSkip}
-        className="mt-8 text-xs text-stone-400 hover:text-stone-700 transition-colors tracking-wide"
+        className="mt-4 text-xs text-stone-400 hover:text-stone-700 transition-colors tracking-wide"
       >
         Passer
       </button>

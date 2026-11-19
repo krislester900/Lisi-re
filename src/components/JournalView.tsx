@@ -23,6 +23,7 @@ import {
 } from '../lib/themes';
 import { Exchange, FIELD_LIMITS, Story } from '../types/story';
 import { ProfileWallView } from './ProfileWallView';
+import { StoryAnalyticsChart } from './StoryAnalyticsChart';
 
 interface JournalViewProps {
   myStories: Story[];
@@ -200,6 +201,7 @@ export function JournalView({
 
   const publicCount = myStories.filter((s) => s.visibility === 'public').length;
   const draftCount = myStories.filter((s) => s.visibility === 'private').length;
+  const totalViewsReceived = myStories.reduce((sum, s) => sum + (s.viewCount ?? 0), 0);
   const totalEchoesReceived = myStories.reduce((sum, s) => sum + (s.echoCount || 0), 0);
   const totalReadingMinutes = myStories.reduce((sum, s) => sum + (s.readingMinutes || 0), 0);
 
@@ -238,7 +240,7 @@ export function JournalView({
       {/* Summary Card */}
       <div
         aria-label="Récapitulatif de votre carnet"
-        className="bg-white border border-stone-200 rounded-lg grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-stone-200"
+        className="bg-white border border-stone-200 rounded-lg grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-stone-200"
       >
         <div className="p-4 sm:p-5">
           <p className="text-xs uppercase tracking-widest text-stone-500">Récits écrits</p>
@@ -249,6 +251,14 @@ export function JournalView({
             {publicCount} publié{publicCount > 1 ? 's' : ''} · {draftCount} brouillon
             {draftCount > 1 ? 's' : ''}
           </p>
+        </div>
+
+        <div className="p-4 sm:p-5">
+          <p className="text-xs uppercase tracking-widest text-stone-500">Vues totales</p>
+          <p className="font-display text-2xl font-medium text-stone-900 tabular-nums mt-1">
+            {totalViewsReceived}
+          </p>
+          <p className="text-xs text-stone-500 mt-1">Ouvertures de vos récits publics</p>
         </div>
 
         <div className="p-4 sm:p-5">
@@ -267,6 +277,9 @@ export function JournalView({
           <p className="text-xs text-stone-500 mt-1">Temps total de vos récits</p>
         </div>
       </div>
+
+      {/* Recharts Reading Statistics */}
+      <StoryAnalyticsChart authorId={user.uid} myStories={myStories} />
 
       {/* Sub-Navigation inside Journal */}
       <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 rounded-md w-fit">
@@ -359,6 +372,7 @@ export function JournalView({
                       <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
                       <span aria-hidden="true">·</span>
                       <span className="tabular-nums">
+                        {story.viewCount ?? 0} vue{(story.viewCount ?? 0) > 1 ? 's' : ''} ·{' '}
                         {story.resonanceCount} résonance{story.resonanceCount > 1 ? 's' : ''} ·{' '}
                         {story.echoCount} commentaire{story.echoCount > 1 ? 's' : ''}
                       </span>

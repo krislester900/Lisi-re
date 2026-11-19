@@ -75,8 +75,26 @@ export interface Story {
   resonanceCount: number;
   echoCount: number;
   lastEchoId?: string;
+  viewCount?: number;
+  lastViewId?: string;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
+}
+
+export interface StoryViewEvent {
+  viewId: string;
+  storyId: string;
+  authorId: string;
+  viewerId: string;
+  dateKey: string;
+  createdAt: Timestamp | null;
+}
+
+export interface StoryResonanceEvent {
+  userId: string;
+  storyId: string;
+  authorId?: string;
+  createdAt: Timestamp | null;
 }
 
 export interface Chapter {
