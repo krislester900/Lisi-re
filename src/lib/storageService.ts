@@ -110,7 +110,7 @@ export async function compressAvatarForProfile(file: File): Promise<string> {
 }
 
 export interface ParsedMusicSource {
-  type: 'audio' | 'youtube' | 'soundcloud' | 'spotify' | 'deezer' | 'apple' | 'link' | 'none';
+  type: 'audio' | 'youtube' | 'soundcloud' | 'spotify' | 'deezer' | 'link' | 'none';
   trackId?: string;
   embedUrl?: string;
   originalUrl?: string;
@@ -120,7 +120,7 @@ function normalizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) return '';
   if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^(www\.|open\.spotify\.com|music\.apple\.com|youtu\.be|youtube\.com|music\.youtube\.com|soundcloud\.com|deezer\.com)/i.test(trimmed)) {
+  if (/^(www\.|open\.spotify\.com|youtu\.be|youtube\.com|music\.youtube\.com|soundcloud\.com|deezer\.com)/i.test(trimmed)) {
     return `https://${trimmed}`;
   }
   return trimmed;
@@ -131,11 +131,25 @@ export function parseMusicSource(rawUrl: string): ParsedMusicSource {
   if (!url) return { type: 'none' };
 
   const lower = url.toLowerCase();
+  const audiusProxyMatch = url.match(/\/api\/music\/audius\/stream\/([a-zA-Z0-9_-]+)/i);
+  if (audiusProxyMatch) {
+    return {
+      type: 'audio',
+      originalUrl: `/api/music/audius/stream/${encodeURIComponent(audiusProxyMatch[1])}`,
+    };
+  }
+
+  const audiusDirectMatch = url.match(/\/v1\/tracks\/([^/?#]+)\/stream/i);
+  if (audiusDirectMatch) {
+    return {
+      type: 'audio',
+      originalUrl: `/api/music/audius/stream/${encodeURIComponent(audiusDirectMatch[1])}`,
+    };
+  }
+
   if (
     /\.(mp3|wav|ogg|m4a|aac|flac)(\?|$)/i.test(lower) ||
-    /\/v1\/tracks\/[^/]+\/stream/i.test(lower) ||
-    /dzcdn\.net\//i.test(lower) ||
-    /audio-ssl\.itunes\.apple\.com\//i.test(lower)
+    /dzcdn\.net\//i.test(lower)
   ) {
     return { type: 'audio', originalUrl: url };
   }
@@ -173,16 +187,6 @@ export function parseMusicSource(rawUrl: string): ParsedMusicSource {
     return {
       type: 'spotify',
       embedUrl: `https://open.spotify.com/embed/${spotifyMatch[1]}/${spotifyMatch[2]}?utm_source=generator&theme=0`,
-      originalUrl: url,
-    };
-  }
-
-  // Apple Music
-  if (lower.includes('music.apple.com/')) {
-    const embedUrl = url.replace(/^https?:\/\/music\.apple\.com/i, 'https://embed.music.apple.com');
-    return {
-      type: 'apple',
-      embedUrl,
       originalUrl: url,
     };
   }

@@ -19,7 +19,6 @@ import {
   fetchSpotifyToken,
   fetchSpotifyTopTracks,
   disconnectSpotifyAccount,
-  loadAppleMusicKitSdk,
   loadSpotifyWebPlaybackSdk,
   MusicProvidersStatus,
   MusicProviderTab,
@@ -48,15 +47,6 @@ interface SpotifyPlayerInstance {
   addListener: (event: string, cb: (payload: unknown) => void) => void;
 }
 
-interface MusicKitInstance {
-  authorize: () => Promise<string>;
-  unauthorize: () => Promise<void>;
-  setQueue: (opts: { song: string }) => Promise<void>;
-  play: () => Promise<void>;
-  pause: () => Promise<void>;
-  isAuthorized: boolean;
-}
-
 function formatMs(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return '0:00';
   const totalSec = Math.floor(ms / 1000);
@@ -74,7 +64,6 @@ export interface ReadingAudioController {
   durationMs: number;
   providers: MusicProvidersStatus | null;
   spotifyDeviceId: string | null;
-  appleAuthorized: boolean;
   playbackError: string | null;
   clearPlaybackError: () => void;
   refreshProviders: () => Promise<void>;
@@ -86,7 +75,6 @@ export interface ReadingAudioController {
   toggleLoop: () => void;
   connectSpotify: () => Promise<void>;
   disconnectSpotify: () => Promise<void>;
-  connectAppleMusic: () => Promise<void>;
   playAuthorMusic: (fav: AuthorMusicInfo, authorName: string) => Promise<void>;
   audioElementRef: React.RefObject<HTMLAudioElement | null>;
   renderHiddenStreams: () => React.ReactNode;
@@ -95,11 +83,9 @@ export interface ReadingAudioController {
 export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioController {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayerInstance | null>(null);
-  const appleKitRef = useRef<MusicKitInstance | null>(null);
 
   const [providers, setProviders] = useState<MusicProvidersStatus | null>(null);
   const [spotifyDeviceId, setSpotifyDeviceId] = useState<string | null>(null);
-  const [appleAuthorized, setAppleAuthorized] = useState(false);
 
   const [activeTrack, setActiveTrack] = useState<ReadingTrack | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -262,9 +248,6 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     if (spotifyPlayerRef.current) {
       await spotifyPlayerRef.current.pause().catch(() => {});
     }
-    if (appleKitRef.current) {
-      await appleKitRef.current.pause().catch(() => {});
-    }
   }, []);
 
   const playTrack = useCallback(
@@ -311,7 +294,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
         return;
       }
 
-      // 2. Link-based tracks (SoundCloud / YouTube / Spotify link / Apple Music link / Deezer link / MP3)
+      // 2. Link-based tracks (SoundCloud / YouTube / Spotify link / Deezer link / MP3)
       if (track.source === 'link' && track.externalUrl) {
         const parsed = parseMusicSource(track.externalUrl);
         if (parsed.type === 'audio' && parsed.originalUrl && audioElementRef.current) {
@@ -326,7 +309,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
         return;
       }
 
-      // 3. Direct audio streams (Audius full tracks, Apple Music catalog preview, Deezer preview)
+      // 3. Direct audio streams (Audius full tracks, Deezer preview)
       if (track.streamUrl && audioElementRef.current) {
         audioElementRef.current.src = track.streamUrl;
         try {
@@ -369,7 +352,6 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
       (parsedLink.type === 'youtube' ||
         parsedLink.type === 'soundcloud' ||
         parsedLink.type === 'spotify' ||
-        parsedLink.type === 'apple' ||
         parsedLink.type === 'deezer')
     ) {
       setIsPlaying((prev) => !prev);
@@ -428,7 +410,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
       const e = err as Error & { callbackUrl?: string };
       if (e.message === 'SPOTIFY_NOT_CONFIGURED') {
         setPlaybackError(
-          `Spotify OAuth n’est pas encore configuré sur ce serveur (variables SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET). En attendant, utilisez Apple Music, Catalogue libre, Deezer ou SoundCloud.`
+          `Spotify OAuth n’est pas encore configuré sur ce serveur (variables SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET). En attendant, utilisez Musique gratuite, Deezer ou SoundCloud.`
         );
       } else {
         setPlaybackError(e.message || 'Impossible d’ouvrir la connexion Spotify.');
@@ -443,37 +425,6 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     }
     await refreshProviders();
   }, [activeTrack?.source, refreshProviders, stopTrack]);
-
-  const connectAppleMusic = useCallback(async () => {
-    setPlaybackError(null);
-    if (!providers?.apple.developerTokenConfigured || !providers.apple.developerToken) {
-      setPlaybackError(
-        'Le jeton Apple MusicKit (APPLE_MUSIC_DEVELOPER_TOKEN) n’est pas configuré sur le serveur. La recherche et l’écoute d’aperçus Apple Music restent déjà disponibles ci-dessous.'
-      );
-      return;
-    }
-
-    try {
-      await loadAppleMusicKitSdk();
-      const win = window as unknown as {
-        MusicKit?: {
-          configure: (cfg: { developerToken: string; app: { name: string; build: string } }) => Promise<MusicKitInstance>;
-        };
-      };
-      if (!win.MusicKit) {
-        throw new Error('MusicKit indisponible.');
-      }
-      const instance = await win.MusicKit.configure({
-        developerToken: providers.apple.developerToken,
-        app: { name: 'Lisière', build: '1.0.0' },
-      });
-      await instance.authorize();
-      appleKitRef.current = instance;
-      setAppleAuthorized(true);
-    } catch {
-      setPlaybackError('Connexion Apple Music annulée ou refusée.');
-    }
-  }, [providers?.apple.developerToken, providers?.apple.developerTokenConfigured]);
 
   const playAuthorMusic = useCallback(
     async (fav: AuthorMusicInfo, authorName: string) => {
@@ -547,7 +498,6 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     durationMs,
     providers,
     spotifyDeviceId,
-    appleAuthorized,
     playbackError,
     clearPlaybackError: () => setPlaybackError(null),
     refreshProviders,
@@ -559,7 +509,6 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     toggleLoop: () => setIsLooping((prev) => !prev),
     connectSpotify,
     disconnectSpotify,
-    connectAppleMusic,
     playAuthorMusic,
     audioElementRef,
     renderHiddenStreams,
@@ -599,7 +548,6 @@ export function ReadingMusicPanel({
     durationMs,
     providers,
     spotifyDeviceId,
-    appleAuthorized,
     playbackError,
     clearPlaybackError,
     playTrack,
@@ -610,7 +558,6 @@ export function ReadingMusicPanel({
     toggleLoop,
     connectSpotify,
     disconnectSpotify,
-    connectAppleMusic,
     playAuthorMusic,
   } = controller;
 
@@ -690,11 +637,9 @@ export function ReadingMusicPanel({
         ? 'Son SoundCloud'
         : parsed.type === 'spotify'
           ? 'Piste Spotify'
-          : parsed.type === 'apple'
-            ? 'Piste Apple Music'
-            : parsed.type === 'youtube'
-              ? 'Ambiance audio'
-              : 'Lien musical');
+          : parsed.type === 'youtube'
+            ? 'Ambiance audio'
+            : 'Lien musical');
 
     void playTrack({
       id: `link_${Date.now()}`,
@@ -865,16 +810,14 @@ export function ReadingMusicPanel({
 
           {isPlaying &&
             parsedActiveEmbed &&
-            (parsedActiveEmbed.type === 'spotify' ||
-              parsedActiveEmbed.type === 'apple' ||
-              parsedActiveEmbed.type === 'deezer') &&
+            (parsedActiveEmbed.type === 'spotify' || parsedActiveEmbed.type === 'deezer') &&
             parsedActiveEmbed.embedUrl && (
               <div className="rounded overflow-hidden border border-stone-200 bg-white">
                 <iframe
                   title={`Lecteur ${activeTrack.title}`}
                   src={parsedActiveEmbed.embedUrl}
                   width="100%"
-                  height={parsedActiveEmbed.type === 'apple' ? 150 : 80}
+                  height={80}
                   allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write"
                   loading="lazy"
                   className="block w-full border-0"
@@ -913,7 +856,6 @@ export function ReadingMusicPanel({
           [
             { id: 'audius', label: 'Musique gratuite' },
             { id: 'spotify', label: 'Spotify' },
-            { id: 'apple', label: 'Apple Music' },
             { id: 'deezer', label: 'Deezer' },
             { id: 'link', label: 'SoundCloud / Lien' },
           ] as const
@@ -986,31 +928,6 @@ export function ReadingMusicPanel({
         </div>
       )}
 
-      {/* Apple Music connection status (optional MusicKit + instant catalog search) */}
-      {providerTab === 'apple' && (
-        <div className="rounded-md border border-stone-200 bg-[#FBF9F5] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-stone-900">
-              {appleAuthorized ? 'Compte Apple Music connecté' : 'Catalogue Apple Music'}
-            </p>
-            <p className="text-[11px] text-stone-600">
-              {appleAuthorized
-                ? 'Lecture via votre abonnement Apple Music.'
-                : 'Recherche directe avec écoute audio immédiate.'}
-            </p>
-          </div>
-          {providers?.apple.developerTokenConfigured && !appleAuthorized && (
-            <button
-              type="button"
-              onClick={() => void connectAppleMusic()}
-              className="min-h-[36px] px-3.5 py-1.5 rounded-md border border-stone-300 bg-white text-stone-900 hover:border-stone-500 text-xs font-medium whitespace-nowrap shrink-0 self-start sm:self-center"
-            >
-              Connecter Apple Music
-            </button>
-          )}
-        </div>
-      )}
-
       {playbackError && (
         <div
           role="alert"
@@ -1036,8 +953,8 @@ export function ReadingMusicPanel({
               type="text"
               value={linkUrl}
               onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="Coller un lien SoundCloud, Spotify, Apple Music, YouTube ou MP3…"
-              aria-label="Lien musical SoundCloud, Spotify, Apple Music ou audio"
+              placeholder="Coller un lien SoundCloud, Spotify, Deezer, YouTube ou MP3…"
+              aria-label="Lien musical SoundCloud, Spotify, Deezer ou audio"
               className="w-full min-h-[40px] px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
             />
             <div className="flex items-center gap-2">
@@ -1075,11 +992,9 @@ export function ReadingMusicPanel({
                 placeholder={
                   providerTab === 'spotify'
                     ? 'Chercher un titre ou un artiste sur Spotify…'
-                    : providerTab === 'apple'
-                      ? 'Chercher sur Apple Music…'
-                      : providerTab === 'deezer'
-                        ? 'Chercher sur Deezer…'
-                        : 'Chercher un morceau pour accompagner votre lecture…'
+                    : providerTab === 'deezer'
+                      ? 'Chercher sur Deezer…'
+                      : 'Chercher un morceau pour accompagner votre lecture…'
                 }
                 aria-label="Rechercher une musique pour la lecture"
                 className="w-full min-h-[40px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"

@@ -107,11 +107,17 @@ function parseLocationPath(pathname: string): {
   if (clean === '/histoires') {
     return { tab: 'pelemele', salonId: null, customSalonId: null, memberId: null };
   }
-  if (clean === '/membres') {
+  if (clean === '/membres' || clean === '/profils') {
     return { tab: 'membres', salonId: null, customSalonId: null, memberId: null };
   }
   if (clean.startsWith('/membres/')) {
     const memberSlug = decodeURIComponent(clean.slice('/membres/'.length));
+    if (memberSlug) {
+      return { tab: 'membres', salonId: null, customSalonId: null, memberId: memberSlug };
+    }
+  }
+  if (clean.startsWith('/profils/')) {
+    const memberSlug = decodeURIComponent(clean.slice('/profils/'.length));
     if (memberSlug) {
       return { tab: 'membres', salonId: null, customSalonId: null, memberId: memberSlug };
     }
@@ -139,7 +145,7 @@ function buildLocationPath(
 ): string {
   if (tab === 'pelemele') return '/histoires';
   if (tab === 'membres') {
-    return memberId ? `/membres/${encodeURIComponent(memberId)}` : '/membres';
+    return memberId ? `/profils/${encodeURIComponent(memberId)}` : '/profils';
   }
   if (tab === 'themes') return '/themes';
   if (tab === 'passerelles') return '/passerelles';
@@ -160,6 +166,9 @@ function SalonApp() {
     initialRoute.customSalonId
   );
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(initialRoute.memberId);
+  const [profilesSubTab, setProfilesSubTab] = useState<'directory' | 'my-profile' | 'edit-profile'>(
+    'directory'
+  );
   const [isViewFading, setIsViewFading] = useState(false);
   const navTimerRef = useRef<number | null>(null);
   const [publicStories, setPublicStories] = useState<Story[]>([]);
@@ -493,7 +502,7 @@ function SalonApp() {
     } else if (activeTab === 'pelemele') {
       document.title = 'Histoires pêle-mêle — Lisière';
     } else if (activeTab === 'membres') {
-      document.title = selectedMemberId ? 'Mur du membre — Lisière' : 'Membres et murs — Lisière';
+      document.title = selectedMemberId ? 'Profil du membre — Lisière' : 'Profils — Lisière';
     } else if (activeTab === 'themes') {
       document.title = 'Thèmes et fils d’écriture — Lisière';
     } else if (activeTab === 'passerelles') {
@@ -590,14 +599,17 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => navigateTo('membres', null, null)}
+              onClick={() => {
+                setProfilesSubTab('directory');
+                navigateTo('membres', null, null);
+              }}
               className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
                 highlightedTab === 'membres'
                   ? 'text-stone-900 border-[#1E3A8A]'
                   : 'text-stone-600 border-transparent hover:text-stone-900'
               }`}
             >
-              Membres
+              Profils
             </button>
             <button
               type="button"
@@ -665,7 +677,7 @@ function SalonApp() {
             [
               { id: 'recits', label: 'Salons' },
               { id: 'pelemele', label: 'Pêle-mêle' },
-              { id: 'membres', label: 'Membres' },
+              { id: 'membres', label: 'Profils' },
               { id: 'themes', label: 'Thèmes' },
               {
                 id: 'passerelles',
@@ -677,7 +689,10 @@ function SalonApp() {
             <button
               key={item.id}
               type="button"
-              onClick={() => navigateTo(item.id, null, null, null)}
+              onClick={() => {
+                if (item.id === 'membres') setProfilesSubTab('directory');
+                navigateTo(item.id, null, null, null);
+              }}
               className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 transition-colors ${
                 highlightedTab === item.id
                   ? 'text-stone-900 border-[#1E3A8A]'
@@ -798,7 +813,10 @@ function SalonApp() {
             profiles={discoverableProfiles}
             profilesLoaded={profilesLoaded}
             selectedMemberId={selectedMemberId}
+            initialSubTab={profilesSubTab}
             publicStories={publicStories}
+            myStories={myStories}
+            myReposts={myReposts}
             existingExchanges={exchanges}
             onSelectMember={(memberId) => navigateTo('membres', null, memberId)}
             onReadStory={(story) => setReadingStory(story)}
@@ -1716,6 +1734,10 @@ function SalonApp() {
               setSelectedExchangeId(exchangeId);
               navigateTo('passerelles');
             }}
+            onOpenMyProfile={() => {
+              setProfilesSubTab('my-profile');
+              navigateTo('membres', null, null);
+            }}
           />
         )}
       </main>
@@ -1743,10 +1765,13 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => navigateTo('membres', null, null)}
+              onClick={() => {
+                setProfilesSubTab('directory');
+                navigateTo('membres', null, null);
+              }}
               className="hover:text-stone-900 transition-colors"
             >
-              Membres
+              Profils
             </button>
             <button
               type="button"

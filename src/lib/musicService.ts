@@ -1,4 +1,4 @@
-export type MusicProviderTab = 'spotify' | 'apple' | 'audius' | 'deezer' | 'link';
+export type MusicProviderTab = 'spotify' | 'audius' | 'deezer' | 'link';
 
 export interface ReadingTrack {
   id: string;
@@ -7,7 +7,7 @@ export interface ReadingTrack {
   album?: string;
   coverUrl?: string;
   durationMs?: number;
-  source: 'spotify' | 'apple' | 'audius' | 'deezer' | 'link';
+  source: 'spotify' | 'audius' | 'deezer' | 'link';
   streamUrl?: string;
   spotifyUri?: string;
   externalUrl?: string;
@@ -26,15 +26,8 @@ export interface SpotifyProviderState {
   } | null;
 }
 
-export interface AppleProviderState {
-  developerTokenConfigured: boolean;
-  developerToken: string | null;
-  searchReady: boolean;
-}
-
 export interface MusicProvidersStatus {
   spotify: SpotifyProviderState;
-  apple: AppleProviderState;
 }
 
 export const READING_MOOD_PRESETS: Array<{ label: string; query: string }> = [
@@ -96,7 +89,7 @@ export async function fetchSpotifyToken(): Promise<{
 
 export async function searchMusicCatalog(
   query: string,
-  provider: 'spotify' | 'apple' | 'audius' | 'deezer'
+  provider: 'spotify' | 'audius' | 'deezer'
 ): Promise<ReadingTrack[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
@@ -168,31 +161,4 @@ export function loadSpotifyWebPlaybackSdk(): Promise<void> {
   });
 
   return spotifySdkPromise;
-}
-
-let appleMusicKitPromise: Promise<void> | null = null;
-
-export function loadAppleMusicKitSdk(): Promise<void> {
-  if (typeof window === 'undefined') return Promise.resolve();
-  const win = window as unknown as { MusicKit?: unknown };
-  if (win.MusicKit) return Promise.resolve();
-  if (appleMusicKitPromise) return appleMusicKitPromise;
-
-  appleMusicKitPromise = new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector(
-      'script[src="https://js-cdn.music.apple.com/musickit/v3/musickit.js"]'
-    );
-    if (!existing) {
-      const script = document.createElement('script');
-      script.src = 'https://js-cdn.music.apple.com/musickit/v3/musickit.js';
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Impossible de charger Apple MusicKit.'));
-      document.body.appendChild(script);
-    } else {
-      resolve();
-    }
-  });
-
-  return appleMusicKitPromise;
 }

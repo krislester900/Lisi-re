@@ -35,7 +35,7 @@ interface NormalizedTrack {
   album?: string;
   coverUrl?: string;
   durationMs?: number;
-  source: 'spotify' | 'apple' | 'audius' | 'deezer';
+  source: 'spotify' | 'audius' | 'deezer';
   streamUrl?: string;
   spotifyUri?: string;
   externalUrl?: string;
@@ -192,7 +192,7 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
   ];
 
   try {
-    const hostsResp = await fetch('https://api.audius.co');
+    const hostsResp = await fetch('https://api.audius.co', { signal: AbortSignal.timeout(3500) });
     if (hostsResp.ok) {
       const hostsJson = (await hostsResp.json()) as { data?: string[] };
       if (Array.isArray(hostsJson.data)) {
@@ -218,12 +218,23 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
           duration?: number;
           genre?: string;
           permalink?: string;
+          is_delete?: boolean;
+          is_available?: boolean;
+          is_streamable?: boolean;
+          access?: { stream?: boolean };
+          stream?: { url?: string | null; mirrors?: string[] } | null;
           artwork?: { '150x150'?: string; '480x480'?: string };
           user?: { name?: string; handle?: string };
         }>;
       };
-      const items = json.data ?? [];
-      const hostOrigin = new URL(endpoint).origin;
+      const items = (json.data ?? []).filter(
+        (item) =>
+          Boolean(item.id) &&
+          !item.is_delete &&
+          item.is_available !== false &&
+          item.is_streamable !== false &&
+          item.access?.stream !== false
+      );
       return items.slice(0, 12).map((item) => ({
         id: `audius_${item.id}`,
         title: item.title || 'Morceau sans titre',
@@ -232,7 +243,7 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
         coverUrl: item.artwork?.['150x150'] || item.artwork?.['480x480'],
         durationMs: item.duration ? item.duration * 1000 : undefined,
         source: 'audius' as const,
-        streamUrl: `${hostOrigin}/v1/tracks/${encodeURIComponent(item.id)}/stream?app_name=Lisiere`,
+        streamUrl: `/api/music/audius/stream/${encodeURIComponent(item.id)}`,
         externalUrl: item.permalink ? `https://audius.co${item.permalink}` : undefined,
         isPreview: false,
       }));
@@ -243,38 +254,52 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
   return [];
 }
 
-async function fetchAppleCatalogTracks(query: string): Promise<NormalizedTrack[]> {
-  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=12`;
-  const resp = await fetch(url, { signal: AbortSignal.timeout(6500) });
-  if (!resp.ok) {
-    throw new Error('Catalogue Apple Music momentanément indisponible.');
+async function resolveAudiusCandidateUrls(trackId: string): Promise<string[]> {
+  const candidates: string[] = [];
+  const safeId = encodeURIComponent(trackId);
+
+  try {
+    const metaResp = await fetch(
+      `https://api.audius.co/v1/tracks/${safeId}?app_name=Lisiere`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    if (metaResp.ok) {
+      const metaJson = (await metaResp.json()) as {
+        data?: {
+          is_delete?: boolean;
+          is_available?: boolean;
+          is_streamable?: boolean;
+          stream?: { url?: string | null; mirrors?: string[] } | null;
+        };
+      };
+      const track = metaJson.data;
+      if (
+        !track ||
+        track.is_delete ||
+        track.is_available === false ||
+        track.is_streamable === false
+      ) {
+        return [];
+      }
+      if (track.stream?.url) {
+        candidates.push(track.stream.url);
+        try {
+          const parsedUrl = new URL(track.stream.url);
+          const suffix = `${parsedUrl.pathname}${parsedUrl.search}`;
+          for (const mirror of track.stream.mirrors ?? []) {
+            candidates.push(`${mirror.replace(/\/+$/, '')}${suffix}`);
+          }
+        } catch {
+          // Ignore malformed mirror URL
+        }
+      }
+    }
+  } catch {
+    // Fallback to direct stream endpoints below
   }
-  const json = (await resp.json()) as {
-    results?: Array<{
-      trackId?: number;
-      trackName?: string;
-      artistName?: string;
-      collectionName?: string;
-      artworkUrl100?: string;
-      trackTimeMillis?: number;
-      previewUrl?: string;
-      trackViewUrl?: string;
-    }>;
-  };
-  return (json.results ?? [])
-    .filter((item) => Boolean(item.trackName && (item.previewUrl || item.trackViewUrl)))
-    .map((item) => ({
-      id: `apple_${item.trackId ?? Math.random()}`,
-      title: item.trackName || 'Titre Apple Music',
-      artist: item.artistName || 'Artiste',
-      album: item.collectionName,
-      coverUrl: item.artworkUrl100,
-      durationMs: item.trackTimeMillis,
-      source: 'apple' as const,
-      streamUrl: item.previewUrl,
-      externalUrl: item.trackViewUrl,
-      isPreview: true,
-    }));
+
+  candidates.push(`https://api.audius.co/v1/tracks/${safeId}/stream?app_name=Lisiere`);
+  return Array.from(new Set(candidates));
 }
 
 async function fetchDeezerTracks(query: string): Promise<NormalizedTrack[]> {
@@ -316,7 +341,6 @@ async function startServer() {
   app.get('/api/music/providers', async (req: Request, res: Response) => {
     const creds = getSpotifyCredentials();
     const session = creds ? await ensureFreshSpotifySession(req, res) : null;
-    const appleToken = (process.env.APPLE_MUSIC_DEVELOPER_TOKEN || '').trim();
 
     res.json({
       spotify: {
@@ -324,11 +348,6 @@ async function startServer() {
         connected: Boolean(session),
         user: session?.user ?? null,
         callbackUrl: getSpotifyCallbackUrl(),
-      },
-      apple: {
-        developerTokenConfigured: Boolean(appleToken),
-        developerToken: appleToken || null,
-        searchReady: true,
       },
     });
   });
@@ -677,6 +696,71 @@ async function startServer() {
     res.json({ ok: true });
   });
 
+  app.get('/api/music/audius/stream/:trackId', async (req: Request, res: Response) => {
+    const trackId = (req.params.trackId || '').trim();
+    if (!trackId || !/^[a-zA-Z0-9_-]+$/.test(trackId)) {
+      res.status(400).json({ error: 'Identifiant de piste invalide.' });
+      return;
+    }
+
+    const candidates = await resolveAudiusCandidateUrls(trackId);
+    if (candidates.length === 0) {
+      res.status(404).json({ error: 'Ce morceau n’est plus disponible sur Audius.' });
+      return;
+    }
+
+    const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+    const { Readable } = await import('node:stream');
+
+    for (const candidateUrl of candidates) {
+      try {
+        const upstream = await fetch(candidateUrl, {
+          headers: rangeHeader ? { Range: rangeHeader } : undefined,
+          redirect: 'follow',
+          signal: AbortSignal.timeout(12000),
+        });
+        if (!upstream.ok || !upstream.body) {
+          await upstream.body?.cancel().catch(() => {});
+          continue;
+        }
+
+        const contentType = upstream.headers.get('content-type') || 'audio/mpeg';
+        if (contentType.includes('application/json') || contentType.includes('text/html')) {
+          await upstream.body.cancel().catch(() => {});
+          continue;
+        }
+
+        res.status(upstream.status);
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        for (const headerName of ['content-length', 'content-range', 'accept-ranges']) {
+          const val = upstream.headers.get(headerName);
+          if (val) res.setHeader(headerName, val);
+        }
+
+        const nodeStream = Readable.fromWeb(
+          upstream.body as unknown as import('node:stream/web').ReadableStream
+        );
+        req.on('close', () => {
+          nodeStream.destroy();
+        });
+        nodeStream.on('error', () => {
+          if (!res.headersSent) {
+            res.status(502).end();
+          } else {
+            res.end();
+          }
+        });
+        nodeStream.pipe(res);
+        return;
+      } catch {
+        continue;
+      }
+    }
+
+    res.status(502).json({ error: 'Flux audio indisponible sur Audius.' });
+  });
+
   app.get('/api/music/search', async (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const source = typeof req.query.source === 'string' ? req.query.source : 'audius';
@@ -686,11 +770,6 @@ async function startServer() {
     }
 
     try {
-      if (source === 'apple') {
-        const tracks = await fetchAppleCatalogTracks(q);
-        res.json({ tracks });
-        return;
-      }
       if (source === 'deezer') {
         const tracks = await fetchDeezerTracks(q);
         res.json({ tracks });

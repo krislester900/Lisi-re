@@ -22,6 +22,7 @@ interface ImmersiveMusicPlayerProps {
   variant?: 'default' | 'wall-widget';
   kicker?: string;
   onDelete?: () => void;
+  onChangeTrack?: () => void;
 }
 
 const MINI_WAVE_HEIGHTS = [38, 68, 92, 54, 84, 100, 62, 78, 44];
@@ -45,8 +46,10 @@ export function ImmersiveMusicPlayer({
   variant = 'default',
   kicker,
   onDelete,
+  onChangeTrack,
 }: ImmersiveMusicPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const lastSrcRef = useRef<string>('');
   const [audioFailed, setAudioFailed] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -58,30 +61,51 @@ export function ImmersiveMusicPlayer({
     parsed.type === 'youtube' ||
     parsed.type === 'soundcloud' ||
     parsed.type === 'spotify' ||
-    parsed.type === 'deezer' ||
-    parsed.type === 'apple';
-
-  useEffect(() => {
-    if (parsed.type !== 'audio' || !audioRef.current) return;
-    if (isActive) {
-      void audioRef.current.play().catch(() => {
-        setAudioFailed(true);
-      });
-    } else {
-      audioRef.current.pause();
-    }
-  }, [isActive, parsed.type]);
-
-  useEffect(() => {
-    if (!audioRef.current) return;
-    audioRef.current.muted = isMuted;
-  }, [isMuted]);
+    parsed.type === 'deezer';
 
   useEffect(() => {
     setAudioFailed(false);
     setCurrentTime(0);
     setDuration(0);
   }, [mediaUrl]);
+
+  useEffect(() => {
+    if (parsed.type !== 'audio' || !audioRef.current) return;
+    const el = audioRef.current;
+    const targetSrc = parsed.originalUrl || '';
+
+    if (isActive) {
+      if (targetSrc && lastSrcRef.current !== targetSrc) {
+        lastSrcRef.current = targetSrc;
+        el.load();
+      }
+      if (el.paused) {
+        void el.play().catch(() => {
+          // Wait for canplay or user tap if browser throttled initial play
+        });
+      }
+    } else {
+      el.pause();
+    }
+  }, [isActive, parsed.type, parsed.originalUrl]);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    audioRef.current.muted = isMuted;
+  }, [isMuted]);
+
+  const handleTogglePlayClick = () => {
+    setAudioFailed(false);
+    if (!isActive && parsed.type === 'audio' && audioRef.current && parsed.originalUrl) {
+      const el = audioRef.current;
+      if (lastSrcRef.current !== parsed.originalUrl) {
+        lastSrcRef.current = parsed.originalUrl;
+        el.load();
+      }
+      void el.play().catch(() => {});
+    }
+    onTogglePlay();
+  };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nextTime = Number(e.target.value);
@@ -94,7 +118,7 @@ export function ImmersiveMusicPlayer({
   const renderCustomAudioBar = () => {
     if (!isActive) return null;
 
-    if (parsed.type === 'audio') {
+    if (parsed.type === 'audio' && !audioFailed) {
       const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
       return (
         <div
@@ -108,7 +132,7 @@ export function ImmersiveMusicPlayer({
         >
           <button
             type="button"
-            onClick={onTogglePlay}
+            onClick={handleTogglePlayClick}
             aria-label={`Mettre en pause ${title}`}
             className="w-8 h-8 rounded-full bg-[#1B365D] text-white hover:bg-[#132744] flex items-center justify-center shrink-0 transition-transform duration-150 active:scale-[0.95]"
           >
@@ -194,6 +218,11 @@ export function ImmersiveMusicPlayer({
             ref={audioRef}
             src={parsed.originalUrl}
             preload="metadata"
+            onCanPlay={() => {
+              if (isActive && audioRef.current?.paused) {
+                void audioRef.current.play().catch(() => {});
+              }
+            }}
             onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
             onEnded={onTogglePlay}
@@ -201,13 +230,25 @@ export function ImmersiveMusicPlayer({
             className="hidden"
           />
           {audioFailed && (
-            <p
-              className={`text-xs mt-1.5 ${
-                variant === 'wall-widget' ? 'text-stone-300' : 'text-stone-600'
+            <div
+              role="alert"
+              className={`mt-2 rounded-lg px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2 ${
+                variant === 'wall-widget'
+                  ? 'bg-amber-950/80 border border-amber-400/40 text-amber-100'
+                  : 'bg-amber-50 border border-amber-200 text-amber-900'
               }`}
             >
-              Lecture directe indisponible sur ce lien audio.
-            </p>
+              <span>Ce morceau n’est plus disponible à l’écoute chez le fournisseur.</span>
+              {onChangeTrack && (
+                <button
+                  type="button"
+                  onClick={onChangeTrack}
+                  className="underline font-medium hover:opacity-80 whitespace-nowrap"
+                >
+                  Choisir un autre titre
+                </button>
+              )}
+            </div>
           )}
         </>
       )}
@@ -227,16 +268,16 @@ export function ImmersiveMusicPlayer({
         </div>
       )}
 
-      {/* Spotify / Deezer / Apple Music compact minimal audio strip only while actively listening */}
+      {/* Spotify / Deezer compact minimal audio strip only while actively listening */}
       {isActive &&
-        (parsed.type === 'spotify' || parsed.type === 'deezer' || parsed.type === 'apple') &&
+        (parsed.type === 'spotify' || parsed.type === 'deezer') &&
         parsed.embedUrl && (
           <div className="rounded-xl overflow-hidden border border-stone-200/80 bg-white mt-2">
             <iframe
               title={`Lecteur audio pour ${title}`}
               src={parsed.embedUrl}
               width="100%"
-              height={parsed.type === 'spotify' ? 80 : parsed.type === 'apple' ? 150 : 90}
+              height={parsed.type === 'spotify' ? 80 : 90}
               allow="autoplay *; clipboard-write; encrypted-media *; fullscreen *; picture-in-picture"
               loading="lazy"
               className="block w-full border-0"
@@ -270,7 +311,7 @@ export function ImmersiveMusicPlayer({
             {/* Left dark square soundwave artwork */}
             <button
               type="button"
-              onClick={canPlayInline ? onTogglePlay : undefined}
+              onClick={canPlayInline ? handleTogglePlayClick : undefined}
               disabled={!canPlayInline}
               aria-label={
                 canPlayInline
@@ -334,7 +375,7 @@ export function ImmersiveMusicPlayer({
                 {canPlayInline ? (
                   <button
                     type="button"
-                    onClick={onTogglePlay}
+                    onClick={handleTogglePlayClick}
                     className="min-h-[32px] px-3 py-1 rounded-full text-xs font-medium bg-[#1B365D] text-white hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-[background-color,transform] duration-150 active:scale-[0.96]"
                   >
                     {isActive ? (
@@ -450,7 +491,7 @@ export function ImmersiveMusicPlayer({
         {canPlayInline ? (
           <button
             type="button"
-            onClick={onTogglePlay}
+            onClick={handleTogglePlayClick}
             aria-label={isActive ? `Mettre en pause ${title}` : `Écouter ${title}`}
             className={`min-h-[38px] px-3.5 py-1.5 rounded-full text-xs font-medium inline-flex items-center gap-1.5 shrink-0 transition-[transform,background-color] duration-150 ease-out active:scale-[0.96] ${btnSurface}`}
           >

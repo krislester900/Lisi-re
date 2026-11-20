@@ -46,8 +46,8 @@ function formatMs(ms: number): string {
 
 function resolvePlayableUrlForSaving(track: ReadingTrack, maxLen: number): string {
   // For Spotify: open.spotify.com URLs play cleanly via embed/OAuth even after preview expiry and stay well under 500 chars
-  // For Audius: streamUrl is https://api.audius.co/v1/tracks/{id}/stream?app_name=Lisiere (full track, plays directly in <audio>)
-  // For Apple / Deezer: streamUrl is the audio preview URL (.m4a / .mp3) so the wall player plays natively without login
+  // For Audius: streamUrl is /api/music/audius/stream/{id} (full track, plays directly in <audio>)
+  // For Deezer: streamUrl is the audio preview URL (.mp3) so the wall player plays natively without login
   const preferred =
     track.source === 'spotify'
       ? track.externalUrl || track.streamUrl || ''
@@ -58,7 +58,6 @@ function resolvePlayableUrlForSaving(track: ReadingTrack, maxLen: number): strin
 const SOURCE_LABELS: Record<ReadingTrack['source'], string> = {
   audius: 'Audius (gratuit)',
   spotify: 'Spotify',
-  apple: 'Apple Music',
   deezer: 'Deezer',
   link: 'Lien audio',
 };
@@ -193,7 +192,7 @@ export function MusicCatalogPicker({
       const e = err as Error;
       if (e.message === 'SPOTIFY_NOT_CONFIGURED') {
         setAuthNotice(
-          'Les clés Spotify ne sont pas encore configurées sur le serveur. Audius (gratuit, morceaux complets), Apple Music et Deezer fonctionnent déjà sans compte.'
+          'Les clés Spotify ne sont pas encore configurées sur le serveur. Audius (gratuit, morceaux complets) et Deezer fonctionnent déjà sans compte.'
         );
       } else {
         setAuthNotice(e.message || 'Impossible de lancer la connexion Spotify.');
@@ -227,6 +226,7 @@ export function MusicCatalogPicker({
 
     try {
       previewAudioRef.current.src = track.streamUrl;
+      previewAudioRef.current.load();
       await previewAudioRef.current.play();
       setPreviewTrackId(track.id);
       setPreviewPlaying(true);
@@ -268,7 +268,6 @@ export function MusicCatalogPicker({
           [
             { id: 'audius', label: 'Audius · Gratuit' },
             { id: 'spotify', label: 'Spotify' },
-            { id: 'apple', label: 'Apple Music' },
             { id: 'deezer', label: 'Deezer' },
             { id: 'link', label: 'SoundCloud / Lien' },
           ] as const
@@ -341,15 +340,10 @@ export function MusicCatalogPicker({
         </div>
       )}
 
-      {/* Apple / Audius info note */}
+      {/* Audius / Deezer info note */}
       {providerTab === 'audius' && (
         <p className="text-[11px] text-stone-600">
           Audius est ouvert sans clé ni abonnement : chaque morceau se lit en entier directement sur votre mur et en mode zen.
-        </p>
-      )}
-      {providerTab === 'apple' && (
-        <p className="text-[11px] text-stone-600">
-          Recherche directe dans le catalogue Apple Music avec lecture audio immédiate sur le mur.
         </p>
       )}
       {providerTab === 'deezer' && (
@@ -384,7 +378,7 @@ export function MusicCatalogPicker({
               maxLength={maxUrlLength}
               value={selectedUrl}
               onChange={(e) => onManualUrlChange?.(e.target.value)}
-              placeholder="Coller un lien SoundCloud, Spotify, Apple Music, Deezer ou MP3…"
+              placeholder="Coller un lien SoundCloud, Spotify, Deezer ou MP3…"
               aria-label="Lien musical personnalisé"
               className="w-full min-h-[40px] pl-8 pr-3 py-2 bg-white border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
             />
@@ -412,11 +406,9 @@ export function MusicCatalogPicker({
                 placeholder={
                   providerTab === 'spotify'
                     ? 'Chercher un titre ou artiste sur Spotify…'
-                    : providerTab === 'apple'
-                      ? 'Chercher sur Apple Music…'
-                      : providerTab === 'deezer'
-                        ? 'Chercher sur Deezer…'
-                        : 'Chercher un morceau ou un artiste sur Audius…'
+                    : providerTab === 'deezer'
+                      ? 'Chercher sur Deezer…'
+                      : 'Chercher un morceau ou un artiste sur Audius…'
                 }
                 aria-label="Rechercher une musique pour votre mur"
                 className="w-full min-h-[38px] pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"

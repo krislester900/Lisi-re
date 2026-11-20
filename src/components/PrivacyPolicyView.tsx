@@ -67,7 +67,7 @@ export function PrivacyPolicyView({ onBackToSalons }: PrivacyPolicyViewProps) {
 
         <section className="space-y-3">
           <h2 className="font-display text-2xl font-medium text-stone-900">
-            3. Musique de lecture et services externes (Spotify, Audius, Apple Music, Deezer)
+            3. Musique de lecture et services externes (Spotify, Audius, Deezer)
           </h2>
           <p className="text-sm sm:text-base">
             Le lecteur musical intégré en mode lecture et mode zen fonctionne uniquement à votre demande. Si vous choisissez de connecter votre compte Spotify, la session OAuth est conservée dans un cookie chiffré (<code className="text-xs bg-stone-100 px-1.5 py-0.5 rounded">HttpOnly; Secure</code>) et peut être révoquée à tout moment via le bouton de déconnexion du lecteur musical. L’écoute libre (Audius, extraits) n’exige aucune création de compte tiers.

@@ -46,11 +46,14 @@ import {
 import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 
+import { Settings } from 'lucide-react';
+
 interface ProfileWallViewProps {
   memberId: string;
   memberStories: Story[];
   existingExchanges: Exchange[];
   onBack?: () => void;
+  onEditProfile?: () => void;
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
   onOpenExchange: (exchangeId: string) => void;
@@ -116,6 +119,7 @@ export function ProfileWallView({
   memberStories,
   existingExchanges,
   onBack,
+  onEditProfile,
   onReadStory,
   onOpenStoryById,
   onOpenExchange,
@@ -127,6 +131,7 @@ export function ProfileWallView({
   const [reposts, setReposts] = useState<StoryRepost[]>([]);
   const [repostBusyId, setRepostBusyId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [profileSection, setProfileSection] = useState<'wall' | 'stories' | 'reposts'>('wall');
 
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -172,6 +177,7 @@ export function ProfileWallView({
   useEffect(() => {
     setLoaded(false);
     setActiveTrackId(null);
+    setProfileSection('wall');
     setShowDmBox(false);
     setDmText('');
     setDmError(null);
@@ -627,7 +633,7 @@ export function ProfileWallView({
   const isAnyMusicPlaying = Boolean(activeTrackId);
 
   return (
-    <div className={embedded ? 'space-y-8' : 'max-w-6xl mx-auto px-6 py-10 space-y-8'}>
+    <div className={embedded ? 'space-y-6' : 'max-w-6xl mx-auto px-6 py-8 space-y-6'}>
       {onBack && (
         <div>
           <button
@@ -636,7 +642,7 @@ export function ProfileWallView({
             className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Tous les membres</span>
+            <span>Tous les profils</span>
           </button>
         </div>
       )}
@@ -754,6 +760,16 @@ export function ProfileWallView({
                     </button>
                   );
                 })}
+                {onEditProfile && (
+                  <button
+                    type="button"
+                    onClick={onEditProfile}
+                    className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border border-stone-300 bg-white text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span>Paramètres</span>
+                  </button>
+                )}
               </>
             ) : existingDirectExchange ? (
               <button
@@ -840,7 +856,43 @@ export function ProfileWallView({
         )}
       </section>
 
+      {/* Clean Sub-Navigation inside Profile Page so it is uncluttered & easy to browse */}
+      <div
+        role="tablist"
+        aria-label="Sections du profil"
+        className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 rounded-lg w-fit"
+      >
+        {(
+          [
+            { id: 'wall', label: 'Mur & musique', icon: Music2 },
+            { id: 'stories', label: `Récits (${publicStories.length})`, icon: BookOpen },
+            { id: 'reposts', label: `Repartages (${reposts.length})`, icon: Repeat2 },
+          ] as const
+        ).map((tab) => {
+          const Icon = tab.icon;
+          const active = profileSection === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setProfileSection(tab.id)}
+              className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                active
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* UNIFIED YOPE-STYLE COLLAGE WALL BOARD (Photos + Music + Soundwave + Notes + Novels together) */}
+      {profileSection === 'wall' && (
       <section
         aria-label={`Mur collage de ${memberProfile.displayName}`}
         className="lisiere-wall-board rounded-2xl p-6 sm:p-8 lg:p-10 text-white space-y-8 shadow-sm"
@@ -944,6 +996,7 @@ export function ProfileWallView({
                     )
                   }
                   onDelete={isOwner ? () => void handleRemoveFeaturedMusic() : undefined}
+                  onChangeTrack={isOwner ? () => openComposerWithKind('music') : undefined}
                 />
               ) : isOwner ? (
                 <button
@@ -959,7 +1012,7 @@ export function ProfileWallView({
                       Choisir ou connecter votre musique préférée
                     </p>
                     <p className="text-xs text-stone-600">
-                      Recherchez sur Audius (gratuit), Spotify, Apple Music, Deezer ou SoundCloud
+                      Recherchez sur Audius (gratuit), Spotify, Deezer ou SoundCloud
                     </p>
                   </div>
                 </button>
@@ -1154,6 +1207,9 @@ export function ProfileWallView({
                         onDelete={
                           isOwner ? () => void handleDeleteWallItem(item.itemId) : undefined
                         }
+                        onChangeTrack={
+                          isOwner ? () => openComposerWithKind('music') : undefined
+                        }
                       />
                       {item.body && (
                         <p className="text-xs text-stone-300 leading-relaxed px-1">{item.body}</p>
@@ -1314,84 +1370,93 @@ export function ProfileWallView({
           </div>
         )}
       </section>
+      )}
 
       {/* Author's Published Stories & Novels */}
-      {publicStories.length > 0 && (
+      {profileSection === 'stories' && (
         <section
           aria-label="Textes publiés par ce membre"
-          className="pt-4 border-t border-stone-200 space-y-5"
+          className="space-y-5"
         >
           <h2 className="font-display text-2xl font-medium text-stone-900">
             Récits et romans de {memberProfile.displayName}
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {publicStories.map((story) => {
-              const salonInfo = THEME_MAP[story.theme];
-              const formatLabel =
-                STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label ?? 'Confession';
-              return (
-                <article
-                  key={story.storyId}
-                  className="bg-white border border-stone-200 rounded-lg p-5 flex flex-col justify-between space-y-4"
-                >
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                      <span
-                        style={{
-                          color:
-                            story.storyScope === 'pelemele' && !story.customSalonId
-                              ? '#1B365D'
-                              : salonInfo?.palette.textAccent,
-                        }}
-                        className="font-medium"
-                      >
-                        {story.customSalonName ||
-                          (story.storyScope === 'pelemele' && !story.customSalonId
-                            ? 'Hors salon · Pêle-mêle'
-                            : salonInfo?.salonName)}
-                      </span>
-                      <span aria-hidden="true">·</span>
-                      <span>{formatLabel}</span>
-                      {story.storyFormat === 'roman' && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="tabular-nums">
-                            {story.chapterCount ?? 1} chapitre
-                            {(story.chapterCount ?? 1) > 1 ? 's' : ''}
-                          </span>
-                        </>
-                      )}
+          {publicStories.length === 0 ? (
+            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center text-sm text-stone-600">
+              {isOwner
+                ? 'Vous n’avez pas encore publié de récit public.'
+                : `${memberProfile.displayName} n’a pas encore publié de récit public.`}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {publicStories.map((story) => {
+                const salonInfo = THEME_MAP[story.theme];
+                const formatLabel =
+                  STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label ?? 'Confession';
+                return (
+                  <article
+                    key={story.storyId}
+                    className="bg-white border border-stone-200 rounded-lg p-5 flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                        <span
+                          style={{
+                            color:
+                              story.storyScope === 'pelemele' && !story.customSalonId
+                                ? '#1B365D'
+                                : salonInfo?.palette.textAccent,
+                          }}
+                          className="font-medium"
+                        >
+                          {story.customSalonName ||
+                            (story.storyScope === 'pelemele' && !story.customSalonId
+                              ? 'Hors salon · Pêle-mêle'
+                              : salonInfo?.salonName)}
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>{formatLabel}</span>
+                        {story.storyFormat === 'roman' && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="tabular-nums">
+                              {story.chapterCount ?? 1} chapitre
+                              {(story.chapterCount ?? 1) > 1 ? 's' : ''}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <h3 className="font-display text-xl font-medium text-stone-900">
+                        {story.title}
+                      </h3>
+                      <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
                     </div>
-                    <h3 className="font-display text-xl font-medium text-stone-900">
-                      {story.title}
-                    </h3>
-                    <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
-                  </div>
 
-                  <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
-                    <span className="text-xs text-stone-500 tabular-nums">
-                      {story.echoCount} commentaire{story.echoCount > 1 ? 's' : ''}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onReadStory(story)}
-                      className="min-h-[36px] px-3 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
-                    >
-                      Lire et commenter
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                    <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
+                      <span className="text-xs text-stone-500 tabular-nums">
+                        {story.echoCount} commentaire{story.echoCount > 1 ? 's' : ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onReadStory(story)}
+                        className="min-h-[36px] px-3 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
+                      >
+                        Lire et commenter
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
       )}
 
       {/* Member's Reposted Stories (respects public / private profile visibility) */}
-      {reposts.length > 0 && (
+      {profileSection === 'reposts' && (
         <section
           aria-label="Histoires repartagées"
-          className="pt-4 border-t border-stone-200 space-y-5"
+          className="space-y-5"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
@@ -1410,6 +1475,13 @@ export function ProfileWallView({
             </span>
           </div>
 
+          {reposts.length === 0 ? (
+            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center text-sm text-stone-600">
+              {isOwner
+                ? 'Vous n’avez pas encore repartagé d’histoire.'
+                : `${memberProfile.displayName} n’a pas encore repartagé d’histoire publiquement.`}
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {reposts.map((repost) => {
               const salonInfo = THEME_MAP[repost.storyTheme];
@@ -1538,6 +1610,7 @@ export function ProfileWallView({
               );
             })}
           </div>
+          )}
         </section>
       )}
 
@@ -1671,7 +1744,7 @@ export function ProfileWallView({
                     </p>
                     <p className="text-xs text-stone-600 mt-0.5 leading-relaxed">
                       Choisissez un morceau sur <strong>Audius</strong> (gratuit, morceaux complets),{' '}
-                      <strong>Spotify</strong>, <strong>Apple Music</strong>, <strong>Deezer</strong> ou via un lien. Il jouera directement sur votre mur et dans le mode zen.
+                      <strong>Spotify</strong>, <strong>Deezer</strong> ou via un lien. Il jouera directement sur votre mur et dans le mode zen.
                     </p>
                   </div>
 
