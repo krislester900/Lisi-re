@@ -91,6 +91,7 @@ export function StoryReaderModal({
   const [hasResonated, setHasResonated] = useState(false);
   const [authorProfile, setAuthorProfile] = useState<PublicProfile | null>(null);
   const [resonateBusy, setResonateBusy] = useState(false);
+  const [resonateError, setResonateError] = useState<string | null>(null);
 
   const [replyType, setReplyType] = useState<EchoReplyType>('comment');
   const [echoText, setEchoText] = useState('');
@@ -168,14 +169,17 @@ export function StoryReaderModal({
     }
   }, [zenFontFamily]);
 
+  const currentStoryId = story?.storyId ?? null;
+
   useEffect(() => {
-    if (!story) return;
+    if (!currentStoryId) return;
     setZenMode(false);
     setShowMusicPanel(false);
     setShowZenAppearance(false);
     setScrollProgress(0);
     setEchoText('');
     setEchoError(null);
+    setResonateError(null);
     setReplyType('comment');
     setShowBridgeBox(false);
     setBridgeMessage('');
@@ -187,6 +191,10 @@ export function StoryReaderModal({
     setChapterNote('');
     setMarkCompleted(false);
     setChapterError(null);
+  }, [currentStoryId]);
+
+  useEffect(() => {
+    if (!story) return;
 
     const unsubChapters =
       story.storyFormat === 'roman'
@@ -250,7 +258,15 @@ export function StoryReaderModal({
       unsubEchoes();
       if (unsubResonance) unsubResonance();
     };
-  }, [story?.storyId, story?.visibility, story?.storyFormat, story?.authorId, user]);
+  }, [
+    story?.storyId,
+    story?.visibility,
+    story?.storyFormat,
+    story?.authorId,
+    story?.customSalonVisibility,
+    user?.uid,
+    user?.emailVerified,
+  ]);
 
   useEffect(() => {
     if (!story) return;
@@ -325,9 +341,14 @@ export function StoryReaderModal({
       return;
     }
     if (resonateBusy) return;
+    setResonateError(null);
     setResonateBusy(true);
     try {
       await toggleStoryResonance(story.storyId, user.uid, story.authorId);
+    } catch (err) {
+      setResonateError(
+        err instanceof Error ? err.message : 'Impossible d’enregistrer cette résonance.'
+      );
     } finally {
       setResonateBusy(false);
     }
@@ -1297,6 +1318,12 @@ export function StoryReaderModal({
                   {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
                 </span>
               </div>
+            )}
+
+            {!zenMode && resonateError && (
+              <p role="alert" className="mt-3 text-xs text-red-700">
+                {resonateError}
+              </p>
             )}
 
             {!zenMode && showBridgeBox && !isAuthor && (

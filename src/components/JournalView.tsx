@@ -76,7 +76,9 @@ export function JournalView({
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [busyStoryId, setBusyStoryId] = useState<string | null>(null);
+  const [storyActionError, setStoryActionError] = useState<string | null>(null);
   const [busyBookmarkId, setBusyBookmarkId] = useState<string | null>(null);
+  const [bookmarkActionError, setBookmarkActionError] = useState<string | null>(null);
   const [busyRepostId, setBusyRepostId] = useState<string | null>(null);
   const [repostActionError, setRepostActionError] = useState<string | null>(null);
 
@@ -179,9 +181,14 @@ export function JournalView({
 
   const handleRemoveBookmark = async (storyId: string) => {
     if (!user || busyBookmarkId) return;
+    setBookmarkActionError(null);
     setBusyBookmarkId(storyId);
     try {
       await removeStoryBookmark(user.uid, storyId);
+    } catch (err) {
+      setBookmarkActionError(
+        err instanceof Error ? err.message : 'Impossible de retirer ce favori.'
+      );
     } finally {
       setBusyBookmarkId(null);
     }
@@ -222,7 +229,8 @@ export function JournalView({
   };
 
   const handleToggleVisibility = async (story: Story) => {
-    if (busyStoryId) return;
+    if (busyStoryId || story.customSalonVisibility === 'private') return;
+    setStoryActionError(null);
     setBusyStoryId(story.storyId);
     try {
       const nextVis = story.visibility === 'public' ? 'private' : 'public';
@@ -231,12 +239,25 @@ export function JournalView({
         excerpt: story.excerpt,
         content: story.content,
         theme: story.theme,
+        storyScope: story.storyScope,
+        customSalon:
+          story.customSalonId && story.customSalonName && story.customSalonVisibility
+            ? {
+                salonId: story.customSalonId,
+                name: story.customSalonName,
+                visibility: story.customSalonVisibility,
+              }
+            : null,
         storyFormat: story.storyFormat,
         releaseCadence: story.releaseCadence,
         seriesStatus: story.seriesStatus,
         promptQuestion: story.promptQuestion,
         visibility: nextVis,
       });
+    } catch (err) {
+      setStoryActionError(
+        err instanceof Error ? err.message : 'Impossible de modifier la visibilité de ce récit.'
+      );
     } finally {
       setBusyStoryId(null);
     }
@@ -244,10 +265,15 @@ export function JournalView({
 
   const handleDelete = async (storyId: string) => {
     if (busyStoryId) return;
+    setStoryActionError(null);
     setBusyStoryId(storyId);
     try {
       await deleteStory(storyId);
       setConfirmDeleteId(null);
+    } catch (err) {
+      setStoryActionError(
+        err instanceof Error ? err.message : 'Impossible de supprimer ce récit.'
+      );
     } finally {
       setBusyStoryId(null);
     }
@@ -512,6 +538,15 @@ export function JournalView({
                 </div>
               )}
 
+              {storyActionError && (
+                <p
+                  role="alert"
+                  className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+                >
+                  {storyActionError}
+                </p>
+              )}
+
               {myStories.length === 0 ? (
                 <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-4">
                   <FileText className="w-7 h-7 text-stone-400 mx-auto" />
@@ -647,24 +682,26 @@ export function JournalView({
                               <span>Modifier</span>
                             </button>
 
-                            <button
-                              type="button"
-                              disabled={isBusy}
-                              onClick={() => handleToggleVisibility(story)}
-                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
-                            >
-                              {story.visibility === 'public' ? (
-                                <>
-                                  <EyeOff className="w-3.5 h-3.5" />
-                                  <span>Passer en privé</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>Publier</span>
-                                </>
-                              )}
-                            </button>
+                            {story.customSalonVisibility !== 'private' && (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => void handleToggleVisibility(story)}
+                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                              >
+                                {story.visibility === 'public' ? (
+                                  <>
+                                    <EyeOff className="w-3.5 h-3.5" />
+                                    <span>Passer en privé</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Publier</span>
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-3 ml-auto">
@@ -732,6 +769,15 @@ export function JournalView({
                     />
                   </div>
                 </div>
+              )}
+
+              {bookmarkActionError && (
+                <p
+                  role="alert"
+                  className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+                >
+                  {bookmarkActionError}
+                </p>
               )}
 
               {bookmarks.length === 0 ? (

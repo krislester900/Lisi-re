@@ -768,6 +768,8 @@ function SalonApp() {
           <CustomSalonRoomView
             salon={activeCustomSalon}
             salonsLoaded={customSalonsLoaded}
+            publicStories={publicStories}
+            myStories={myStories}
             bookmarkedStoryIds={bookmarkedStoryIds}
             repostedStoryIds={repostedStoryIds}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}

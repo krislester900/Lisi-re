@@ -147,6 +147,14 @@ export function parseMusicSource(rawUrl: string): ParsedMusicSource {
     };
   }
 
+  const deezerProxyMatch = url.match(/\/api\/music\/deezer\/stream\/([0-9]+)/i);
+  if (deezerProxyMatch) {
+    return {
+      type: 'audio',
+      originalUrl: `/api/music/deezer/stream/${deezerProxyMatch[1]}`,
+    };
+  }
+
   if (
     /\.(mp3|wav|ogg|m4a|aac|flac)(\?|$)/i.test(lower) ||
     /dzcdn\.net\//i.test(lower)

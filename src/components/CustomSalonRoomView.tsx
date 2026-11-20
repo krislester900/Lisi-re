@@ -53,6 +53,8 @@ import {
 interface CustomSalonRoomViewProps {
   salon: CustomSalon | null;
   salonsLoaded: boolean;
+  publicStories?: Story[];
+  myStories?: Story[];
   bookmarkedStoryIds?: Set<string>;
   repostedStoryIds?: Set<string>;
   onToggleBookmark?: (story: Story) => void;
@@ -67,6 +69,8 @@ interface CustomSalonRoomViewProps {
 export function CustomSalonRoomView({
   salon,
   salonsLoaded,
+  publicStories = [],
+  myStories = [],
   bookmarkedStoryIds,
   repostedStoryIds,
   onToggleBookmark,
@@ -80,7 +84,7 @@ export function CustomSalonRoomView({
   const { user, profile, signInWithGoogle } = useAuth();
   const [memberRecord, setMemberRecord] = useState<SalonMember | null>(null);
   const [ownerMembers, setOwnerMembers] = useState<SalonMember[]>([]);
-  const [stories, setStories] = useState<Story[]>([]);
+  const [privateSalonStories, setPrivateSalonStories] = useState<Story[]>([]);
   const [messages, setMessages] = useState<CustomSalonMessage[]>([]);
 
   const [roomSection, setRoomSection] = useState<'stories' | 'chat' | 'members'>('stories');
@@ -134,12 +138,35 @@ export function CustomSalonRoomView({
   }, [salon?.salonId, salon?.ownerId, user?.uid, isOwner]);
 
   useEffect(() => {
-    if (!salon || !canViewContent) {
-      setStories([]);
+    if (!salon || salon.visibility !== 'private' || !canViewContent) {
+      setPrivateSalonStories([]);
       return;
     }
-    return subscribeToCustomSalonStories(salon.salonId, setStories);
-  }, [salon?.salonId, canViewContent]);
+    return subscribeToCustomSalonStories(salon.salonId, 'private', setPrivateSalonStories);
+  }, [salon?.salonId, salon?.visibility, canViewContent]);
+
+  const stories = useMemo(() => {
+    if (!salon) return [];
+    const byId = new Map<string, Story>();
+    const sourceList = salon.visibility === 'private' ? privateSalonStories : publicStories;
+    for (const s of sourceList) {
+      if (s.customSalonId === salon.salonId) {
+        byId.set(s.storyId, s);
+      }
+    }
+    for (const s of myStories) {
+      if (s.customSalonId === salon.salonId && !byId.has(s.storyId)) {
+        byId.set(s.storyId, s);
+      }
+    }
+    const merged = Array.from(byId.values());
+    merged.sort((a, b) => {
+      const aMs = (a.updatedAt || a.createdAt)?.toMillis() ?? 0;
+      const bMs = (b.updatedAt || b.createdAt)?.toMillis() ?? 0;
+      return bMs - aMs;
+    });
+    return merged;
+  }, [salon, privateSalonStories, publicStories, myStories]);
 
   useEffect(() => {
     if (!salon || !user || !canViewContent) {

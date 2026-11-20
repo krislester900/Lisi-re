@@ -325,7 +325,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
       setPlaybackError('Aucun flux audio lisible directement pour ce morceau.');
       setIsPlaying(false);
     },
-    [providers?.spotify.connected, spotifyDeviceId, stopAllEngines]
+    [providers?.spotify.connected, providers?.spotify.user?.product, spotifyDeviceId, stopAllEngines]
   );
 
   const togglePlayPause = useCallback(async () => {

@@ -45,6 +45,10 @@ interface NormalizedTrack {
 function getAppUrl(): string {
   const configured = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
   if (configured) return configured;
+  const vercelProd = (process.env.VERCEL_PROJECT_PRODUCTION_URL || '').trim().replace(/\/+$/, '');
+  if (vercelProd) return `https://${vercelProd}`;
+  const vercelUrl = (process.env.VERCEL_URL || '').trim().replace(/\/+$/, '');
+  if (vercelUrl) return `https://${vercelUrl}`;
   return `http://localhost:${PORT}`;
 }
 
@@ -327,13 +331,13 @@ async function fetchDeezerTracks(query: string): Promise<NormalizedTrack[]> {
     coverUrl: item.album?.cover_medium || item.album?.cover_small,
     durationMs: item.duration ? item.duration * 1000 : undefined,
     source: 'deezer' as const,
-    streamUrl: item.preview,
+    streamUrl: item.preview ? `/api/music/deezer/stream/${item.id}` : undefined,
     externalUrl: item.link,
     isPreview: true,
   }));
 }
 
-async function startServer() {
+export function createApiApp(): express.Express {
   const app = express();
   app.set('trust proxy', 1);
   app.use(express.json());
@@ -761,6 +765,72 @@ async function startServer() {
     res.status(502).json({ error: 'Flux audio indisponible sur Audius.' });
   });
 
+  app.get('/api/music/deezer/stream/:trackId', async (req: Request, res: Response) => {
+    const trackId = (req.params.trackId || '').trim();
+    if (!trackId || !/^[0-9]+$/.test(trackId)) {
+      res.status(400).json({ error: 'Identifiant Deezer invalide.' });
+      return;
+    }
+
+    try {
+      const metaResp = await fetch(`https://api.deezer.com/track/${trackId}`, {
+        signal: AbortSignal.timeout(6500),
+      });
+      if (!metaResp.ok) {
+        res.status(404).json({ error: 'Extrait Deezer introuvable.' });
+        return;
+      }
+
+      const meta = (await metaResp.json()) as { preview?: string; error?: unknown };
+      if (!meta.preview || meta.error) {
+        res.status(404).json({ error: 'Aucun extrait audio disponible sur Deezer pour ce titre.' });
+        return;
+      }
+
+      const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+      const upstream = await fetch(meta.preview, {
+        headers: rangeHeader ? { Range: rangeHeader } : undefined,
+        redirect: 'follow',
+        signal: AbortSignal.timeout(12000),
+      });
+
+      if (!upstream.ok || !upstream.body) {
+        await upstream.body?.cancel().catch(() => {});
+        res.status(502).json({ error: 'Flux extrait Deezer indisponible.' });
+        return;
+      }
+
+      const contentType = upstream.headers.get('content-type') || 'audio/mpeg';
+      res.status(upstream.status);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'private, max-age=120');
+      for (const headerName of ['content-length', 'content-range', 'accept-ranges']) {
+        const val = upstream.headers.get(headerName);
+        if (val) res.setHeader(headerName, val);
+      }
+
+      const { Readable } = await import('node:stream');
+      const nodeStream = Readable.fromWeb(
+        upstream.body as unknown as import('node:stream/web').ReadableStream
+      );
+      req.on('close', () => {
+        nodeStream.destroy();
+      });
+      nodeStream.on('error', () => {
+        if (!res.headersSent) {
+          res.status(502).end();
+        } else {
+          res.end();
+        }
+      });
+      nodeStream.pipe(res);
+    } catch {
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Flux extrait Deezer momentanément indisponible.' });
+      }
+    }
+  });
+
   app.get('/api/music/search', async (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const source = typeof req.query.source === 'string' ? req.query.source : 'audius';
@@ -784,6 +854,12 @@ async function startServer() {
     }
   });
 
+  return app;
+}
+
+async function startServer() {
+  const app = createApiApp();
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -804,4 +880,6 @@ async function startServer() {
   });
 }
 
-void startServer();
+if (!process.env.VERCEL) {
+  void startServer();
+}

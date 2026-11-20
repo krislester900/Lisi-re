@@ -1490,11 +1490,25 @@ export async function leaveOrRemoveSalonMember(params: {
 
 export function subscribeToCustomSalonStories(
   salonId: string,
+  salonVisibility: CustomSalonVisibility,
   onData: (stories: Story[]) => void
 ): () => void {
   assertValidId(salonId, 'salonId');
   const path = 'stories';
-  const q = query(collection(db, 'stories'), where('customSalonId', '==', salonId), limit(80));
+  const q =
+    salonVisibility === 'private'
+      ? query(
+          collection(db, 'stories'),
+          where('customSalonId', '==', salonId),
+          where('customSalonVisibility', '==', 'private'),
+          limit(80)
+        )
+      : query(
+          collection(db, 'stories'),
+          where('customSalonId', '==', salonId),
+          where('visibility', '==', 'public'),
+          limit(80)
+        );
   return onSnapshot(
     q,
     (snapshot) => {
