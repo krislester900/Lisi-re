@@ -129,6 +129,16 @@ export function StoryReaderModal({
     }
     return 'md';
   });
+  const [zenFontFamily, setZenFontFamily] = useState<'serif' | 'sans'>(() => {
+    try {
+      const saved = window.localStorage.getItem('lisiere_zen_font');
+      if (saved === 'serif' || saved === 'sans') return saved;
+    } catch {
+      // Ignore storage errors
+    }
+    return 'serif';
+  });
+  const [showZenAppearance, setShowZenAppearance] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
@@ -151,9 +161,18 @@ export function StoryReaderModal({
   }, [zenFontSize]);
 
   useEffect(() => {
+    try {
+      window.localStorage.setItem('lisiere_zen_font', zenFontFamily);
+    } catch {
+      // Ignore
+    }
+  }, [zenFontFamily]);
+
+  useEffect(() => {
     if (!story) return;
     setZenMode(false);
     setShowMusicPanel(false);
+    setShowZenAppearance(false);
     setScrollProgress(0);
     setEchoText('');
     setEchoError(null);
@@ -237,7 +256,9 @@ export function StoryReaderModal({
     if (!story) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showMusicPanel) {
+        if (showZenAppearance) {
+          setShowZenAppearance(false);
+        } else if (showMusicPanel) {
           setShowMusicPanel(false);
         } else if (zenMode) {
           setZenMode(false);
@@ -248,7 +269,7 @@ export function StoryReaderModal({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [story, zenMode, showMusicPanel, onClose]);
+  }, [story, zenMode, showMusicPanel, showZenAppearance, onClose]);
 
   if (!story) return null;
 
@@ -427,10 +448,13 @@ export function StoryReaderModal({
 
   const zenFontClass =
     zenFontSize === 'sm'
-      ? 'text-[16px] sm:text-[17px] leading-[1.82]'
+      ? 'text-[16px] sm:text-[17px] leading-[1.85]'
       : zenFontSize === 'lg'
-        ? 'text-[20px] sm:text-[21px] leading-[1.95]'
-        : 'text-[18px] sm:text-[19px] leading-[1.9]';
+        ? 'text-[20px] sm:text-[22px] leading-[1.98]'
+        : 'text-[18px] sm:text-[19px] leading-[1.92]';
+
+  const zenTypefaceClass =
+    zenFontFamily === 'serif' ? 'font-display tracking-[0.005em]' : 'font-sans';
 
   const zenControlBarClass =
     zenTheme === 'night'
@@ -438,6 +462,13 @@ export function StoryReaderModal({
       : zenTheme === 'sepia'
         ? 'border-[#DFD2B7] bg-[#EFE4CC]/95 text-[#2F261D]'
         : 'border-stone-200 bg-[#FBF9F5]/95 text-stone-800';
+
+  const zenPopoverClass =
+    zenTheme === 'night'
+      ? 'bg-[#23201D] border-[#3A3530] text-[#EAE4D9]'
+      : zenTheme === 'sepia'
+        ? 'bg-[#F8F1E1] border-[#DFD2B7] text-[#2F261D]'
+        : 'bg-white border-stone-200 text-stone-900';
 
   const handleArticleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
@@ -481,88 +512,44 @@ export function StoryReaderModal({
               />
             </div>
 
-            {/* Clean Top Zen Control Strip */}
+            {/* Minimal Zen Control Strip: hides distracting chrome, exposes only Aa, Music & Exit */}
             <header
-              className={`border-b px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 backdrop-blur-sm shrink-0 ${zenControlBarClass}`}
+              className={`border-b px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 backdrop-blur-sm shrink-0 ${zenControlBarClass}`}
             >
-              <div className="min-w-0 flex items-center gap-2.5">
+              <div className="min-w-0 flex items-center gap-2">
                 <span className="text-[11px] uppercase tracking-widest opacity-65 whitespace-nowrap">
-                  Lecture zen
+                  Mode lecture zen
                 </span>
-                <span className="opacity-35 hidden sm:inline" aria-hidden="true">·</span>
-                <p className="text-xs font-medium truncate max-w-[160px] sm:max-w-[260px] hidden sm:block">
-                  {story.title}
-                </p>
                 {isRoman && totalChapters > 1 && (
-                  <span className="text-[11px] opacity-75 tabular-nums whitespace-nowrap">
-                    Ch. {activeChapterIdx + 1}/{totalChapters}
-                  </span>
+                  <>
+                    <span className="opacity-35" aria-hidden="true">·</span>
+                    <span className="text-[11px] opacity-75 tabular-nums whitespace-nowrap">
+                      Ch. {activeChapterIdx + 1}/{totalChapters}
+                    </span>
+                  </>
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-                {/* Text size toggle */}
-                <div
-                  className="inline-flex items-center rounded-md border border-current/20 overflow-hidden"
-                  role="group"
-                  aria-label="Taille du texte"
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowZenAppearance((prev) => !prev);
+                    setShowMusicPanel(false);
+                  }}
+                  aria-label="Régler la typographie et l’ambiance"
+                  aria-expanded={showZenAppearance}
+                  className={`min-h-[34px] px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
+                    showZenAppearance
+                      ? zenTheme === 'night'
+                        ? 'border-amber-200 bg-amber-200 text-stone-950'
+                        : 'border-[#1B365D] bg-[#1B365D] text-white'
+                      : 'border-current/25 hover:border-current/50'
+                  }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setZenFontSize((prev) => (prev === 'lg' ? 'md' : 'sm'))
-                    }
-                    disabled={zenFontSize === 'sm'}
-                    aria-label="Réduire la taille du texte"
-                    className="min-h-[34px] px-2 text-xs font-medium hover:bg-current/10 disabled:opacity-35"
-                  >
-                    A-
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setZenFontSize((prev) => (prev === 'sm' ? 'md' : 'lg'))
-                    }
-                    disabled={zenFontSize === 'lg'}
-                    aria-label="Agrandir la taille du texte"
-                    className="min-h-[34px] px-2 text-xs font-medium border-l border-current/20 hover:bg-current/10 disabled:opacity-35"
-                  >
-                    A+
-                  </button>
-                </div>
+                  Aa
+                </button>
 
-                {/* Ambiance theme pills */}
-                <div
-                  className="inline-flex items-center rounded-md border border-current/20 p-0.5 gap-0.5"
-                  role="group"
-                  aria-label="Ambiance visuelle"
-                >
-                  {(
-                    [
-                      { id: 'paper', label: 'Papier' },
-                      { id: 'sepia', label: 'Sépia' },
-                      { id: 'night', label: 'Nuit' },
-                    ] as const
-                  ).map((opt) => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setZenTheme(opt.id)}
-                      aria-pressed={zenTheme === opt.id}
-                      className={`min-h-[30px] px-2 py-0.5 text-[11px] font-medium rounded transition-colors ${
-                        zenTheme === opt.id
-                          ? zenTheme === 'night'
-                            ? 'bg-amber-200 text-stone-950'
-                            : 'bg-[#1B365D] text-white'
-                          : 'opacity-75 hover:opacity-100'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Quick play/pause if track active */}
                 {audioController.activeTrack && (
                   <button
                     type="button"
@@ -583,7 +570,7 @@ export function StoryReaderModal({
                     ) : (
                       <Play className="w-3.5 h-3.5 fill-current" />
                     )}
-                    <span className="max-w-[90px] truncate hidden md:inline">
+                    <span className="max-w-[90px] truncate hidden sm:inline">
                       {audioController.activeTrack.title}
                     </span>
                   </button>
@@ -591,7 +578,10 @@ export function StoryReaderModal({
 
                 <button
                   type="button"
-                  onClick={() => setShowMusicPanel((prev) => !prev)}
+                  onClick={() => {
+                    setShowMusicPanel((prev) => !prev);
+                    setShowZenAppearance(false);
+                  }}
                   aria-label="Musique de lecture"
                   aria-expanded={showMusicPanel}
                   className={`min-h-[34px] px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
@@ -610,7 +600,10 @@ export function StoryReaderModal({
 
                 <button
                   type="button"
-                  onClick={() => setZenMode(false)}
+                  onClick={() => {
+                    setShowZenAppearance(false);
+                    setZenMode(false);
+                  }}
                   aria-label="Quitter le mode lecture zen"
                   aria-pressed={true}
                   className="min-h-[34px] px-3 py-1 rounded-md border border-current/25 hover:border-current/50 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
@@ -620,6 +613,109 @@ export function StoryReaderModal({
                 </button>
               </div>
             </header>
+
+            {showZenAppearance && (
+              <div
+                role="region"
+                aria-label="Réglages typographiques et ambiance"
+                className={`fixed top-14 right-4 sm:top-16 sm:right-6 z-20 w-[min(92vw,300px)] rounded-lg border shadow-xl p-4 space-y-4 ${zenPopoverClass}`}
+              >
+                <div className="space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-widest opacity-65">
+                    Typographie
+                  </p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setZenFontFamily('serif')}
+                      className={`min-h-[34px] px-3 py-1 rounded border text-xs font-display transition-colors ${
+                        zenFontFamily === 'serif'
+                          ? zenTheme === 'night'
+                            ? 'bg-amber-200 text-stone-950 border-amber-200'
+                            : 'bg-[#1B365D] text-white border-[#1B365D]'
+                          : 'border-current/20 opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      Littéraire (Serif)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setZenFontFamily('sans')}
+                      className={`min-h-[34px] px-3 py-1 rounded border text-xs font-sans transition-colors ${
+                        zenFontFamily === 'sans'
+                          ? zenTheme === 'night'
+                            ? 'bg-amber-200 text-stone-950 border-amber-200'
+                            : 'bg-[#1B365D] text-white border-[#1B365D]'
+                          : 'border-current/20 opacity-80 hover:opacity-100'
+                      }`}
+                    >
+                      Épurée (Sans)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-widest opacity-65">
+                    Taille du texte
+                  </p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(
+                      [
+                        { id: 'sm', label: 'A-' },
+                        { id: 'md', label: 'Normal' },
+                        { id: 'lg', label: 'A+' },
+                      ] as const
+                    ).map((sz) => (
+                      <button
+                        key={sz.id}
+                        type="button"
+                        onClick={() => setZenFontSize(sz.id)}
+                        className={`min-h-[34px] px-2 py-1 rounded border text-xs font-medium transition-colors ${
+                          zenFontSize === sz.id
+                            ? zenTheme === 'night'
+                              ? 'bg-amber-200 text-stone-950 border-amber-200'
+                              : 'bg-[#1B365D] text-white border-[#1B365D]'
+                            : 'border-current/20 opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        {sz.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <p className="text-[11px] uppercase tracking-widest opacity-65">
+                    Ambiance papier
+                  </p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(
+                      [
+                        { id: 'paper', label: 'Papier' },
+                        { id: 'sepia', label: 'Sépia' },
+                        { id: 'night', label: 'Nuit' },
+                      ] as const
+                    ).map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setZenTheme(opt.id)}
+                        aria-pressed={zenTheme === opt.id}
+                        className={`min-h-[34px] px-2 py-1 rounded border text-xs font-medium transition-colors ${
+                          zenTheme === opt.id
+                            ? zenTheme === 'night'
+                              ? 'bg-amber-200 text-stone-950 border-amber-200'
+                              : 'bg-[#1B365D] text-white border-[#1B365D]'
+                            : 'border-current/20 opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {showMusicPanel && (
               <div className="fixed top-14 right-4 sm:top-16 sm:right-6 z-20 w-[min(92vw,420px)] max-h-[75vh] overflow-y-auto">
@@ -734,12 +830,12 @@ export function StoryReaderModal({
                 <button
                   type="button"
                   onClick={() => setZenMode(true)}
-                  aria-label="Passer en mode lecture zen"
+                  aria-label="Activer le Mode lecture zen"
                   aria-pressed={false}
                   className="min-h-[40px] px-3 py-1.5 rounded-md border border-[#1B365D]/35 bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#1B365D] hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                 >
                   <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Lecture zen</span>
+                  <span>Mode lecture zen</span>
                 </button>
                 <button
                   type="button"
@@ -770,11 +866,11 @@ export function StoryReaderModal({
           onScroll={handleArticleScroll}
           className={
             zenMode
-              ? 'flex-1 min-h-0 overflow-y-auto px-6 sm:px-12 pt-10 pb-24 sm:pt-14 sm:pb-28'
+              ? 'flex-1 min-h-0 overflow-y-auto px-6 sm:px-12 pt-12 pb-28 sm:pt-16 sm:pb-32'
               : 'flex-1 min-h-0 overflow-y-auto px-6 sm:px-12 py-8 sm:py-10'
           }
         >
-          <article className={zenMode ? 'max-w-[66ch] mx-auto' : 'max-w-prose mx-auto'}>
+          <article className={zenMode ? 'max-w-[62ch] mx-auto' : 'max-w-prose mx-auto'}>
             {!zenMode && story.promptQuestion && (
               <p className="text-xs text-stone-500 mb-3 italic">
                 En réponse au fil : « {story.promptQuestion} »
@@ -862,7 +958,7 @@ export function StoryReaderModal({
                       className="min-h-[32px] px-3 py-1 rounded bg-[#1B365D] text-white hover:bg-[#132744] text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <Maximize2 className="w-3 h-3" />
-                      <span>Ouvrir le mode zen</span>
+                      <span>Mode lecture zen</span>
                     </button>
                   </div>
                 </div>
@@ -1030,7 +1126,7 @@ export function StoryReaderModal({
             <div
               className={
                 zenMode
-                  ? `space-y-6 ${zenFontClass} ${zenBodyTextClass}`
+                  ? `space-y-6 ${zenTypefaceClass} ${zenFontClass} ${zenBodyTextClass}`
                   : 'space-y-5 text-base sm:text-[17px] leading-[1.8] text-stone-800'
               }
             >
