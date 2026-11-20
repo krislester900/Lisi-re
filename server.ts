@@ -202,13 +202,70 @@ async function ensureFreshSpotifySession(
   return refreshed;
 }
 
+function buildCandidateUrlsFromStream(
+  trackId: string,
+  stream?: { url?: string | null; mirrors?: string[] } | null
+): string[] {
+  const candidates: string[] = [];
+  if (stream?.url) {
+    candidates.push(stream.url);
+    try {
+      const parsedUrl = new URL(stream.url);
+      const suffix = `${parsedUrl.pathname}${parsedUrl.search}`;
+      for (const mirror of stream.mirrors ?? []) {
+        candidates.push(`${mirror.replace(/\/+$/, '')}${suffix}`);
+      }
+    } catch {
+      // Ignore malformed mirror URL
+    }
+  }
+  const safeId = encodeURIComponent(trackId);
+  candidates.push(`https://api.audius.co/v1/tracks/${safeId}/stream?app_name=Lisiere`);
+  return Array.from(new Set(candidates));
+}
+
+async function isAudiusTrackReachable(
+  trackId: string,
+  stream?: { url?: string | null; mirrors?: string[] } | null
+): Promise<boolean> {
+  const urls = buildCandidateUrlsFromStream(trackId, stream).slice(0, 3);
+  const controllers = urls.map(() => new AbortController());
+  const timer = setTimeout(() => {
+    for (const c of controllers) c.abort();
+  }, 2200);
+
+  try {
+    await Promise.any(
+      urls.map(async (url, idx) => {
+        const resp = await fetch(url, {
+          headers: { Range: 'bytes=0-0' },
+          redirect: 'follow',
+          signal: controllers[idx].signal,
+        });
+        const ct = resp.headers.get('content-type') || '';
+        await resp.body?.cancel().catch(() => {});
+        if (!resp.ok || ct.includes('application/json') || ct.includes('text/html')) {
+          throw new Error('unplayable');
+        }
+        return true;
+      })
+    );
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+    for (const c of controllers) c.abort();
+  }
+}
+
 async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
   const endpoints = [
     `https://api.audius.co/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=Lisiere`,
   ];
 
   try {
-    const hostsResp = await fetch('https://api.audius.co', { signal: AbortSignal.timeout(3500) });
+    const hostsResp = await fetch('https://api.audius.co', { signal: AbortSignal.timeout(3000) });
     if (hostsResp.ok) {
       const hostsJson = (await hostsResp.json()) as { data?: string[] };
       if (Array.isArray(hostsJson.data)) {
@@ -225,7 +282,7 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
 
   for (const endpoint of endpoints) {
     try {
-      const resp = await fetch(endpoint, { signal: AbortSignal.timeout(6500) });
+      const resp = await fetch(endpoint, { signal: AbortSignal.timeout(5500) });
       if (!resp.ok) continue;
       const json = (await resp.json()) as {
         data?: Array<{
@@ -243,15 +300,24 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
           user?: { name?: string; handle?: string };
         }>;
       };
-      const items = (json.data ?? []).filter(
-        (item) =>
-          Boolean(item.id) &&
-          !item.is_delete &&
-          item.is_available !== false &&
-          item.is_streamable !== false &&
-          item.access?.stream !== false
+      const items = (json.data ?? [])
+        .filter(
+          (item) =>
+            Boolean(item.id) &&
+            !item.is_delete &&
+            item.is_available !== false &&
+            item.is_streamable !== false &&
+            item.access?.stream !== false
+        )
+        .slice(0, 12);
+
+      const reachability = await Promise.all(
+        items.map((item) => isAudiusTrackReachable(item.id, item.stream))
       );
-      return items.slice(0, 12).map((item) => ({
+      const playableItems = items.filter((_, idx) => reachability[idx]);
+      const finalItems = playableItems.length > 0 ? playableItems : items;
+
+      return finalItems.map((item) => ({
         id: `audius_${item.id}`,
         title: item.title || 'Morceau sans titre',
         artist: item.user?.name || item.user?.handle || 'Artiste indépendant',
@@ -271,13 +337,12 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
 }
 
 async function resolveAudiusCandidateUrls(trackId: string): Promise<string[]> {
-  const candidates: string[] = [];
   const safeId = encodeURIComponent(trackId);
 
   try {
     const metaResp = await fetch(
       `https://api.audius.co/v1/tracks/${safeId}?app_name=Lisiere`,
-      { signal: AbortSignal.timeout(5000) }
+      { signal: AbortSignal.timeout(3200) }
     );
     if (metaResp.ok) {
       const metaJson = (await metaResp.json()) as {
@@ -297,25 +362,13 @@ async function resolveAudiusCandidateUrls(trackId: string): Promise<string[]> {
       ) {
         return [];
       }
-      if (track.stream?.url) {
-        candidates.push(track.stream.url);
-        try {
-          const parsedUrl = new URL(track.stream.url);
-          const suffix = `${parsedUrl.pathname}${parsedUrl.search}`;
-          for (const mirror of track.stream.mirrors ?? []) {
-            candidates.push(`${mirror.replace(/\/+$/, '')}${suffix}`);
-          }
-        } catch {
-          // Ignore malformed mirror URL
-        }
-      }
+      return buildCandidateUrlsFromStream(trackId, track.stream);
     }
   } catch {
     // Fallback to direct stream endpoints below
   }
 
-  candidates.push(`https://api.audius.co/v1/tracks/${safeId}/stream?app_name=Lisiere`);
-  return Array.from(new Set(candidates));
+  return [`https://api.audius.co/v1/tracks/${safeId}/stream?app_name=Lisiere`];
 }
 
 async function fetchDeezerTracks(query: string): Promise<NormalizedTrack[]> {
@@ -727,54 +780,77 @@ export function createApiApp(): express.Express {
 
     const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
     const { Readable } = await import('node:stream');
+    const raceUrls = candidates.slice(0, 6);
+    const controllers = raceUrls.map(() => new AbortController());
+    let winnerIndex: number | null = null;
 
-    for (const candidateUrl of candidates) {
-      try {
-        const upstream = await fetch(candidateUrl, {
-          headers: rangeHeader ? { Range: rangeHeader } : undefined,
-          redirect: 'follow',
-          signal: AbortSignal.timeout(12000),
-        });
-        if (!upstream.ok || !upstream.body) {
-          await upstream.body?.cancel().catch(() => {});
-          continue;
-        }
+    const connectTimer = setTimeout(() => {
+      controllers.forEach((ctrl, idx) => {
+        if (idx !== winnerIndex) ctrl.abort();
+      });
+    }, 4200);
 
-        const contentType = upstream.headers.get('content-type') || 'audio/mpeg';
-        if (contentType.includes('application/json') || contentType.includes('text/html')) {
-          await upstream.body.cancel().catch(() => {});
-          continue;
-        }
-
-        res.status(upstream.status);
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'public, max-age=300');
-        for (const headerName of ['content-length', 'content-range', 'accept-ranges']) {
-          const val = upstream.headers.get(headerName);
-          if (val) res.setHeader(headerName, val);
-        }
-
-        const nodeStream = Readable.fromWeb(
-          upstream.body as unknown as import('node:stream/web').ReadableStream
-        );
-        req.on('close', () => {
-          nodeStream.destroy();
-        });
-        nodeStream.on('error', () => {
-          if (!res.headersSent) {
-            res.status(502).end();
-          } else {
-            res.end();
+    try {
+      const winner = await Promise.any(
+        raceUrls.map(async (candidateUrl, idx) => {
+          const upstream = await fetch(candidateUrl, {
+            headers: rangeHeader ? { Range: rangeHeader } : undefined,
+            redirect: 'follow',
+            signal: controllers[idx].signal,
+          });
+          if (!upstream.ok || !upstream.body) {
+            await upstream.body?.cancel().catch(() => {});
+            throw new Error(`HTTP_${upstream.status}`);
           }
-        });
-        nodeStream.pipe(res);
-        return;
-      } catch {
-        continue;
+          const contentType = upstream.headers.get('content-type') || 'audio/mpeg';
+          if (contentType.includes('application/json') || contentType.includes('text/html')) {
+            await upstream.body.cancel().catch(() => {});
+            throw new Error('NON_AUDIO_RESPONSE');
+          }
+          if (winnerIndex === null) {
+            winnerIndex = idx;
+            clearTimeout(connectTimer);
+            controllers.forEach((ctrl, otherIdx) => {
+              if (otherIdx !== idx) ctrl.abort();
+            });
+            return { upstream, contentType, idx };
+          }
+          await upstream.body.cancel().catch(() => {});
+          throw new Error('LOST_RACE');
+        })
+      );
+
+      res.status(winner.upstream.status);
+      res.setHeader('Content-Type', winner.contentType);
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      for (const headerName of ['content-length', 'content-range', 'accept-ranges']) {
+        const val = winner.upstream.headers.get(headerName);
+        if (val) res.setHeader(headerName, val);
+      }
+
+      const nodeStream = Readable.fromWeb(
+        winner.upstream.body as unknown as import('node:stream/web').ReadableStream
+      );
+      req.on('close', () => {
+        controllers[winner.idx].abort();
+        nodeStream.destroy();
+      });
+      nodeStream.on('error', () => {
+        if (!res.headersSent) {
+          res.status(502).end();
+        } else {
+          res.end();
+        }
+      });
+      nodeStream.pipe(res);
+      return;
+    } catch {
+      clearTimeout(connectTimer);
+      controllers.forEach((ctrl) => ctrl.abort());
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Flux audio indisponible sur Audius.' });
       }
     }
-
-    res.status(502).json({ error: 'Flux audio indisponible sur Audius.' });
   });
 
   app.get('/api/music/deezer/stream/:trackId', async (req: Request, res: Response) => {

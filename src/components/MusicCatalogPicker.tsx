@@ -262,6 +262,7 @@ export function MusicCatalogPicker({
         onError={() => {
           setPreviewPlaying(false);
           setPreviewTrackId(null);
+          setAuthNotice('Ce morceau ne répond plus chez le fournisseur. Essayez un autre titre ou passez sur Deezer.');
         }}
         className="hidden"
       />

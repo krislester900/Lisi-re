@@ -50,6 +50,7 @@ export function ImmersiveMusicPlayer({
 }: ImmersiveMusicPlayerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lastSrcRef = useRef<string>('');
+  const [audioLoading, setAudioLoading] = useState(false);
   const [audioFailed, setAudioFailed] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -65,6 +66,7 @@ export function ImmersiveMusicPlayer({
 
   useEffect(() => {
     setAudioFailed(false);
+    setAudioLoading(false);
     setCurrentTime(0);
     setDuration(0);
   }, [mediaUrl]);
@@ -75,9 +77,14 @@ export function ImmersiveMusicPlayer({
     const targetSrc = parsed.originalUrl || '';
 
     if (isActive) {
-      if (targetSrc && lastSrcRef.current !== targetSrc) {
+      if (targetSrc && ((lastSrcRef.current && lastSrcRef.current !== targetSrc) || el.error)) {
         lastSrcRef.current = targetSrc;
         el.load();
+      } else if (targetSrc) {
+        lastSrcRef.current = targetSrc;
+      }
+      if (el.readyState < 2) {
+        setAudioLoading(true);
       }
       if (el.paused) {
         void el.play().catch(() => {
@@ -85,9 +92,22 @@ export function ImmersiveMusicPlayer({
         });
       }
     } else {
+      setAudioLoading(false);
       el.pause();
     }
   }, [isActive, parsed.type, parsed.originalUrl]);
+
+  useEffect(() => {
+    if (!isActive || parsed.type !== 'audio' || !audioLoading || audioFailed) return;
+    const timer = window.setTimeout(() => {
+      const el = audioRef.current;
+      if (!el || (el.readyState < 2 && el.currentTime === 0)) {
+        setAudioLoading(false);
+        setAudioFailed(true);
+      }
+    }, 11000);
+    return () => window.clearTimeout(timer);
+  }, [isActive, parsed.type, audioLoading, audioFailed]);
 
   useEffect(() => {
     if (!audioRef.current) return;
@@ -98,9 +118,14 @@ export function ImmersiveMusicPlayer({
     setAudioFailed(false);
     if (!isActive && parsed.type === 'audio' && audioRef.current && parsed.originalUrl) {
       const el = audioRef.current;
-      if (lastSrcRef.current !== parsed.originalUrl) {
+      if ((lastSrcRef.current && lastSrcRef.current !== parsed.originalUrl) || el.error) {
         lastSrcRef.current = parsed.originalUrl;
         el.load();
+      } else {
+        lastSrcRef.current = parsed.originalUrl;
+      }
+      if (el.readyState < 2) {
+        setAudioLoading(true);
       }
       void el.play().catch(() => {});
     }
@@ -154,7 +179,7 @@ export function ImmersiveMusicPlayer({
               className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-[#1B365D]"
             />
             <div className="flex items-center justify-between text-[11px] text-stone-500 tabular-nums">
-              <span>{formatAudioTime(currentTime)}</span>
+              <span>{audioLoading ? 'Chargement audio…' : formatAudioTime(currentTime)}</span>
               <span>{duration > 0 ? formatAudioTime(duration) : '--:--'}</span>
             </div>
           </div>
@@ -219,14 +244,28 @@ export function ImmersiveMusicPlayer({
             src={parsed.originalUrl}
             preload="metadata"
             onCanPlay={() => {
+              setAudioLoading(false);
               if (isActive && audioRef.current?.paused) {
                 void audioRef.current.play().catch(() => {});
               }
             }}
-            onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+            onPlaying={() => {
+              setAudioLoading(false);
+              setAudioFailed(false);
+            }}
+            onTimeUpdate={(e) => {
+              setAudioLoading(false);
+              setCurrentTime(e.currentTarget.currentTime);
+            }}
+            onLoadedMetadata={(e) => {
+              setAudioLoading(false);
+              setDuration(e.currentTarget.duration || 0);
+            }}
             onEnded={onTogglePlay}
-            onError={() => setAudioFailed(true)}
+            onError={() => {
+              setAudioLoading(false);
+              setAudioFailed(true);
+            }}
             className="hidden"
           />
           {audioFailed && (
@@ -238,7 +277,7 @@ export function ImmersiveMusicPlayer({
                   : 'bg-amber-50 border border-amber-200 text-amber-900'
               }`}
             >
-              <span>Ce morceau n’est plus disponible à l’écoute chez le fournisseur.</span>
+              <span>Ce morceau ne répond plus chez le fournisseur.</span>
               {onChangeTrack && (
                 <button
                   type="button"
