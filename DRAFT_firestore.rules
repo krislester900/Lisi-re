@@ -1095,7 +1095,7 @@ service cloud.firestore {
     match /exchanges/{exchangeId} {
       allow get: if isSignedIn()
         && isValidId(exchangeId)
-        && request.auth.uid in existing().participantIds;
+        && (resource == null || request.auth.uid in existing().participantIds);
       allow list: if isSignedIn()
         && request.auth.uid in resource.data.participantIds;
 

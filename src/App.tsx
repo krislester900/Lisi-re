@@ -10,6 +10,7 @@ import {
   Globe,
   Heart,
   Lock,
+  Menu,
   MessageCircle,
   Plus,
   Repeat2,
@@ -170,6 +171,7 @@ function SalonApp() {
   const [profilesSubTab, setProfilesSubTab] = useState<'directory' | 'my-profile' | 'edit-profile'>(
     'directory'
   );
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isViewFading, setIsViewFading] = useState(false);
   const navTimerRef = useRef<number | null>(null);
   const [publicStories, setPublicStories] = useState<Story[]>([]);
@@ -466,12 +468,24 @@ function SalonApp() {
       return;
     }
 
+    setMobileMenuOpen(false);
     const nextPath = buildLocationPath(tab, salonId, memberId, customSalonId);
     if (window.location.pathname !== nextPath) {
       window.history.pushState({ tab, salonId, memberId, customSalonId }, '', nextPath);
     }
     applyRouteChangeWithFade(tab, salonId, memberId, customSalonId);
   };
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mobileMenuOpen]);
 
   useEffect(() => {
     const onPopState = () => {
@@ -560,7 +574,7 @@ function SalonApp() {
     <div className="min-h-screen flex flex-col bg-[#FBF9F5] text-stone-900">
       {/* Top Bar Contract: 1-row, 3-zone */}
       <header className="border-b border-stone-200 bg-[#FBF9F5]">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between gap-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between gap-3 sm:gap-8">
           {/* Zone 1: Brand wordmark */}
           <button
             type="button"
@@ -647,63 +661,103 @@ function SalonApp() {
             </button>
           </nav>
 
-          {/* Zone 3: 1 primary action */}
-          <div className="shrink-0">
+          {/* Zone 3: Primary action + mobile menu button */}
+          <div className="flex items-center gap-2 shrink-0">
             {user ? (
               <button
                 type="button"
-                onClick={() => void openComposer()}
-                className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  void openComposer();
+                }}
+                className="min-h-[40px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
               >
                 Écrire un récit
               </button>
             ) : (
               <button
                 type="button"
-                onClick={signInWithGoogle}
-                className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  void signInWithGoogle();
+                }}
+                className="min-h-[40px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
               >
                 Se connecter
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-navigation-drawer"
+              aria-label={mobileMenuOpen ? 'Fermer le menu de navigation' : 'Ouvrir le menu de navigation'}
+              className={`md:hidden min-h-[40px] min-w-[40px] px-2.5 inline-flex items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                mobileMenuOpen
+                  ? 'border-[#1E3A8A] bg-[#1E3A8A] text-white'
+                  : 'border-stone-300 bg-white text-stone-800 hover:border-stone-500'
+              }`}
+            >
+              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+              <span className="hidden min-[390px]:inline">Menu</span>
+            </button>
           </div>
         </div>
 
-        {/* Mobile navigation row */}
-        <nav
-          aria-label="Navigation mobile"
-          className="md:hidden border-t border-stone-200 px-6 py-2 flex items-center gap-6 overflow-x-auto text-sm font-medium"
+        {/* Collapsible Mobile Navigation Drawer with smooth opening transition */}
+        <div
+          id="mobile-navigation-drawer"
+          aria-hidden={!mobileMenuOpen}
+          className={`md:hidden grid transition-[grid-template-rows,opacity] duration-250 ease-out motion-reduce:transition-none ${
+            mobileMenuOpen
+              ? 'grid-rows-[1fr] opacity-100 border-t border-stone-200'
+              : 'grid-rows-[0fr] opacity-0 pointer-events-none'
+          }`}
         >
-          {(
-            [
-              { id: 'recits', label: 'Salons' },
-              { id: 'pelemele', label: 'Pêle-mêle' },
-              { id: 'membres', label: 'Profils' },
-              { id: 'themes', label: 'Thèmes' },
-              {
-                id: 'passerelles',
-                label: `Passerelles${exchanges.length > 0 ? ` (${exchanges.length})` : ''}`,
-              },
-              { id: 'carnet', label: 'Mon carnet' },
-            ] as const
-          ).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => {
-                if (item.id === 'membres') setProfilesSubTab('directory');
-                navigateTo(item.id, null, null, null);
-              }}
-              className={`py-1.5 whitespace-nowrap shrink-0 border-b-2 transition-colors ${
-                highlightedTab === item.id
-                  ? 'text-stone-900 border-[#1E3A8A]'
-                  : 'text-stone-600 border-transparent'
+          <div className="overflow-hidden min-h-0">
+            <nav
+              aria-label="Navigation mobile"
+              className={`px-4 py-3 bg-[#FBF9F5] grid grid-cols-2 gap-1.5 text-sm font-medium transition-transform duration-250 ease-out motion-reduce:transition-none ${
+                mobileMenuOpen ? 'translate-y-0' : '-translate-y-2'
               }`}
             >
-              {item.label}
-            </button>
-          ))}
-        </nav>
+              {(
+                [
+                  { id: 'recits', label: 'Salons' },
+                  { id: 'pelemele', label: 'Pêle-mêle' },
+                  { id: 'membres', label: 'Profils' },
+                  { id: 'themes', label: 'Thèmes' },
+                  {
+                    id: 'passerelles',
+                    label: `Passerelles${exchanges.length > 0 ? ` (${exchanges.length})` : ''}`,
+                  },
+                  { id: 'carnet', label: 'Mon carnet' },
+                ] as const
+              ).map((item) => {
+                const isActive = highlightedTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    tabIndex={mobileMenuOpen ? 0 : -1}
+                    onClick={() => {
+                      if (item.id === 'membres') setProfilesSubTab('directory');
+                      navigateTo(item.id, null, null, null);
+                    }}
+                    className={`min-h-[42px] px-3 py-2 rounded-md border text-left flex items-center justify-between transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'bg-white border-[#1E3A8A]/35 text-[#1E3A8A] font-semibold'
+                        : 'bg-white/60 border-stone-200 text-stone-700 hover:bg-white hover:text-stone-900'
+                    }`}
+                  >
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
       </header>
 
       {/* Inline Feedback Banners */}

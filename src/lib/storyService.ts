@@ -1040,8 +1040,11 @@ export async function createDirectExchangeWithFirstMessage(params: {
     const existingSnap = await getDoc(exchangeRef);
     if (existingSnap.exists()) {
       const existingExchange = existingSnap.data() as Exchange;
+      if (existingExchange.status !== 'active') {
+        await updateExchangeStatus(exchangeId, 'active');
+      }
       await sendExchangeMessage({
-        exchange: existingExchange,
+        exchange: { ...existingExchange, status: 'active' },
         senderId: params.initiatorId,
         senderName: params.initiatorName,
         rawContent: content,
