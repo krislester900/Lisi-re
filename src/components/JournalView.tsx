@@ -704,8 +704,8 @@ export function JournalView({
                             )}
                           </div>
 
-                          <div className="flex items-center gap-3 ml-auto">
-                            <span className="text-xs text-stone-500 tabular-nums hidden sm:inline">
+                          <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 ml-auto">
+                            <span className="text-xs text-stone-500 tabular-nums">
                               {story.viewCount ?? 0} vue{(story.viewCount ?? 0) > 1 ? 's' : ''} ·{' '}
                               {story.resonanceCount} rés. · {story.echoCount} comm.
                             </span>
@@ -1093,7 +1093,11 @@ export function JournalView({
                 </div>
               </div>
 
-              <StoryAnalyticsChart authorId={user.uid} myStories={myStories} />
+              <StoryAnalyticsChart
+                authorId={user.uid}
+                myStories={myStories}
+                onReadStory={onReadStory}
+              />
             </section>
           )}
         </div>

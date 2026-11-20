@@ -10,17 +10,20 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { BarChart3, Eye, Heart, RefreshCw } from 'lucide-react';
+import { BarChart3, Eye, Heart, MessageCircle, RefreshCw } from 'lucide-react';
 import { fetchAuthorReadingTimeline, formatLocalDateKey } from '../lib/storyService';
+import { formatFrenchDate, STORY_FORMAT_LABELS } from '../lib/themes';
 import { Story, StoryResonanceEvent, StoryViewEvent } from '../types/story';
 
 interface StoryAnalyticsChartProps {
   authorId: string;
   myStories: Story[];
+  onReadStory?: (story: Story) => void;
 }
 
 type DayRange = 7 | 14 | 30;
 type ChartMode = 'daily' | 'by-story';
+type BreakdownSort = 'views' | 'resonances' | 'recent';
 
 interface DailyPoint {
   dateKey: string;
@@ -84,10 +87,15 @@ function ChartTooltip({
   );
 }
 
-export function StoryAnalyticsChart({ authorId, myStories }: StoryAnalyticsChartProps) {
+export function StoryAnalyticsChart({
+  authorId,
+  myStories,
+  onReadStory,
+}: StoryAnalyticsChartProps) {
   const [dayRange, setDayRange] = useState<DayRange>(14);
   const [chartMode, setChartMode] = useState<ChartMode>('daily');
   const [selectedStoryId, setSelectedStoryId] = useState<string>('all');
+  const [breakdownSort, setBreakdownSort] = useState<BreakdownSort>('views');
 
   const [views, setViews] = useState<StoryViewEvent[]>([]);
   const [resonances, setResonances] = useState<StoryResonanceEvent[]>([]);
@@ -215,6 +223,28 @@ export function StoryAnalyticsChart({ authorId, myStories }: StoryAnalyticsChart
   const periodResonances = useMemo(
     () => dailySeries.reduce((sum, d) => sum + d.resonances, 0),
     [dailySeries]
+  );
+
+  const sortedBreakdownStories = useMemo(() => {
+    const list = [...publicStories];
+    list.sort((a, b) => {
+      if (breakdownSort === 'views') {
+        const diff = (b.viewCount ?? 0) - (a.viewCount ?? 0);
+        if (diff !== 0) return diff;
+      } else if (breakdownSort === 'resonances') {
+        const diff = (b.resonanceCount ?? 0) - (a.resonanceCount ?? 0);
+        if (diff !== 0) return diff;
+      }
+      const bMs = b.createdAt ? b.createdAt.toMillis() : 0;
+      const aMs = a.createdAt ? a.createdAt.toMillis() : 0;
+      return bMs - aMs;
+    });
+    return list;
+  }, [publicStories, breakdownSort]);
+
+  const maxStoryViews = useMemo(
+    () => Math.max(1, ...publicStories.map((s) => s.viewCount ?? 0)),
+    [publicStories]
   );
 
   return (
@@ -461,6 +491,104 @@ export function StoryAnalyticsChart({ authorId, myStories }: StoryAnalyticsChart
         <p className="text-xs text-stone-500">
           Les courbes se rempliront automatiquement au fil des lectures et des résonances déposées sur vos récits publiés.
         </p>
+      )}
+
+      {publicStories.length > 0 && (
+        <div className="pt-5 border-t border-stone-200 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-display text-lg font-medium text-stone-900">
+                Détail des lectures par récit
+              </h3>
+              <p className="text-xs text-stone-500">
+                Performance de chacun de vos récits publiés
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md self-start sm:self-auto">
+              {(
+                [
+                  { id: 'views', label: 'Plus vus' },
+                  { id: 'resonances', label: 'Résonances' },
+                  { id: 'recent', label: 'Récents' },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setBreakdownSort(opt.id)}
+                  className={`min-h-[30px] px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
+                    breakdownSort === opt.id
+                      ? 'bg-white text-stone-900 shadow-sm'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5]">
+            {sortedBreakdownStories.map((story) => {
+              const viewsCount = story.viewCount ?? 0;
+              const barPct = viewsCount > 0 ? Math.max(4, Math.round((viewsCount / maxStoryViews) * 100)) : 0;
+              return (
+                <div
+                  key={story.storyId}
+                  className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {onReadStory ? (
+                      <button
+                        type="button"
+                        onClick={() => onReadStory(story)}
+                        className="font-medium text-sm text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate block max-w-full"
+                      >
+                        {story.title}
+                      </button>
+                    ) : (
+                      <p className="font-medium text-sm text-stone-900 truncate">{story.title}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                      <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular-nums">{story.readingMinutes} min</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-5 shrink-0">
+                    <div className="w-24 hidden md:block">
+                      <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
+                        <div
+                          style={{ width: `${barPct}%` }}
+                          className="h-full bg-[#1B365D] rounded-full transition-[width] duration-200 motion-reduce:transition-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs text-stone-700 tabular-nums">
+                      <span className="inline-flex items-center gap-1 font-medium text-stone-900" title="Vues">
+                        <Eye className="w-3.5 h-3.5 text-[#1B365D]" />
+                        {viewsCount}
+                      </span>
+                      <span className="inline-flex items-center gap-1" title="Résonances">
+                        <Heart className="w-3.5 h-3.5 text-[#9A3B29]" />
+                        {story.resonanceCount ?? 0}
+                      </span>
+                      <span className="inline-flex items-center gap-1" title="Commentaires">
+                        <MessageCircle className="w-3.5 h-3.5 text-stone-500" />
+                        {story.echoCount ?? 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </section>
   );

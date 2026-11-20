@@ -4,6 +4,7 @@ import {
   Bookmark,
   BookOpen,
   Disc3,
+  Eye,
   Heart,
   Maximize2,
   MessageCircle,
@@ -171,6 +172,17 @@ export function StoryReaderModal({
 
   const currentStoryId = story?.storyId ?? null;
 
+  const recalculateScrollProgress = React.useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll <= 4) {
+      setScrollProgress(100);
+    } else {
+      setScrollProgress(Math.min(100, Math.max(0, (el.scrollTop / maxScroll) * 100)));
+    }
+  }, []);
+
   useEffect(() => {
     if (!currentStoryId) return;
     setZenMode(false);
@@ -192,6 +204,30 @@ export function StoryReaderModal({
     setMarkCompleted(false);
     setChapterError(null);
   }, [currentStoryId]);
+
+  useEffect(() => {
+    if (!currentStoryId) return;
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = 0;
+    }
+    const rafId = window.requestAnimationFrame(() => {
+      recalculateScrollProgress();
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [currentStoryId, activeChapterIdx, recalculateScrollProgress]);
+
+  useEffect(() => {
+    if (!currentStoryId) return;
+    const rafId = window.requestAnimationFrame(() => {
+      recalculateScrollProgress();
+    });
+    const handleResize = () => recalculateScrollProgress();
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [currentStoryId, zenMode, chapters.length, recalculateScrollProgress]);
 
   useEffect(() => {
     if (!story) return;
@@ -494,12 +530,14 @@ export function StoryReaderModal({
   const handleArticleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const maxScroll = el.scrollHeight - el.clientHeight;
-    if (maxScroll <= 0) {
+    if (maxScroll <= 4) {
       setScrollProgress(100);
     } else {
       setScrollProgress(Math.min(100, Math.max(0, (el.scrollTop / maxScroll) * 100)));
     }
   };
+
+  const roundedScrollProgress = Math.round(scrollProgress);
 
   return (
     <div
@@ -521,18 +559,27 @@ export function StoryReaderModal({
       >
         {audioController.renderHiddenStreams()}
 
+        {/* Fine reading progress bar pinned at the top edge of the modal */}
+        <div
+          role="progressbar"
+          aria-label="Progression de lecture"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={roundedScrollProgress}
+          className={`h-[3px] w-full shrink-0 ${
+            zenMode ? 'bg-black/15' : 'bg-stone-200/80'
+          }`}
+        >
+          <div
+            style={{ width: `${scrollProgress}%` }}
+            className={`h-full transition-[width] duration-150 ease-out motion-reduce:transition-none ${
+              zenMode && zenTheme === 'night' ? 'bg-amber-300/90' : 'bg-[#1B365D]'
+            }`}
+          />
+        </div>
+
         {zenMode ? (
           <>
-            {/* Reading progress hairline */}
-            <div className="h-0.5 w-full bg-black/10 shrink-0" aria-hidden="true">
-              <div
-                style={{ width: `${scrollProgress}%` }}
-                className={`h-full transition-[width] duration-150 ${
-                  zenTheme === 'night' ? 'bg-amber-300/80' : 'bg-[#1B365D]'
-                }`}
-              />
-            </div>
-
             {/* Minimal Zen Control Strip: hides distracting chrome, exposes only Aa, Music & Exit */}
             <header
               className={`border-b px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 backdrop-blur-sm shrink-0 ${zenControlBarClass}`}
@@ -811,6 +858,10 @@ export function StoryReaderModal({
                 <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
                 <span aria-hidden="true">·</span>
                 <span className="whitespace-nowrap tabular-nums">{displayedMinutes} min de lecture</span>
+                <span aria-hidden="true">·</span>
+                <span className="whitespace-nowrap tabular-nums text-[#1B365D] font-medium">
+                  {roundedScrollProgress} % lu
+                </span>
                 {story.customSalonVisibility === 'private' ? (
                   <>
                     <span aria-hidden="true">·</span>
@@ -927,6 +978,15 @@ export function StoryReaderModal({
                     </button>
                     <span aria-hidden="true">·</span>
                     <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                    {story.visibility === 'public' && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="inline-flex items-center gap-1 tabular-nums text-stone-500">
+                          <Eye className="w-3.5 h-3.5" />
+                          {story.viewCount ?? 0} vue{(story.viewCount ?? 0) > 1 ? 's' : ''}
+                        </span>
+                      </>
+                    )}
                     {isRoman && (
                       <>
                         <span aria-hidden="true">·</span>
@@ -1314,9 +1374,17 @@ export function StoryReaderModal({
                   )}
                 </div>
 
-                <span className="text-xs text-stone-500 tabular-nums">
-                  {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
-                </span>
+                <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
+                  {story.visibility === 'public' && (
+                    <span className="inline-flex items-center gap-1">
+                      <Eye className="w-3.5 h-3.5" />
+                      {story.viewCount ?? 0} vue{(story.viewCount ?? 0) > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  <span>
+                    {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
+                  </span>
+                </div>
               </div>
             )}
 

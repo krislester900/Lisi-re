@@ -5,6 +5,7 @@ import {
   Bookmark,
   BookOpen,
   Compass,
+  Eye,
   Feather,
   Globe,
   Heart,
@@ -1475,7 +1476,12 @@ function SalonApp() {
                           )}
 
                           <div className="space-y-4">
-                            <div className="flex items-center gap-5 text-xs text-stone-600 tabular-nums">
+                            <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 tabular-nums">
+                              <span className="inline-flex items-center gap-1.5" title="Vues">
+                                <Eye className="w-3.5 h-3.5 text-stone-500" />
+                                {leadStory.viewCount ?? 0} vue
+                                {(leadStory.viewCount ?? 0) > 1 ? 's' : ''}
+                              </span>
                               <span className="inline-flex items-center gap-1.5">
                                 <Heart className="w-3.5 h-3.5 text-stone-500" />
                                 {leadStory.resonanceCount} résonance
@@ -1625,12 +1631,16 @@ function SalonApp() {
                               </div>
 
                               <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
-                                  <span className="inline-flex items-center gap-1">
+                                <div className="flex items-center gap-3.5 text-xs text-stone-500 tabular-nums">
+                                  <span className="inline-flex items-center gap-1" title="Vues">
+                                    <Eye className="w-3.5 h-3.5" />
+                                    {story.viewCount ?? 0}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1" title="Résonances">
                                     <Heart className="w-3.5 h-3.5" />
                                     {story.resonanceCount}
                                   </span>
-                                  <span className="inline-flex items-center gap-1">
+                                  <span className="inline-flex items-center gap-1" title="Commentaires">
                                     <MessageCircle className="w-3.5 h-3.5" />
                                     {story.echoCount}
                                   </span>
