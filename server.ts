@@ -6,8 +6,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const resolvedFilename =
+  typeof __filename !== 'undefined'
+    ? __filename
+    : import.meta.url
+      ? fileURLToPath(import.meta.url)
+      : '';
+const resolvedDirname =
+  typeof __dirname !== 'undefined'
+    ? __dirname
+    : resolvedFilename
+      ? path.dirname(resolvedFilename)
+      : process.cwd();
 
 const PORT = Number(process.env.PORT || 3000);
 const SPOTIFY_SESSION_COOKIE = 'lisiere_spotify_session';
@@ -49,6 +59,8 @@ function getAppUrl(): string {
   if (vercelProd) return `https://${vercelProd}`;
   const vercelUrl = (process.env.VERCEL_URL || '').trim().replace(/\/+$/, '');
   if (vercelUrl) return `https://${vercelUrl}`;
+  const netlifyUrl = (process.env.URL || process.env.DEPLOY_PRIME_URL || '').trim().replace(/\/+$/, '');
+  if (netlifyUrl) return netlifyUrl.startsWith('http') ? netlifyUrl : `https://${netlifyUrl}`;
   return `http://localhost:${PORT}`;
 }
 
@@ -868,7 +880,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distDir = path.resolve(__dirname, 'dist');
+    const distDir = path.resolve(resolvedDirname, 'dist');
     app.use(express.static(distDir));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distDir, 'index.html'));
@@ -880,6 +892,12 @@ async function startServer() {
   });
 }
 
-if (!process.env.VERCEL) {
+const isDirectExecution =
+  Boolean(process.argv[1]) &&
+  Boolean(resolvedFilename) &&
+  path.resolve(process.argv[1]) === path.resolve(resolvedFilename);
+
+if (!process.env.VERCEL && !process.env.NETLIFY && isDirectExecution) {
   void startServer();
 }
+

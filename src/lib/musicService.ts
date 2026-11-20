@@ -37,21 +37,39 @@ export const READING_MOOD_PRESETS: Array<{ label: string; query: string }> = [
   { label: 'Classique', query: 'debussy chopin nocturne' },
 ];
 
+async function parseJsonSafe<T>(resp: Response, fallbackError: string): Promise<T> {
+  const contentType = resp.headers.get('content-type') || '';
+  const rawText = await resp.text();
+  if (!contentType.includes('application/json') && rawText.trimStart().startsWith('<')) {
+    throw new Error(
+      'Le service musical du serveur est indisponible sur cet hébergement (API introuvable). Redéployez le projet complet avec ses fonctions serveur.'
+    );
+  }
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    throw new Error(fallbackError);
+  }
+}
+
 export async function fetchMusicProvidersStatus(): Promise<MusicProvidersStatus> {
   const resp = await fetch('/api/music/providers', { credentials: 'include' });
   if (!resp.ok) {
     throw new Error('Impossible de vérifier les services musicaux.');
   }
-  return (await resp.json()) as MusicProvidersStatus;
+  return parseJsonSafe<MusicProvidersStatus>(
+    resp,
+    'Impossible de vérifier les services musicaux.'
+  );
 }
 
 export async function fetchSpotifyAuthUrl(): Promise<{ url: string; callbackUrl: string }> {
   const resp = await fetch('/api/spotify/auth-url', { credentials: 'include' });
-  const data = (await resp.json()) as {
+  const data = await parseJsonSafe<{
     url?: string;
     error?: string;
     callbackUrl?: string;
-  };
+  }>(resp, 'Connexion Spotify impossible.');
   if (!resp.ok || !data.url) {
     const err = new Error(
       data.error === 'SPOTIFY_NOT_CONFIGURED'
@@ -80,11 +98,11 @@ export async function fetchSpotifyToken(): Promise<{
   if (!resp.ok) {
     throw new Error('Session Spotify expirée.');
   }
-  return (await resp.json()) as {
+  return parseJsonSafe<{
     accessToken: string;
     product: string;
     displayName: string;
-  };
+  }>(resp, 'Session Spotify expirée.');
 }
 
 export async function searchMusicCatalog(
@@ -100,7 +118,10 @@ export async function searchMusicCatalog(
       : `/api/music/search?source=${encodeURIComponent(provider)}&q=${encodeURIComponent(trimmed)}`;
 
   const resp = await fetch(endpoint, { credentials: 'include' });
-  const data = (await resp.json()) as { tracks?: ReadingTrack[]; error?: string };
+  const data = await parseJsonSafe<{ tracks?: ReadingTrack[]; error?: string }>(
+    resp,
+    'Recherche musicale indisponible.'
+  );
   if (!resp.ok) {
     throw new Error(data.error || 'Recherche musicale indisponible.');
   }
@@ -109,7 +130,10 @@ export async function searchMusicCatalog(
 
 export async function fetchSpotifyTopTracks(): Promise<ReadingTrack[]> {
   const resp = await fetch('/api/spotify/top-tracks', { credentials: 'include' });
-  const data = (await resp.json()) as { tracks?: ReadingTrack[]; error?: string };
+  const data = await parseJsonSafe<{ tracks?: ReadingTrack[]; error?: string }>(
+    resp,
+    'Impossible de charger vos titres Spotify.'
+  );
   if (!resp.ok) {
     throw new Error(data.error || 'Impossible de charger vos titres Spotify.');
   }
@@ -124,7 +148,10 @@ export async function startSpotifyPlayback(uri: string, deviceId?: string): Prom
     body: JSON.stringify({ uri, deviceId }),
   });
   if (!resp.ok) {
-    const data = (await resp.json().catch(() => ({}))) as { error?: string };
+    const data = await parseJsonSafe<{ error?: string }>(
+      resp,
+      'Impossible de lancer ce titre sur Spotify.'
+    ).catch(() => ({} as { error?: string }));
     throw new Error(data.error || 'Impossible de lancer ce titre sur Spotify.');
   }
 }
