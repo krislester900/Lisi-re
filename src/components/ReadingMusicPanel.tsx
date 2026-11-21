@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Disc3,
   ExternalLink,
+  Eye,
+  EyeOff,
   Link2,
   Maximize2,
   Minimize2,
@@ -94,11 +96,15 @@ export interface ReadingAudioController {
   disconnectSpotify: () => Promise<void>;
   playAuthorMusic: (fav: AuthorMusicInfo, authorName: string) => Promise<void>;
   audioElementRef: React.RefObject<HTMLAudioElement | null>;
+  embedBackground: boolean;
+  isExternalEmbedActive: boolean;
+  toggleEmbedBackground: () => void;
   renderHiddenStreams: () => React.ReactNode;
 }
 
 export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioController {
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const embedIframeRef = useRef<HTMLIFrameElement | null>(null);
   const spotifyPlayerRef = useRef<SpotifyPlayerInstance | null>(null);
 
   const [providers, setProviders] = useState<MusicProvidersStatus | null>(null);
@@ -112,6 +118,12 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
   const [durationMs, setDurationMs] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [embedCompact, setEmbedCompact] = useState(false);
+  const [embedBackground, setEmbedBackground] = useState(true);
+
+  const isLoopingRef = useRef(isLooping);
+  isLoopingRef.current = isLooping;
+  const isMutedRef = useRef(isMuted);
+  isMutedRef.current = isMuted;
 
   const [localTracks, setLocalTracks] = useState<ReadingTrack[]>([]);
   const [localBusy, setLocalBusy] = useState(false);
@@ -264,6 +276,96 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     };
   }, [storyOpen, providers?.spotify.connected]);
 
+  const activeExternalEmbed =
+    activeTrack &&
+    (((activeTrack.source === 'youtube' || activeTrack.source === 'link') &&
+      activeTrack.externalUrl) ||
+      (activeTrack.source === 'spotify' &&
+        !spotifyDeviceId &&
+        !activeTrack.streamUrl &&
+        activeTrack.externalUrl))
+      ? parseMusicSource(activeTrack.externalUrl!)
+      : null;
+
+  const isExternalEmbedActive = Boolean(
+    activeExternalEmbed &&
+      (activeExternalEmbed.type === 'youtube' || activeExternalEmbed.type === 'soundcloud') &&
+      activeExternalEmbed.embedUrl
+  );
+
+  const sendYouTubeCommand = useCallback(
+    (func: string, args: unknown[] = []) => {
+      const win = embedIframeRef.current?.contentWindow;
+      if (!win) return;
+      try {
+        win.postMessage(
+          JSON.stringify({ event: 'command', func, args }),
+          'https://www.youtube.com'
+        );
+      } catch {
+        // Ignore cross-origin postMessage failure if iframe not ready
+      }
+    },
+    []
+  );
+
+  const sendSoundCloudCommand = useCallback((method: string, value?: unknown) => {
+    const win = embedIframeRef.current?.contentWindow;
+    if (!win) return;
+    try {
+      win.postMessage(
+        JSON.stringify(value !== undefined ? { method, value } : { method }),
+        'https://w.soundcloud.com'
+      );
+    } catch {
+      // Ignore cross-origin postMessage failure if iframe not ready
+    }
+  }, []);
+
+  // Listen for YouTube embed state events (sync play/pause & handle loop without reloading iframe)
+  useEffect(() => {
+    if (!storyOpen) return;
+    const onMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== 'https://www.youtube.com' &&
+        event.origin !== 'https://www.youtube-nocookie.com'
+      ) {
+        return;
+      }
+      if (typeof event.data !== 'string') return;
+      try {
+        const payload = JSON.parse(event.data) as {
+          event?: string;
+          info?: number | { playerState?: number };
+        };
+        const playerState =
+          typeof payload.info === 'number'
+            ? payload.info
+            : typeof payload.info === 'object' && payload.info !== null
+              ? payload.info.playerState
+              : undefined;
+        if (typeof playerState !== 'number') return;
+
+        if (playerState === 1) {
+          setIsPlaying(true);
+        } else if (playerState === 2) {
+          setIsPlaying(false);
+        } else if (playerState === 0) {
+          if (isLoopingRef.current) {
+            sendYouTubeCommand('seekTo', [0, true]);
+            sendYouTubeCommand('playVideo');
+          } else {
+            setIsPlaying(false);
+          }
+        }
+      } catch {
+        // Ignore non-JSON YouTube messages
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [storyOpen, sendYouTubeCommand]);
+
   // Reset all playback cleanly when story modal closes
   useEffect(() => {
     if (storyOpen) return;
@@ -288,7 +390,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     setLocalError(null);
   }, [storyOpen]);
 
-  // Sync mute state to audio and Spotify SDK
+  // Sync mute state to audio, Spotify SDK, and active YouTube/SoundCloud embed
   useEffect(() => {
     if (audioElementRef.current) {
       audioElementRef.current.muted = isMuted;
@@ -296,7 +398,17 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     if (spotifyPlayerRef.current) {
       void spotifyPlayerRef.current.setVolume(isMuted ? 0 : 0.7).catch(() => {});
     }
-  }, [isMuted]);
+    if (activeExternalEmbed?.type === 'youtube') {
+      sendYouTubeCommand(isMuted ? 'mute' : 'unMute');
+    } else if (activeExternalEmbed?.type === 'soundcloud') {
+      sendSoundCloudCommand('setVolume', isMuted ? 0 : 80);
+    }
+  }, [
+    isMuted,
+    activeExternalEmbed?.type,
+    sendYouTubeCommand,
+    sendSoundCloudCommand,
+  ]);
 
   const stopAllEnginesSync = useCallback(() => {
     if (audioElementRef.current) {
@@ -412,7 +524,13 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
           parsedLink.type === 'spotify' ||
           parsedLink.type === 'deezer'))
     ) {
-      setIsPlaying((prev) => !prev);
+      const nextPlaying = !isPlaying;
+      if (activeTrack.source === 'youtube' || parsedLink?.type === 'youtube') {
+        sendYouTubeCommand(nextPlaying ? 'playVideo' : 'pauseVideo');
+      } else if (parsedLink?.type === 'soundcloud') {
+        sendSoundCloudCommand(nextPlaying ? 'play' : 'pause');
+      }
+      setIsPlaying(nextPlaying);
       return;
     }
 
@@ -425,7 +543,13 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
         setIsPlaying(true);
       }
     }
-  }, [activeTrack, isPlaying, spotifyDeviceId]);
+  }, [
+    activeTrack,
+    isPlaying,
+    sendSoundCloudCommand,
+    sendYouTubeCommand,
+    spotifyDeviceId,
+  ]);
 
   const stopTrack = useCallback(async () => {
     stopAllEnginesSync();
@@ -536,6 +660,10 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     [activeTrack?.id, stopTrack]
   );
 
+  const toggleEmbedBackground = useCallback(() => {
+    setEmbedBackground((prev) => !prev);
+  }, []);
+
   const renderHiddenStreams = useCallback(() => {
     const parsed =
       (activeTrack?.source === 'youtube' || activeTrack?.source === 'link') &&
@@ -548,11 +676,13 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
           ? parseMusicSource(activeTrack.externalUrl)
           : null;
 
-    const showExternalDock =
-      isPlaying &&
-      parsed &&
-      (parsed.type === 'youtube' || parsed.type === 'soundcloud') &&
-      Boolean(parsed.embedUrl);
+    // Keep external YouTube / SoundCloud iframe mounted while track is active (even paused)
+    // so pausing/resuming and switching between background & visible video dock never restarts playback.
+    const hasExternalEmbed =
+      Boolean(activeTrack) &&
+      Boolean(parsed) &&
+      (parsed!.type === 'youtube' || parsed!.type === 'soundcloud') &&
+      Boolean(parsed!.embedUrl);
 
     return (
       <>
@@ -572,52 +702,98 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
           className="hidden"
         />
 
-        {/* Persistent visible compact dock so YouTube / SoundCloud keep playing reliably in both standard and Zen mode */}
-        {showExternalDock && parsed?.embedUrl && (
+        {hasExternalEmbed && parsed?.embedUrl && (
           <div
-            className={`fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[60] rounded-lg border border-stone-700 bg-[#171614] text-white shadow-2xl overflow-hidden transition-all duration-200 ${
-              embedCompact ? 'w-[210px]' : 'w-[268px] sm:w-[300px]'
-            }`}
-            aria-label="Lecteur audio intégré"
+            aria-hidden={embedBackground}
+            aria-label={embedBackground ? undefined : 'Lecteur vidéo en cours'}
+            className={
+              embedBackground
+                ? 'absolute bottom-3 right-3 z-0 w-[260px] h-[150px] pointer-events-none opacity-[0.01] overflow-hidden'
+                : `fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[60] rounded-lg border border-stone-700 bg-[#171614] text-white shadow-2xl overflow-hidden transition-all duration-200 ${
+                    embedCompact ? 'w-[220px]' : 'w-[276px] sm:w-[310px]'
+                  }`
+            }
           >
-            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-white/10 bg-[#1F1E1C]">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <Disc3 className="w-3.5 h-3.5 text-amber-300 lisiere-disc-spin shrink-0" />
-                <span className="text-[11px] font-medium truncate">
-                  {activeTrack?.title || (parsed.type === 'youtube' ? 'YouTube' : 'SoundCloud')}
-                </span>
+            {!embedBackground && (
+              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-white/10 bg-[#1F1E1C]">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Disc3
+                    className={`w-3.5 h-3.5 text-amber-300 shrink-0 ${
+                      isPlaying ? 'lisiere-disc-spin' : ''
+                    }`}
+                  />
+                  <span className="text-[11px] font-medium truncate">
+                    {activeTrack?.title || (parsed.type === 'youtube' ? 'YouTube' : 'SoundCloud')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setEmbedBackground(true)}
+                    aria-label="Jouer en arrière-plan derrière la lecture"
+                    title="Mettre en arrière-plan"
+                    className="px-1.5 py-1 rounded text-[11px] text-amber-200 hover:text-white hover:bg-white/10 inline-flex items-center gap-1 whitespace-nowrap"
+                  >
+                    <EyeOff className="w-3 h-3" />
+                    <span>Arrière-plan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEmbedCompact((prev) => !prev)}
+                    aria-label={embedCompact ? 'Agrandir le lecteur' : 'Réduire le lecteur'}
+                    title={embedCompact ? 'Agrandir' : 'Réduire'}
+                    className="p-1 rounded text-stone-300 hover:text-white hover:bg-white/10"
+                  >
+                    {embedCompact ? (
+                      <Maximize2 className="w-3 h-3" />
+                    ) : (
+                      <Minimize2 className="w-3 h-3" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void stopTrack()}
+                    aria-label="Fermer et arrêter la musique"
+                    title="Arrêter"
+                    className="p-1 rounded text-stone-300 hover:text-white hover:bg-white/10"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setEmbedCompact((prev) => !prev)}
-                  aria-label={embedCompact ? 'Agrandir le lecteur' : 'Réduire le lecteur'}
-                  title={embedCompact ? 'Agrandir' : 'Réduire'}
-                  className="p-1 rounded text-stone-300 hover:text-white hover:bg-white/10"
-                >
-                  {embedCompact ? (
-                    <Maximize2 className="w-3 h-3" />
-                  ) : (
-                    <Minimize2 className="w-3 h-3" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void stopTrack()}
-                  aria-label="Fermer et arrêter la musique"
-                  title="Arrêter"
-                  className="p-1 rounded text-stone-300 hover:text-white hover:bg-white/10"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
+            )}
+
             <iframe
+              ref={embedIframeRef}
               key={parsed.embedUrl}
               title={`Lecture audio de ${activeTrack?.title || 'musique'}`}
               src={parsed.embedUrl}
+              tabIndex={embedBackground ? -1 : 0}
               width="100%"
-              height={parsed.type === 'youtube' ? (embedCompact ? 118 : 158) : 80}
+              height={
+                embedBackground
+                  ? 150
+                  : parsed.type === 'youtube'
+                    ? embedCompact
+                      ? 124
+                      : 164
+                    : 80
+              }
+              onLoad={() => {
+                if (parsed.type === 'youtube') {
+                  try {
+                    embedIframeRef.current?.contentWindow?.postMessage(
+                      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+                      'https://www.youtube.com'
+                    );
+                    if (isMutedRef.current) {
+                      sendYouTubeCommand('mute');
+                    }
+                  } catch {
+                    // Ignore cross-origin frame init errors
+                  }
+                }
+              }}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
               referrerPolicy="strict-origin-when-cross-origin"
@@ -627,7 +803,16 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
         )}
       </>
     );
-  }, [activeTrack, embedCompact, isPlaying, isLooping, spotifyDeviceId, stopTrack]);
+  }, [
+    activeTrack,
+    embedBackground,
+    embedCompact,
+    isLooping,
+    isPlaying,
+    sendYouTubeCommand,
+    spotifyDeviceId,
+    stopTrack,
+  ]);
 
   return {
     activeTrack,
@@ -657,6 +842,9 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     disconnectSpotify,
     playAuthorMusic,
     audioElementRef,
+    embedBackground,
+    isExternalEmbedActive,
+    toggleEmbedBackground,
     renderHiddenStreams,
   };
 }
@@ -713,6 +901,9 @@ export function ReadingMusicPanel({
     connectSpotify,
     disconnectSpotify,
     playAuthorMusic,
+    embedBackground,
+    isExternalEmbedActive,
+    toggleEmbedBackground,
   } = controller;
 
   const runSearch = useCallback(
@@ -870,8 +1061,8 @@ export function ReadingMusicPanel({
       {/* Currently playing bar */}
       {activeTrack && (
         <div className="rounded-md border border-stone-200 bg-[#FBF9F5] p-3 space-y-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               {activeTrack.coverUrl ? (
                 <img
                   src={activeTrack.coverUrl}
@@ -888,11 +1079,16 @@ export function ReadingMusicPanel({
                 <p className="text-xs text-stone-600 truncate">
                   {activeTrack.artist}
                   {activeTrack.isPreview ? ' · Aperçu 30 s' : ''}
+                  {isExternalEmbedActive
+                    ? embedBackground
+                      ? ' · En arrière-plan'
+                      : ' · Vidéo affichée'
+                    : ''}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => void togglePlayPause()}
@@ -905,42 +1101,73 @@ export function ReadingMusicPanel({
                   <Play className="w-3.5 h-3.5 fill-current" />
                 )}
               </button>
-              {showSeekableBar && (
-                <>
-                  <button
-                    type="button"
-                    onClick={toggleLoop}
-                    aria-label={isLooping ? 'Désactiver la lecture en boucle' : 'Lire en boucle'}
-                    aria-pressed={isLooping}
-                    title="Lire en boucle"
-                    className={`min-h-[36px] min-w-[36px] rounded-md border inline-flex items-center justify-center transition-colors ${
-                      isLooping
-                        ? 'border-[#1B365D] bg-[#1B365D]/10 text-[#1B365D]'
-                        : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
-                    }`}
-                  >
-                    <Repeat className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={toggleMute}
-                    aria-label={isMuted ? 'Réactiver le son' : 'Couper le son'}
-                    className="min-h-[36px] min-w-[36px] rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 inline-flex items-center justify-center"
-                  >
-                    {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
-                  </button>
-                </>
+              {(showSeekableBar || parsedActiveEmbed?.type === 'youtube') && (
+                <button
+                  type="button"
+                  onClick={toggleLoop}
+                  aria-label={isLooping ? 'Désactiver la lecture en boucle' : 'Lire en boucle'}
+                  aria-pressed={isLooping}
+                  title="Lire en boucle"
+                  className={`min-h-[36px] min-w-[36px] rounded-md border inline-flex items-center justify-center transition-colors ${
+                    isLooping
+                      ? 'border-[#1B365D] bg-[#1B365D]/10 text-[#1B365D]'
+                      : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
+                  }`}
+                >
+                  <Repeat className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {(showSeekableBar || isExternalEmbedActive) && (
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  aria-label={isMuted ? 'Réactiver le son' : 'Couper le son'}
+                  className="min-h-[36px] min-w-[36px] rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 inline-flex items-center justify-center"
+                >
+                  {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                </button>
+              )}
+              {isExternalEmbedActive && (
+                <button
+                  type="button"
+                  onClick={toggleEmbedBackground}
+                  aria-pressed={!embedBackground}
+                  title={
+                    embedBackground
+                      ? 'Afficher le lecteur vidéo'
+                      : 'Masquer la vidéo derrière la page de lecture'
+                  }
+                  className="min-h-[36px] px-2.5 rounded-md border border-stone-300 bg-white text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                >
+                  {embedBackground ? (
+                    <>
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Vidéo</span>
+                    </>
+                  ) : (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span>Arrière-plan</span>
+                    </>
+                  )}
+                </button>
               )}
               <button
                 type="button"
                 onClick={() => void stopTrack()}
                 aria-label="Arrêter la musique"
-                className="min-h-[36px] px-2.5 rounded-md border border-stone-300 bg-white text-xs text-stone-700 hover:text-stone-900 whitespace-nowrap"
+                className="min-h-[36px] px-2.5 rounded-md border border-stone-300 bg-white text-xs text-stone-700 hover:text-stone-900 whitespace-nowrap shrink-0"
               >
                 Arrêter
               </button>
             </div>
           </div>
+
+          {isExternalEmbedActive && embedBackground && (
+            <p className="text-[11px] text-stone-500 leading-relaxed">
+              Lecture en arrière-plan activée pour ne pas gêner votre lecture. Si votre téléphone bloque le démarrage automatique, touchez « Vidéo » pour lancer puis repassez en « Arrière-plan ».
+            </p>
+          )}
 
           {showSeekableBar && (
             <div className="space-y-1">
@@ -1268,7 +1495,7 @@ export function ReadingMusicPanel({
             </div>
           </div>
           <p className="text-[11px] text-stone-500">
-            Les liens YouTube et SoundCloud s’affichent dans un mini-lecteur discret au bas de l’écran afin d’assurer une lecture fiable sur mobile et ordinateur.
+            Les pistes YouTube et SoundCloud jouent en arrière-plan derrière la page de lecture pour préserver l’immersion (vous pouvez afficher ou masquer la vidéo à tout moment).
           </p>
         </form>
       ) : (

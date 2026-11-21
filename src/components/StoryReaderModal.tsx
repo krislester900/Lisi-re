@@ -889,22 +889,27 @@ export function StoryReaderModal({
         className={`overflow-hidden flex flex-col transition-all duration-200 motion-reduce:transition-none ${
           zenMode
             ? `relative w-full h-full max-w-none border-0 rounded-none ${zenSurfaceClass}`
-            : 'bg-[#FBF9F5] w-full max-w-4xl max-h-[92vh] border border-stone-300 rounded-lg my-auto'
+            : 'relative bg-[#FBF9F5] w-full max-w-4xl max-h-[92vh] border border-stone-300 rounded-lg my-auto'
         }`}
       >
         {audioController.renderHiddenStreams()}
 
-        {/* Fine reading progress bar pinned at the top edge of the modal */}
         <div
-          role="progressbar"
-          aria-label="Progression de lecture"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={roundedScrollProgress}
-          className={`h-[3px] w-full shrink-0 ${
-            zenMode ? 'bg-black/15' : 'bg-stone-200/80'
+          className={`relative z-10 flex-1 min-h-0 flex flex-col ${
+            zenMode ? zenSurfaceClass : 'bg-[#FBF9F5]'
           }`}
         >
+          {/* Fine reading progress bar pinned at the top edge of the modal */}
+          <div
+            role="progressbar"
+            aria-label="Progression de lecture"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={roundedScrollProgress}
+            className={`h-[3px] w-full shrink-0 ${
+              zenMode ? 'bg-black/15' : 'bg-stone-200/80'
+            }`}
+          >
           <div
             style={{ width: `${scrollProgress}%` }}
             className={`h-full transition-[width] duration-150 ease-out motion-reduce:transition-none ${
@@ -991,6 +996,36 @@ export function StoryReaderModal({
                     <span className="max-w-[90px] truncate hidden sm:inline">
                       {audioController.activeTrack.title}
                     </span>
+                  </button>
+                )}
+
+                {audioController.isExternalEmbedActive && (
+                  <button
+                    type="button"
+                    onClick={audioController.toggleEmbedBackground}
+                    aria-label={
+                      audioController.embedBackground
+                        ? 'Afficher le lecteur vidéo'
+                        : 'Mettre la vidéo en arrière-plan'
+                    }
+                    title={
+                      audioController.embedBackground
+                        ? 'Afficher la vidéo'
+                        : 'Mettre en arrière-plan'
+                    }
+                    className="min-h-[34px] px-2.5 py-1 rounded-md border border-current/25 hover:border-current/50 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    {audioController.embedBackground ? (
+                      <>
+                        <Eye className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Vidéo</span>
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Arrière-plan</span>
+                      </>
+                    )}
                   </button>
                 )}
 
@@ -1227,6 +1262,35 @@ export function StoryReaderModal({
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {audioController.isExternalEmbedActive && (
+                  <button
+                    type="button"
+                    onClick={audioController.toggleEmbedBackground}
+                    aria-label={
+                      audioController.embedBackground
+                        ? 'Afficher le lecteur vidéo'
+                        : 'Mettre la vidéo en arrière-plan'
+                    }
+                    title={
+                      audioController.embedBackground
+                        ? 'Afficher la vidéo'
+                        : 'Mettre en arrière-plan'
+                    }
+                    className="min-h-[40px] px-2.5 py-1.5 rounded-md border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-400 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    {audioController.embedBackground ? (
+                      <>
+                        <Eye className="w-3.5 h-3.5" />
+                        <span className="hidden md:inline">Vidéo</span>
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5" />
+                        <span className="hidden md:inline">Arrière-plan</span>
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowMusicPanel((prev) => !prev)}
@@ -2133,6 +2197,7 @@ export function StoryReaderModal({
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );
