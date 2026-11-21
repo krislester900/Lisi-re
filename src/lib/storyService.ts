@@ -40,6 +40,7 @@ import {
   Story,
   StoryBookmark,
   StoryFormat,
+  StoryQuote,
   StoryRepost,
   StoryResonanceEvent,
   StoryScope,
@@ -1915,6 +1916,111 @@ export async function deleteStoryRepost(userId: string, storyId: string): Promis
   const path = `publicProfiles/${userId}/reposts/${storyId}`;
   try {
     await deleteDoc(doc(db, 'publicProfiles', userId, 'reposts', storyId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- Favorite Quotes / Story Highlights ("Citations favorites") ---
+
+export function subscribeToUserQuotes(
+  userId: string,
+  onData: (quotes: StoryQuote[]) => void
+): () => void {
+  assertValidId(userId, 'userId');
+  const path = `users/${userId}/quotes`;
+  const q = query(
+    collection(db, 'users', userId, 'quotes'),
+    where('userId', '==', userId),
+    limit(300)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as StoryQuote);
+      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function createStoryQuote(params: {
+  userId: string;
+  story: Story;
+  chapterNumber: number;
+  chapterTitle?: string;
+  paragraphIndex: number;
+  quoteText: string;
+}): Promise<string> {
+  assertValidId(params.userId, 'userId');
+  assertValidId(params.story.storyId, 'storyId');
+
+  const normalizedQuote = clampString(
+    params.quoteText.replace(/\s+/g, ' '),
+    FIELD_LIMITS.quoteText.max
+  );
+  if (normalizedQuote.length < FIELD_LIMITS.quoteText.min) {
+    throw new Error('Sélectionnez au moins quelques mots pour enregistrer une citation.');
+  }
+
+  const chapterNumber = Math.min(500, Math.max(1, Math.round(params.chapterNumber || 1)));
+  const paragraphIndex = Math.min(5000, Math.max(0, Math.round(params.paragraphIndex || 0)));
+
+  const quoteRef = doc(collection(db, 'users', params.userId, 'quotes'));
+  const quoteId = quoteRef.id;
+  const path = `users/${params.userId}/quotes/${quoteId}`;
+
+  const snapshotFields = buildStorySnapshotFields(params.story);
+  const payload: Record<string, unknown> = {
+    quoteId,
+    userId: params.userId,
+    storyId: params.story.storyId,
+    chapterNumber,
+    paragraphIndex,
+    quoteText: normalizedQuote,
+    storyTitle: snapshotFields.storyTitle,
+    storyAuthorId: snapshotFields.storyAuthorId,
+    storyAuthorName: snapshotFields.storyAuthorName,
+    storyTheme: snapshotFields.storyTheme,
+    createdAt: serverTimestamp(),
+  };
+
+  if (snapshotFields.customSalonId) {
+    payload.customSalonId = snapshotFields.customSalonId;
+  }
+  if (snapshotFields.customSalonName) {
+    payload.customSalonName = snapshotFields.customSalonName;
+  }
+  if (snapshotFields.storyScope) {
+    payload.storyScope = snapshotFields.storyScope;
+  }
+  if (snapshotFields.storyFormat) {
+    payload.storyFormat = snapshotFields.storyFormat;
+  }
+  const cleanChapterTitle = params.chapterTitle
+    ? clampString(params.chapterTitle, FIELD_LIMITS.chapterTitle.max)
+    : '';
+  if (cleanChapterTitle) {
+    payload.chapterTitle = cleanChapterTitle;
+  }
+
+  try {
+    await setDoc(quoteRef, payload);
+    return quoteId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function deleteStoryQuote(userId: string, quoteId: string): Promise<void> {
+  assertValidId(userId, 'userId');
+  assertValidId(quoteId, 'quoteId');
+  const path = `users/${userId}/quotes/${quoteId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId, 'quotes', quoteId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

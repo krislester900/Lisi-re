@@ -3,10 +3,13 @@ import {
   ArrowUpRight,
   Bookmark,
   BookOpen,
+  Check,
+  Copy,
   Disc3,
   Eye,
   EyeOff,
   Heart,
+  Highlighter,
   Maximize2,
   MessageCircle,
   Minimize2,
@@ -14,7 +17,9 @@ import {
   Pause,
   Play,
   Plus,
+  Quote,
   Repeat2,
+  Trash2,
   User as UserIcon,
   X,
 } from 'lucide-react';
@@ -25,6 +30,8 @@ import {
   addStoryEcho,
   buildExchangeId,
   createExchangeWithFirstMessage,
+  createStoryQuote,
+  deleteStoryQuote,
   fetchPublicProfile,
   formatLocalDateKey,
   recordStoryView,
@@ -52,6 +59,7 @@ import {
   PublicProfile,
   SeriesStatus,
   Story,
+  StoryQuote,
   StoryThemeId,
 } from '../types/story';
 
@@ -60,6 +68,7 @@ interface StoryReaderModalProps {
   onClose: () => void;
   existingExchanges: Exchange[];
   customSalons?: CustomSalon[];
+  userQuotes?: StoryQuote[];
   isBookmarked?: boolean;
   isReposted?: boolean;
   onToggleBookmark?: (story: Story) => void;
@@ -76,6 +85,7 @@ export function StoryReaderModal({
   onClose,
   existingExchanges,
   customSalons = [],
+  userQuotes = [],
   isBookmarked = false,
   isReposted = false,
   onToggleBookmark,
@@ -144,8 +154,23 @@ export function StoryReaderModal({
   const [showZenAppearance, setShowZenAppearance] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
+  const storyParagraphsRef = React.useRef<HTMLDivElement | null>(null);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
   const audioController = useReadingAudioEngine(Boolean(story));
+
+  const [pendingSelection, setPendingSelection] = useState<{
+    paragraphIndex: number;
+    text: string;
+    truncated: boolean;
+  } | null>(null);
+  const [activeQuotePopover, setActiveQuotePopover] = useState<StoryQuote | null>(null);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [quoteFeedback, setQuoteFeedback] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [quoteCopiedId, setQuoteCopiedId] = useState<string | null>(null);
+  const [showStoryQuotesDrawer, setShowStoryQuotesDrawer] = useState(false);
 
   useEffect(() => {
     try {
@@ -204,10 +229,16 @@ export function StoryReaderModal({
     setChapterNote('');
     setMarkCompleted(false);
     setChapterError(null);
+    setPendingSelection(null);
+    setActiveQuotePopover(null);
+    setQuoteFeedback(null);
+    setShowStoryQuotesDrawer(false);
   }, [currentStoryId]);
 
   useEffect(() => {
     if (!currentStoryId) return;
+    setPendingSelection(null);
+    setActiveQuotePopover(null);
     if (scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = 0;
     }
@@ -216,6 +247,87 @@ export function StoryReaderModal({
     });
     return () => window.cancelAnimationFrame(rafId);
   }, [currentStoryId, activeChapterIdx, recalculateScrollProgress]);
+
+  const inspectSelection = React.useCallback(() => {
+    const container = storyParagraphsRef.current;
+    if (!container) return;
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+      setPendingSelection(null);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const getParaElement = (node: Node | null): HTMLElement | null => {
+      if (!node) return null;
+      const el = node instanceof Element ? node : node.parentElement;
+      if (!el) return null;
+      const para = el.closest('[data-paragraph-index]') as HTMLElement | null;
+      return para && container.contains(para) ? para : null;
+    };
+
+    const startPara = getParaElement(range.startContainer);
+    const endPara = getParaElement(range.endContainer);
+    if (!startPara) {
+      setPendingSelection(null);
+      return;
+    }
+
+    const idxRaw = startPara.getAttribute('data-paragraph-index');
+    const paragraphIndex = idxRaw !== null ? Number(idxRaw) : NaN;
+    if (!Number.isInteger(paragraphIndex) || paragraphIndex < 0) {
+      setPendingSelection(null);
+      return;
+    }
+
+    let rawText = '';
+    if (endPara === startPara) {
+      rawText = range.toString();
+    } else {
+      try {
+        const clamped = document.createRange();
+        clamped.setStart(range.startContainer, range.startOffset);
+        clamped.selectNodeContents(startPara);
+        clamped.setStart(range.startContainer, range.startOffset);
+        rawText = clamped.toString();
+      } catch {
+        rawText = range.toString();
+      }
+    }
+
+    const normalized = rawText.replace(/\s+/g, ' ').trim();
+    if (normalized.length < FIELD_LIMITS.quoteText.min) {
+      setPendingSelection(null);
+      return;
+    }
+
+    const truncated = normalized.length > FIELD_LIMITS.quoteText.max;
+    const clippedText = truncated
+      ? normalized.slice(0, FIELD_LIMITS.quoteText.max).trim()
+      : normalized;
+
+    setActiveQuotePopover(null);
+    setPendingSelection({
+      paragraphIndex,
+      text: clippedText,
+      truncated,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!currentStoryId) return;
+    let timerId: number | null = null;
+    const handleSelectionChange = () => {
+      if (timerId !== null) window.clearTimeout(timerId);
+      timerId = window.setTimeout(() => {
+        inspectSelection();
+      }, 90);
+    };
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      if (timerId !== null) window.clearTimeout(timerId);
+    };
+  }, [currentStoryId, inspectSelection]);
 
   useEffect(() => {
     if (!currentStoryId) return;
@@ -314,7 +426,12 @@ export function StoryReaderModal({
     if (!story) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (showZenAppearance) {
+        if (pendingSelection) {
+          window.getSelection()?.removeAllRanges();
+          setPendingSelection(null);
+        } else if (activeQuotePopover) {
+          setActiveQuotePopover(null);
+        } else if (showZenAppearance) {
           setShowZenAppearance(false);
         } else if (showMusicPanel) {
           setShowMusicPanel(false);
@@ -327,7 +444,15 @@ export function StoryReaderModal({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [story, zenMode, showMusicPanel, showZenAppearance, onClose]);
+  }, [
+    story,
+    zenMode,
+    showMusicPanel,
+    showZenAppearance,
+    pendingSelection,
+    activeQuotePopover,
+    onClose,
+  ]);
 
   if (!story) return null;
 
@@ -372,6 +497,20 @@ export function StoryReaderModal({
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
+
+  const currentChapterNumber = activeChapterIdx + 1;
+  const currentStoryQuotes = userQuotes.filter((q) => q.storyId === story.storyId);
+  const activeChapterQuotes = currentStoryQuotes.filter(
+    (q) => q.chapterNumber === currentChapterNumber
+  );
+
+  const matchingPendingQuote = pendingSelection
+    ? activeChapterQuotes.find(
+        (q) =>
+          q.paragraphIndex === pendingSelection.paragraphIndex &&
+          q.quoteText === pendingSelection.text
+      ) ?? null
+    : null;
 
   const existingExchange =
     user && !isAuthor
@@ -548,6 +687,193 @@ export function StoryReaderModal({
 
   const roundedScrollProgress = Math.round(scrollProgress);
 
+  const markHighlightClass =
+    zenMode && zenTheme === 'night'
+      ? 'bg-amber-300/25 text-[#FFF7E6] border-b border-amber-300/60 rounded-[2px] px-0.5 cursor-pointer hover:bg-amber-300/40 transition-colors'
+      : zenMode && zenTheme === 'sepia'
+        ? 'bg-[#D9B66A]/45 text-[#2F261D] rounded-[2px] px-0.5 cursor-pointer hover:bg-[#D9B66A]/65 transition-colors'
+        : 'bg-amber-200/75 text-stone-900 rounded-[2px] px-0.5 cursor-pointer hover:bg-amber-300/75 transition-colors';
+
+  const findQuoteSpanInParagraph = (
+    paragraphText: string,
+    quoteText: string
+  ): { start: number; end: number } | null => {
+    const directIdx = paragraphText.indexOf(quoteText);
+    if (directIdx !== -1) {
+      return { start: directIdx, end: directIdx + quoteText.length };
+    }
+    const normChars: string[] = [];
+    const origStarts: number[] = [];
+    let prevWasSpace = false;
+    for (let i = 0; i < paragraphText.length; i++) {
+      const ch = paragraphText[i];
+      if (/\s/.test(ch)) {
+        if (!prevWasSpace && normChars.length > 0) {
+          normChars.push(' ');
+          origStarts.push(i);
+          prevWasSpace = true;
+        }
+      } else {
+        normChars.push(ch);
+        origStarts.push(i);
+        prevWasSpace = false;
+      }
+    }
+    const normalizedParagraph = normChars.join('');
+    const normMatchIdx = normalizedParagraph.indexOf(quoteText);
+    if (normMatchIdx === -1) return null;
+    const start = origStarts[normMatchIdx];
+    const lastNormIdx = normMatchIdx + quoteText.length - 1;
+    const end =
+      lastNormIdx + 1 < origStarts.length
+        ? origStarts[lastNormIdx] + 1
+        : paragraphText.length;
+    return { start, end };
+  };
+
+  const renderHighlightedParagraph = (paragraphText: string, paragraphIdx: number) => {
+    const quotesInPara = activeChapterQuotes.filter((q) => q.paragraphIndex === paragraphIdx);
+    if (quotesInPara.length === 0) return paragraphText;
+
+    const spans: Array<{ start: number; end: number; quote: StoryQuote }> = [];
+    for (const q of quotesInPara) {
+      const found = findQuoteSpanInParagraph(paragraphText, q.quoteText);
+      if (found && found.end > found.start) {
+        spans.push({ start: found.start, end: found.end, quote: q });
+      }
+    }
+    if (spans.length === 0) return paragraphText;
+
+    spans.sort((a, b) => a.start - b.start || b.end - a.end);
+    const nonOverlapping: Array<{ start: number; end: number; quote: StoryQuote }> = [];
+    let cursor = 0;
+    for (const s of spans) {
+      if (s.start >= cursor) {
+        nonOverlapping.push(s);
+        cursor = s.end;
+      }
+    }
+
+    const nodes: React.ReactNode[] = [];
+    let pos = 0;
+    for (const item of nonOverlapping) {
+      if (item.start > pos) {
+        nodes.push(
+          <React.Fragment key={`t-${paragraphIdx}-${pos}`}>
+            {paragraphText.slice(pos, item.start)}
+          </React.Fragment>
+        );
+      }
+      const slice = paragraphText.slice(item.start, item.end);
+      nodes.push(
+        <mark
+          key={item.quote.quoteId}
+          role="button"
+          tabIndex={0}
+          title="Passage enregistré dans vos citations favorites — Cliquer pour gérer"
+          onClick={(e) => {
+            const currentSel = window.getSelection();
+            if (currentSel && !currentSel.isCollapsed) return;
+            e.stopPropagation();
+            setPendingSelection(null);
+            setActiveQuotePopover(item.quote);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setPendingSelection(null);
+              setActiveQuotePopover(item.quote);
+            }
+          }}
+          className={markHighlightClass}
+        >
+          {slice}
+        </mark>
+      );
+      pos = item.end;
+    }
+    if (pos < paragraphText.length) {
+      nodes.push(
+        <React.Fragment key={`t-${paragraphIdx}-${pos}`}>
+          {paragraphText.slice(pos)}
+        </React.Fragment>
+      );
+    }
+    return nodes;
+  };
+
+  const showQuoteFeedback = (kind: 'success' | 'error', message: string) => {
+    setQuoteFeedback({ kind, message });
+    window.setTimeout(() => {
+      setQuoteFeedback((prev) => (prev?.message === message ? null : prev));
+    }, 4000);
+  };
+
+  const handleSaveHighlight = async () => {
+    if (!pendingSelection || quoteBusy) return;
+    if (!user) {
+      await signInWithGoogle();
+      return;
+    }
+    setQuoteBusy(true);
+    try {
+      await createStoryQuote({
+        userId: user.uid,
+        story,
+        chapterNumber: currentChapterNumber,
+        chapterTitle: activeFollowupChapter?.title,
+        paragraphIndex: pendingSelection.paragraphIndex,
+        quoteText: pendingSelection.text,
+      });
+      window.getSelection()?.removeAllRanges();
+      setPendingSelection(null);
+      showQuoteFeedback(
+        'success',
+        'Ajouté à vos citations favorites dans Mon carnet.'
+      );
+    } catch (err) {
+      showQuoteFeedback(
+        'error',
+        err instanceof Error ? err.message : 'Impossible d’enregistrer cette citation.'
+      );
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
+
+  const handleDeleteHighlight = async (quoteId: string) => {
+    if (!user || quoteBusy) return;
+    setQuoteBusy(true);
+    try {
+      await deleteStoryQuote(user.uid, quoteId);
+      window.getSelection()?.removeAllRanges();
+      setPendingSelection(null);
+      setActiveQuotePopover((prev) => (prev?.quoteId === quoteId ? null : prev));
+      showQuoteFeedback('success', 'Surlignage retiré de vos citations.');
+    } catch (err) {
+      showQuoteFeedback(
+        'error',
+        err instanceof Error ? err.message : 'Impossible de retirer ce surlignage.'
+      );
+    } finally {
+      setQuoteBusy(false);
+    }
+  };
+
+  const handleCopyQuoteText = async (quote: StoryQuote) => {
+    try {
+      await navigator.clipboard.writeText(
+        `« ${quote.quoteText} » — ${quote.storyTitle} (${quote.storyAuthorName})`
+      );
+      setQuoteCopiedId(quote.quoteId);
+      window.setTimeout(() => {
+        setQuoteCopiedId((prev) => (prev === quote.quoteId ? null : prev));
+      }, 2200);
+    } catch {
+      showQuoteFeedback('error', 'Copie dans le presse-papiers impossible.');
+    }
+  };
+
   return (
     <div
       className={`fixed inset-0 z-50 flex justify-center ${
@@ -603,6 +929,21 @@ export function StoryReaderModal({
                     <span className="text-[11px] opacity-75 tabular-nums whitespace-nowrap">
                       Ch. {activeChapterIdx + 1}/{totalChapters}
                     </span>
+                  </>
+                )}
+                {currentStoryQuotes.length > 0 && (
+                  <>
+                    <span className="opacity-35 hidden sm:inline" aria-hidden="true">·</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowStoryQuotesDrawer((prev) => !prev)}
+                      className="hidden sm:inline-flex items-center gap-1 text-[11px] opacity-85 hover:opacity-100 underline underline-offset-2 whitespace-nowrap tabular-nums"
+                    >
+                      <Highlighter className="w-3 h-3" />
+                      <span>
+                        {currentStoryQuotes.length} citation{currentStoryQuotes.length > 1 ? 's' : ''}
+                      </span>
+                    </button>
                   </>
                 )}
               </div>
@@ -1061,6 +1402,75 @@ export function StoryReaderModal({
                     </button>
                   </div>
                 </div>
+
+                {/* Highlighting Guide & Saved Quotes Summary for this Story */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 px-1">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Highlighter className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <span>
+                      Sélectionnez un passage dans le récit pour le surligner et l’ajouter à vos citations favorites.
+                    </span>
+                  </span>
+                  {currentStoryQuotes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowStoryQuotesDrawer((prev) => !prev)}
+                      className="font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 tabular-nums"
+                    >
+                      <Quote className="w-3.5 h-3.5" />
+                      <span>
+                        {currentStoryQuotes.length} passage{currentStoryQuotes.length > 1 ? 's' : ''}{' '}
+                        surligné{currentStoryQuotes.length > 1 ? 's' : ''}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                {showStoryQuotesDrawer && currentStoryQuotes.length > 0 && (
+                  <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs uppercase tracking-widest text-stone-500">
+                        Vos citations de ce récit ({currentStoryQuotes.length})
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowStoryQuotesDrawer(false)}
+                        className="text-xs text-stone-500 hover:text-stone-900"
+                      >
+                        Masquer
+                      </button>
+                    </div>
+                    <ul className="divide-y divide-stone-100">
+                      {currentStoryQuotes.map((q) => (
+                        <li
+                          key={q.quoteId}
+                          className="py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3"
+                        >
+                          <div className="space-y-1 min-w-0">
+                            <p className="font-display text-sm text-stone-900 leading-relaxed">
+                              « {q.quoteText} »
+                            </p>
+                            {isRoman && (
+                              <p className="text-[11px] text-stone-500">
+                                Chapitre {q.chapterNumber}
+                                {q.chapterTitle ? ` · ${q.chapterTitle}` : ''}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={quoteBusy}
+                            onClick={() => void handleDeleteHighlight(q.quoteId)}
+                            aria-label="Retirer cette citation"
+                            className="p-1.5 text-stone-400 hover:text-red-700 rounded transition-colors shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1223,15 +1633,22 @@ export function StoryReaderModal({
             )}
 
             <div
+              ref={storyParagraphsRef}
+              onMouseUp={inspectSelection}
+              onTouchEnd={() => window.setTimeout(inspectSelection, 120)}
               className={
                 zenMode
-                  ? `space-y-6 ${zenTypefaceClass} ${zenFontClass} ${zenBodyTextClass}`
-                  : 'space-y-5 text-base sm:text-[17px] leading-[1.8] text-stone-800'
+                  ? `space-y-6 select-text ${zenTypefaceClass} ${zenFontClass} ${zenBodyTextClass}`
+                  : 'space-y-5 select-text text-base sm:text-[17px] leading-[1.8] text-stone-800'
               }
             >
               {paragraphs.map((para, idx) => (
-                <p key={idx} className={idx === 0 ? 'editorial-drop-cap' : ''}>
-                  {para}
+                <p
+                  key={idx}
+                  data-paragraph-index={idx}
+                  className={idx === 0 ? 'editorial-drop-cap' : ''}
+                >
+                  {renderHighlightedParagraph(para, idx)}
                 </p>
               ))}
             </div>
@@ -1582,6 +1999,140 @@ export function StoryReaderModal({
             )}
           </article>
         </div>
+
+        {/* Floating Selection Highlight Bar & Existing Highlight Action Bar */}
+        {(pendingSelection || activeQuotePopover || quoteFeedback) && (
+          <div className="pointer-events-none fixed bottom-4 inset-x-0 z-[60] flex justify-center px-4">
+            <div className="pointer-events-auto max-w-xl w-full sm:w-auto flex flex-col gap-2">
+              {quoteFeedback && (
+                <div
+                  role="status"
+                  className={`mx-auto px-3.5 py-2 rounded-md border text-xs font-medium shadow-md flex items-center gap-2 ${
+                    quoteFeedback.kind === 'error'
+                      ? 'bg-red-50 border-red-200 text-red-900'
+                      : 'bg-stone-900 border-stone-800 text-[#FBF9F5]'
+                  }`}
+                >
+                  {quoteFeedback.kind === 'success' && <Check className="w-3.5 h-3.5 text-amber-300 shrink-0" />}
+                  <span>{quoteFeedback.message}</span>
+                </div>
+              )}
+
+              {pendingSelection && (
+                <div
+                  onMouseDown={(e) => e.preventDefault()}
+                  className={`rounded-lg border shadow-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 ${
+                    zenMode && zenTheme === 'night'
+                      ? 'bg-[#26231F] border-amber-300/35 text-[#F5F0E6]'
+                      : 'bg-white border-stone-300 text-stone-900'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-display italic text-xs sm:text-sm truncate">
+                      « {pendingSelection.text} »
+                    </p>
+                    {pendingSelection.truncated && (
+                      <p className="text-[11px] opacity-70">
+                        Extrait ajusté à 800 caractères maximum.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {matchingPendingQuote ? (
+                      <button
+                        type="button"
+                        disabled={quoteBusy}
+                        onClick={() => void handleDeleteHighlight(matchingPendingQuote.quoteId)}
+                        className="min-h-[36px] px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-800 border border-red-200 hover:bg-red-100 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Retirer le surlignage</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={quoteBusy}
+                        onClick={() => void handleSaveHighlight()}
+                        className="min-h-[36px] px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#1B365D] text-white hover:bg-[#132744] disabled:opacity-60 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Highlighter className="w-3.5 h-3.5 text-amber-300" />
+                        <span>
+                          {quoteBusy ? 'Enregistrement…' : 'Surligner · Citations favorites'}
+                        </span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.getSelection()?.removeAllRanges();
+                        setPendingSelection(null);
+                      }}
+                      aria-label="Annuler la sélection"
+                      className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-md opacity-70 hover:opacity-100"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!pendingSelection && activeQuotePopover && (
+                <div
+                  className={`rounded-lg border shadow-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 ${
+                    zenMode && zenTheme === 'night'
+                      ? 'bg-[#26231F] border-amber-300/35 text-[#F5F0E6]'
+                      : 'bg-white border-stone-300 text-stone-900'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] uppercase tracking-widest opacity-65">
+                      Citation favorite
+                    </p>
+                    <p className="font-display italic text-xs sm:text-sm truncate">
+                      « {activeQuotePopover.quoteText} »
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyQuoteText(activeQuotePopover)}
+                      className="min-h-[34px] px-2.5 py-1 rounded-md border border-current/20 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap hover:border-current/45"
+                    >
+                      {quoteCopiedId === activeQuotePopover.quoteId ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Copié</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copier</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={quoteBusy}
+                      onClick={() => void handleDeleteHighlight(activeQuotePopover.quoteId)}
+                      className="min-h-[34px] px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-800 border border-red-200 hover:bg-red-100 inline-flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Retirer</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveQuotePopover(null)}
+                      aria-label="Fermer"
+                      className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md opacity-70 hover:opacity-100"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

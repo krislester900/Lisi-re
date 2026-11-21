@@ -46,6 +46,7 @@ import {
   subscribeToPublicStories,
   subscribeToUserBookmarks,
   subscribeToUserExchanges,
+  subscribeToUserQuotes,
   subscribeToUserStories,
   toggleStoryBookmark,
 } from './lib/storyService';
@@ -62,6 +63,7 @@ import {
   PublicProfile,
   Story,
   StoryBookmark,
+  StoryQuote,
   StoryRepost,
   StoryThemeId,
 } from './types/story';
@@ -181,6 +183,7 @@ function SalonApp() {
   const [customSalonFilter, setCustomSalonFilter] = useState<'all' | 'public' | 'private'>('all');
   const [exchanges, setExchanges] = useState<Exchange[]>([]);
   const [bookmarks, setBookmarks] = useState<StoryBookmark[]>([]);
+  const [userQuotes, setUserQuotes] = useState<StoryQuote[]>([]);
   const [myReposts, setMyReposts] = useState<StoryRepost[]>([]);
   const [discoverableProfiles, setDiscoverableProfiles] = useState<PublicProfile[]>([]);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
@@ -231,6 +234,7 @@ function SalonApp() {
       setMyStories([]);
       setExchanges([]);
       setBookmarks([]);
+      setUserQuotes([]);
       setMyReposts([]);
       setDiscoverableProfiles([]);
       setProfilesLoaded(false);
@@ -239,6 +243,7 @@ function SalonApp() {
     const unsubMyStories = subscribeToUserStories(user.uid, setMyStories);
     const unsubExchanges = subscribeToUserExchanges(user.uid, setExchanges);
     const unsubBookmarks = subscribeToUserBookmarks(user.uid, setBookmarks);
+    const unsubQuotes = subscribeToUserQuotes(user.uid, setUserQuotes);
     const unsubMyReposts = subscribeToProfileReposts(user.uid, user.uid, setMyReposts);
     const unsubProfiles = subscribeToDiscoverableProfiles((profilesList) => {
       setDiscoverableProfiles(profilesList);
@@ -248,6 +253,7 @@ function SalonApp() {
       unsubMyStories();
       unsubExchanges();
       unsubBookmarks();
+      unsubQuotes();
       unsubMyReposts();
       unsubProfiles();
     };
@@ -1799,6 +1805,7 @@ function SalonApp() {
             myStories={myStories}
             existingExchanges={exchanges}
             bookmarks={bookmarks}
+            quotes={userQuotes}
             reposts={myReposts}
             onReadStory={(story) => setReadingStory(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
@@ -1885,6 +1892,7 @@ function SalonApp() {
         onClose={() => setReadingStory(null)}
         existingExchanges={exchanges}
         customSalons={customSalons}
+        userQuotes={userQuotes}
         isBookmarked={Boolean(readingStory && bookmarkedStoryIds.has(readingStory.storyId))}
         isReposted={Boolean(readingStory && repostedStoryIds.has(readingStory.storyId))}
         onToggleBookmark={(story) => void handleToggleBookmark(story)}

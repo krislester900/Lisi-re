@@ -244,6 +244,25 @@ export interface StoryRepost {
   updatedAt: Timestamp | null;
 }
 
+export interface StoryQuote {
+  quoteId: string;
+  userId: string;
+  storyId: string;
+  chapterNumber: number;
+  chapterTitle?: string;
+  paragraphIndex: number;
+  quoteText: string;
+  storyTitle: string;
+  storyAuthorId: string;
+  storyAuthorName: string;
+  storyTheme: StoryThemeId;
+  customSalonId?: string;
+  customSalonName?: string;
+  storyScope?: StoryScope;
+  storyFormat?: StoryFormat;
+  createdAt: Timestamp | null;
+}
+
 export const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export const FIELD_LIMITS = {
@@ -277,4 +296,5 @@ export const FIELD_LIMITS = {
   salonAdmissionRules: { max: 500 },
   salonRequestNote: { max: 300 },
   repostNote: { max: 280 },
+  quoteText: { min: 3, max: 800 },
 } as const;

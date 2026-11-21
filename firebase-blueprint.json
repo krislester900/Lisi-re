@@ -993,6 +993,96 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "StoryQuote": {
+      "title": "StoryQuote",
+      "description": "A highlighted passage saved by a reader into their private favorite quotes collection.",
+      "type": "object",
+      "properties": {
+        "quoteId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "chapterNumber": {
+          "type": "integer"
+        },
+        "chapterTitle": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "paragraphIndex": {
+          "type": "integer"
+        },
+        "quoteText": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 800
+        },
+        "storyTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "storyAuthorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "storyAuthorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "storyTheme": {
+          "type": "string",
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+        },
+        "customSalonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customSalonName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "storyScope": {
+          "type": "string",
+          "enum": ["salon", "pelemele"]
+        },
+        "storyFormat": {
+          "type": "string",
+          "enum": ["confession", "roman"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "quoteId",
+        "userId",
+        "storyId",
+        "chapterNumber",
+        "paragraphIndex",
+        "quoteText",
+        "storyTitle",
+        "storyAuthorId",
+        "storyAuthorName",
+        "storyTheme",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
@@ -1025,6 +1115,12 @@
         "$ref": "#/entities/StoryBookmark"
       },
       "description": "Private saved-for-later story bookmarks per user."
+    },
+    "/users/{userId}/quotes/{quoteId}": {
+      "schema": {
+        "$ref": "#/entities/StoryQuote"
+      },
+      "description": "Private favorite highlighted quotes saved per user from stories."
     },
     "/stories/{storyId}": {
       "schema": {

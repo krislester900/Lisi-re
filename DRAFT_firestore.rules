@@ -138,6 +138,36 @@ service cloud.firestore {
         && data.createdAt is timestamp;
     }
 
+    function isValidQuote(data) {
+      return data.keys().hasAll([
+          'quoteId', 'userId', 'storyId', 'chapterNumber', 'paragraphIndex',
+          'quoteText', 'storyTitle', 'storyAuthorId', 'storyAuthorName',
+          'storyTheme', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'quoteId', 'userId', 'storyId', 'chapterNumber', 'chapterTitle',
+          'paragraphIndex', 'quoteText', 'storyTitle', 'storyAuthorId',
+          'storyAuthorName', 'storyTheme', 'customSalonId', 'customSalonName',
+          'storyScope', 'storyFormat', 'createdAt'
+        ])
+        && isValidId(data.quoteId)
+        && isValidId(data.userId)
+        && isValidId(data.storyId)
+        && data.chapterNumber is int && data.chapterNumber >= 1 && data.chapterNumber <= 500
+        && (!('chapterTitle' in data) || (data.chapterTitle is string && data.chapterTitle.size() >= 1 && data.chapterTitle.size() <= 140))
+        && data.paragraphIndex is int && data.paragraphIndex >= 0 && data.paragraphIndex <= 5000
+        && data.quoteText is string && data.quoteText.size() >= 3 && data.quoteText.size() <= 800
+        && data.storyTitle is string && data.storyTitle.size() >= 1 && data.storyTitle.size() <= 140
+        && isValidId(data.storyAuthorId)
+        && data.storyAuthorName is string && data.storyAuthorName.size() >= 2 && data.storyAuthorName.size() <= 60
+        && isValidSalonId(data.storyTheme)
+        && (!('customSalonId' in data) || isValidId(data.customSalonId))
+        && (!('customSalonName' in data) || (data.customSalonName is string && data.customSalonName.size() <= 80))
+        && (!('storyScope' in data) || data.storyScope in ['salon', 'pelemele'])
+        && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
+        && data.createdAt is timestamp;
+    }
+
     function isValidRepost(data) {
       return data.keys().hasAll([
           'repostId', 'reposterId', 'reposterName', 'storyId', 'storyTitle',
@@ -579,6 +609,28 @@ service cloud.firestore {
       allow delete: if isVerifiedUser()
         && isValidId(userId)
         && isValidId(storyId)
+        && isOwner(userId)
+        && existing().userId == request.auth.uid;
+    }
+
+    // Private favorite highlighted quotes ("Citations favorites")
+    match /users/{userId}/quotes/{quoteId} {
+      allow get: if isValidId(userId) && isValidId(quoteId) && isOwner(userId);
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(quoteId)
+        && isOwner(userId)
+        && isValidQuote(incoming())
+        && incoming().quoteId == quoteId
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/stories/$(incoming().storyId))
+        && canReadStoryData(get(/databases/$(database)/documents/stories/$(incoming().storyId)).data);
+      allow update: if false;
+      allow delete: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(quoteId)
         && isOwner(userId)
         && existing().userId == request.auth.uid;
     }

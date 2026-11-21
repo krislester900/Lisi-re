@@ -3,14 +3,18 @@ import {
   BarChart3,
   Bookmark,
   BookOpen,
+  Check,
+  Copy,
   Edit3,
   Eye,
   EyeOff,
   FileText,
   Globe,
+  Highlighter,
   Lock,
   LogOut,
   Plus,
+  Quote,
   Repeat2,
   Search,
   Trash2,
@@ -19,6 +23,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import {
   deleteStory,
+  deleteStoryQuote,
   deleteStoryRepost,
   removeStoryBookmark,
   updateRepostVisibility,
@@ -35,6 +40,7 @@ import {
   Exchange,
   Story,
   StoryBookmark,
+  StoryQuote,
   StoryRepost,
 } from '../types/story';
 import { StoryAnalyticsChart } from './StoryAnalyticsChart';
@@ -43,6 +49,7 @@ interface JournalViewProps {
   myStories: Story[];
   existingExchanges: Exchange[];
   bookmarks?: StoryBookmark[];
+  quotes?: StoryQuote[];
   reposts?: StoryRepost[];
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
@@ -52,13 +59,14 @@ interface JournalViewProps {
   onOpenMyProfile?: () => void;
 }
 
-type JournalSubTab = 'stories' | 'bookmarks' | 'reposts' | 'stats';
+type JournalSubTab = 'stories' | 'bookmarks' | 'quotes' | 'reposts' | 'stats';
 type StoryFilter = 'all' | 'public' | 'private' | 'roman';
 type RepostFilter = 'all' | 'public' | 'private';
 
 export function JournalView({
   myStories,
   bookmarks = [],
+  quotes = [],
   reposts = [],
   onReadStory,
   onOpenStoryById,
@@ -71,6 +79,7 @@ export function JournalView({
   const [storyFilter, setStoryFilter] = useState<StoryFilter>('all');
   const [storySearch, setStorySearch] = useState('');
   const [bookmarkSearch, setBookmarkSearch] = useState('');
+  const [quoteSearch, setQuoteSearch] = useState('');
   const [repostFilter, setRepostFilter] = useState<RepostFilter>('all');
   const [repostSearch, setRepostSearch] = useState('');
 
@@ -79,6 +88,9 @@ export function JournalView({
   const [storyActionError, setStoryActionError] = useState<string | null>(null);
   const [busyBookmarkId, setBusyBookmarkId] = useState<string | null>(null);
   const [bookmarkActionError, setBookmarkActionError] = useState<string | null>(null);
+  const [busyQuoteId, setBusyQuoteId] = useState<string | null>(null);
+  const [quoteActionError, setQuoteActionError] = useState<string | null>(null);
+  const [copiedQuoteId, setCopiedQuoteId] = useState<string | null>(null);
   const [busyRepostId, setBusyRepostId] = useState<string | null>(null);
   const [repostActionError, setRepostActionError] = useState<string | null>(null);
 
@@ -139,6 +151,18 @@ export function JournalView({
     );
   }, [bookmarks, bookmarkSearch]);
 
+  const filteredQuotes = useMemo(() => {
+    const q = quoteSearch.trim().toLowerCase();
+    if (!q) return quotes;
+    return quotes.filter(
+      (item) =>
+        item.quoteText.toLowerCase().includes(q) ||
+        item.storyTitle.toLowerCase().includes(q) ||
+        item.storyAuthorName.toLowerCase().includes(q) ||
+        (item.chapterTitle || '').toLowerCase().includes(q)
+    );
+  }, [quotes, quoteSearch]);
+
   const filteredReposts = useMemo(() => {
     const q = repostSearch.trim().toLowerCase();
     return reposts.filter((repost) => {
@@ -191,6 +215,36 @@ export function JournalView({
       );
     } finally {
       setBusyBookmarkId(null);
+    }
+  };
+
+  const handleDeleteQuote = async (quoteId: string) => {
+    if (!user || busyQuoteId) return;
+    setQuoteActionError(null);
+    setBusyQuoteId(quoteId);
+    try {
+      await deleteStoryQuote(user.uid, quoteId);
+    } catch (err) {
+      setQuoteActionError(
+        err instanceof Error ? err.message : 'Impossible de retirer cette citation.'
+      );
+    } finally {
+      setBusyQuoteId(null);
+    }
+  };
+
+  const handleCopyQuote = async (quote: StoryQuote) => {
+    setQuoteActionError(null);
+    try {
+      await navigator.clipboard.writeText(
+        `« ${quote.quoteText} » — ${quote.storyTitle} (${quote.storyAuthorName})`
+      );
+      setCopiedQuoteId(quote.quoteId);
+      window.setTimeout(() => {
+        setCopiedQuoteId((prev) => (prev === quote.quoteId ? null : prev));
+      }, 2200);
+    } catch {
+      setQuoteActionError('Impossible de copier cette citation dans le presse-papiers.');
     }
   };
 
@@ -300,6 +354,13 @@ export function JournalView({
       shortLabel: 'Favoris',
       count: bookmarks.length,
       icon: Bookmark,
+    },
+    {
+      id: 'quotes',
+      label: 'Citations favorites',
+      shortLabel: 'Citations',
+      count: quotes.length,
+      icon: Quote,
     },
     {
       id: 'reposts',
@@ -869,7 +930,162 @@ export function JournalView({
             </section>
           )}
 
-          {/* Tab 3: Reposts ("Histoires repartagées") */}
+          {/* Tab 3: Favorite Highlighted Quotes ("Citations favorites") */}
+          {subTab === 'quotes' && (
+            <section aria-label="Collection de citations favorites" className="space-y-4">
+              {quotes.length > 0 && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
+                  <p className="text-xs text-stone-600 tabular-nums">
+                    {filteredQuotes.length} citation{filteredQuotes.length > 1 ? 's' : ''} favorite
+                    {filteredQuotes.length > 1 ? 's' : ''}
+                  </p>
+                  {quotes.length > 1 && (
+                    <div className="relative w-full sm:w-64">
+                      <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <input
+                        type="search"
+                        value={quoteSearch}
+                        onChange={(e) => setQuoteSearch(e.target.value)}
+                        placeholder="Rechercher une citation, un titre…"
+                        aria-label="Rechercher dans mes citations favorites"
+                        className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {quoteActionError && (
+                <p
+                  role="alert"
+                  className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+                >
+                  {quoteActionError}
+                </p>
+              )}
+
+              {quotes.length === 0 ? (
+                <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-2">
+                  <Highlighter className="w-6 h-6 text-amber-700/80 mx-auto" />
+                  <p className="font-display text-xl text-stone-900">
+                    Aucune citation favorite pour le moment
+                  </p>
+                  <p className="text-sm text-stone-600 max-w-md mx-auto leading-relaxed">
+                    Lors de la lecture d’un récit ou d’un roman, sélectionnez n’importe quel passage et cliquez sur « Surligner » pour le retrouver ici.
+                  </p>
+                </div>
+              ) : filteredQuotes.length === 0 ? (
+                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
+                  <p className="font-display text-lg text-stone-900">
+                    Aucune citation ne correspond à cette recherche
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setQuoteSearch('')}
+                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                  >
+                    Tout afficher
+                  </button>
+                </div>
+              ) : (
+                <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+                  {filteredQuotes.map((quote) => {
+                    const salonInfo = THEME_MAP[quote.storyTheme];
+                    const isBusy = busyQuoteId === quote.quoteId;
+                    const isCopied = copiedQuoteId === quote.quoteId;
+                    const originLabel =
+                      quote.customSalonName ||
+                      (quote.storyScope === 'pelemele' && !quote.customSalonId
+                        ? 'Hors salon · Pêle-mêle'
+                        : salonInfo?.salonName || 'Salon');
+
+                    return (
+                      <article key={quote.quoteId} className="p-5 sm:p-6 space-y-3.5">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                          <span className="font-medium text-stone-800">{originLabel}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>Par {quote.storyAuthorName}</span>
+                          {quote.storyFormat === 'roman' && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="tabular-nums">
+                                Chapitre {quote.chapterNumber}
+                                {quote.chapterTitle ? ` · ${quote.chapterTitle}` : ''}
+                              </span>
+                            </>
+                          )}
+                          <span aria-hidden="true">·</span>
+                          <span>
+                            Enregistré le {formatFrenchDate(quote.createdAt?.toDate() ?? null)}
+                          </span>
+                        </div>
+
+                        <blockquote className="bg-[#FBF9F5] border border-stone-200/90 rounded-md px-4 py-3.5">
+                          <p className="font-display italic text-lg sm:text-xl leading-relaxed text-stone-900">
+                            « {quote.quoteText} »
+                          </p>
+                        </blockquote>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                          <p className="text-xs text-stone-600">
+                            Extrait de{' '}
+                            <button
+                              type="button"
+                              onClick={() => onOpenStoryById?.(quote.storyId)}
+                              className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left"
+                            >
+                              {quote.storyTitle}
+                            </button>
+                          </p>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => onOpenStoryById?.(quote.storyId)}
+                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>Lire le récit</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => void handleCopyQuote(quote)}
+                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              {isCopied ? (
+                                <>
+                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>Copié</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Copier</span>
+                                </>
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => void handleDeleteQuote(quote.quoteId)}
+                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Retirer</span>
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Tab 4: Reposts ("Histoires repartagées") */}
           {subTab === 'reposts' && (
             <section aria-label="Vos histoires repartagées" className="space-y-4">
               {repostActionError && (
