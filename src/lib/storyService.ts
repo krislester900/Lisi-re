@@ -396,11 +396,13 @@ export interface StoryInput {
   seriesStatus?: SeriesStatus;
   promptQuestion: string;
   visibility: StoryVisibility;
+  isAnonymous?: boolean;
 }
 
 function buildValidatedStoryFields(input: StoryInput, authorName: string) {
+  const isAnonymous = Boolean(input.isAnonymous);
   const cleanAuthorName = clampString(authorName, FIELD_LIMITS.displayName.max);
-  if (cleanAuthorName.length < FIELD_LIMITS.displayName.min) {
+  if (!isAnonymous && cleanAuthorName.length < FIELD_LIMITS.displayName.min) {
     throw new Error('Votre nom d’auteur doit contenir au moins 2 caractères.');
   }
 
@@ -435,7 +437,8 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
   const storyScope: StoryScope = input.customSalon ? 'salon' : (input.storyScope ?? 'salon');
 
   return {
-    authorName: cleanAuthorName,
+    authorName: isAnonymous ? 'Auteur anonyme' : cleanAuthorName,
+    isAnonymous,
     title,
     excerpt,
     content,
@@ -1616,7 +1619,9 @@ function buildStorySnapshotFields(story: Story): {
   assertValidId(story.authorId, 'storyAuthorId');
   const cleanTitle = clampString(story.title, FIELD_LIMITS.title.max) || 'Récit';
   const cleanExcerpt = clampString(story.excerpt, FIELD_LIMITS.excerpt.max);
-  const rawAuthor = clampString(story.authorName, FIELD_LIMITS.displayName.max);
+  const rawAuthor = story.isAnonymous
+    ? 'Auteur anonyme'
+    : clampString(story.authorName, FIELD_LIMITS.displayName.max);
   const cleanAuthor = rawAuthor.length >= FIELD_LIMITS.displayName.min ? rawAuthor : 'Auteur';
   const readingMinutes = Math.min(60, Math.max(1, Math.round(story.readingMinutes || 1)));
 

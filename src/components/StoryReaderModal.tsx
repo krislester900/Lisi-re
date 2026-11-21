@@ -5,6 +5,7 @@ import {
   BookOpen,
   Disc3,
   Eye,
+  EyeOff,
   Heart,
   Maximize2,
   MessageCircle,
@@ -265,9 +266,13 @@ export function StoryReaderModal({
       setHasResonated(false);
     }
 
-    void fetchPublicProfile(story.authorId)
-      .then((p) => setAuthorProfile(p))
-      .catch(() => setAuthorProfile(null));
+    if (story.isAnonymous) {
+      setAuthorProfile(null);
+    } else {
+      void fetchPublicProfile(story.authorId)
+        .then((p) => setAuthorProfile(p))
+        .catch(() => setAuthorProfile(null));
+    }
 
     if (user && user.emailVerified) {
       const storageKey = `lisiere_view_${story.storyId}_${user.uid}_${formatLocalDateKey()}`;
@@ -299,6 +304,7 @@ export function StoryReaderModal({
     story?.visibility,
     story?.storyFormat,
     story?.authorId,
+    story?.isAnonymous,
     story?.customSalonVisibility,
     user?.uid,
     user?.emailVerified,
@@ -326,6 +332,8 @@ export function StoryReaderModal({
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
+  const isAnonymousStory = Boolean(story.isAnonymous);
+  const publicAuthorLabel = isAnonymousStory ? 'Auteur anonyme' : story.authorName;
   const isRoman = story.storyFormat === 'roman';
   const theme = THEME_MAP[story.theme];
   const hasOriginSalon = Boolean(story.customSalonId || story.storyScope !== 'pelemele');
@@ -346,13 +354,14 @@ export function StoryReaderModal({
   const activeFollowupChapter =
     isRoman && activeChapterIdx > 0 ? chapters[activeChapterIdx - 1] ?? null : null;
 
-  const authorPinnedMusic = authorProfile?.favoriteTrackTitle
-    ? {
-        title: authorProfile.favoriteTrackTitle,
-        artist: authorProfile.favoriteTrackArtist,
-        mediaUrl: authorProfile.favoriteTrackUrl,
-      }
-    : undefined;
+  const authorPinnedMusic =
+    !isAnonymousStory && authorProfile?.favoriteTrackTitle
+      ? {
+          title: authorProfile.favoriteTrackTitle,
+          artist: authorProfile.favoriteTrackArtist,
+          mediaUrl: authorProfile.favoriteTrackUrl,
+        }
+      : undefined;
 
   const displayedContent = activeFollowupChapter ? activeFollowupChapter.content : story.content;
   const displayedMinutes = activeFollowupChapter
@@ -789,7 +798,7 @@ export function StoryReaderModal({
               <div className="fixed top-14 right-4 sm:top-16 sm:right-6 z-20 w-[min(92vw,420px)] max-h-[75vh] overflow-y-auto">
                 <ReadingMusicPanel
                   controller={audioController}
-                  authorName={story.authorName}
+                  authorName={publicAuthorLabel}
                   authorFavoriteMusic={authorPinnedMusic}
                   compactPopover={true}
                   onClose={() => setShowMusicPanel(false)}
@@ -924,7 +933,7 @@ export function StoryReaderModal({
               <div className="max-h-[42vh] overflow-y-auto shrink-0">
                 <ReadingMusicPanel
                   controller={audioController}
-                  authorName={story.authorName}
+                  authorName={publicAuthorLabel}
                   authorFavoriteMusic={authorPinnedMusic}
                   onClose={() => setShowMusicPanel(false)}
                 />
@@ -965,17 +974,26 @@ export function StoryReaderModal({
               <div className="pb-5 border-b border-stone-200 mb-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-600">
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onClose();
-                        onOpenMemberWall(story.authorId);
-                      }}
-                      className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
-                    >
-                      <UserIcon className="w-3.5 h-3.5 text-stone-500" />
-                      <span>{story.authorName}</span>
-                    </button>
+                    {isAnonymousStory ? (
+                      <span className="font-medium text-stone-700 inline-flex items-center gap-1.5">
+                        <EyeOff className="w-3.5 h-3.5 text-stone-500" />
+                        <span>
+                          Auteur anonyme{isAuthor ? ' (votre texte)' : ''}
+                        </span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenMemberWall(story.authorId);
+                        }}
+                        className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
+                      >
+                        <UserIcon className="w-3.5 h-3.5 text-stone-500" />
+                        <span>{story.authorName}</span>
+                      </button>
+                    )}
                     <span aria-hidden="true">·</span>
                     <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
                     {story.visibility === 'public' && (
@@ -1022,7 +1040,7 @@ export function StoryReaderModal({
                         onClick={() =>
                           void audioController.playAuthorMusic(
                             authorPinnedMusic,
-                            story.authorName
+                            publicAuthorLabel
                           )
                         }
                         className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
@@ -1220,7 +1238,8 @@ export function StoryReaderModal({
 
             {!zenMode && activeFollowupChapter?.authorNote && (
               <div className="mt-8 p-4 bg-white border border-stone-200 rounded-md text-sm text-stone-700 italic">
-                Note de {story.authorName} : « {activeFollowupChapter.authorNote} »
+                {isAnonymousStory ? 'Note de l’auteur' : `Note de ${story.authorName}`} : «{' '}
+                {activeFollowupChapter.authorNote} »
               </div>
             )}
 
@@ -1266,7 +1285,10 @@ export function StoryReaderModal({
               </div>
             )}
 
-            {!zenMode && authorProfile && (authorProfile.bio || authorProfile.listeningNote) && (
+            {!zenMode &&
+              !isAnonymousStory &&
+              authorProfile &&
+              (authorProfile.bio || authorProfile.listeningNote) && (
               <div className="mt-10 p-5 bg-white border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
@@ -1342,7 +1364,7 @@ export function StoryReaderModal({
                     <span>{isReposted ? 'Repartagé' : 'Repartager'}</span>
                   </button>
 
-                  {!isAuthor && story.visibility === 'public' && (
+                  {!isAuthor && !isAnonymousStory && story.visibility === 'public' && (
                     existingExchange ? (
                       <button
                         type="button"
@@ -1394,7 +1416,7 @@ export function StoryReaderModal({
               </p>
             )}
 
-            {!zenMode && showBridgeBox && !isAuthor && (
+            {!zenMode && showBridgeBox && !isAuthor && !isAnonymousStory && (
               <form
                 onSubmit={handleOpenBridge}
                 className="mt-6 bg-white border border-stone-200 rounded-md p-5 space-y-4"

@@ -124,7 +124,9 @@ export function RepostModal({
             <h2 className="font-display text-2xl font-medium text-stone-900 leading-snug">
               {story.title}
             </h2>
-            <p className="text-xs text-stone-500">Par {story.authorName}</p>
+            <p className="text-xs text-stone-500">
+              Par {story.isAnonymous ? 'Auteur anonyme' : story.authorName}
+            </p>
           </div>
 
           <button

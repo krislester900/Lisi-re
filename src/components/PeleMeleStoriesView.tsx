@@ -97,7 +97,7 @@ export function PeleMeleStoriesView({
       return (
         story.title.toLowerCase().includes(q) ||
         story.excerpt.toLowerCase().includes(q) ||
-        story.authorName.toLowerCase().includes(q) ||
+        (!story.isAnonymous && story.authorName.toLowerCase().includes(q)) ||
         salonLabel.includes(q)
       );
     });
@@ -414,13 +414,17 @@ export function PeleMeleStoriesView({
 
                 <div className="space-y-4 pt-3 border-t border-stone-100">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
-                    <button
-                      type="button"
-                      onClick={() => onOpenMemberWall(story.authorId)}
-                      className="font-medium text-stone-800 hover:underline"
-                    >
-                      Par {story.authorName}
-                    </button>
+                    {story.isAnonymous ? (
+                      <span className="font-medium text-stone-600">Par Auteur anonyme</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onOpenMemberWall(story.authorId)}
+                        className="font-medium text-stone-800 hover:underline"
+                      >
+                        Par {story.authorName}
+                      </button>
+                    )}
                     <span className="tabular-nums">
                       {story.readingMinutes} min · {formatFrenchDate(story.createdAt?.toDate() ?? null)}
                     </span>

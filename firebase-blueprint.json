@@ -243,6 +243,9 @@
           "type": "string",
           "enum": ["public", "private"]
         },
+        "isAnonymous": {
+          "type": "boolean"
+        },
         "readingMinutes": {
           "type": "integer"
         },

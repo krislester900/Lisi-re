@@ -1,4 +1,4 @@
-export type MusicProviderTab = 'spotify' | 'audius' | 'deezer' | 'link';
+export type MusicProviderTab = 'audius' | 'youtube' | 'spotify' | 'deezer' | 'local' | 'link';
 
 export interface ReadingTrack {
   id: string;
@@ -7,7 +7,7 @@ export interface ReadingTrack {
   album?: string;
   coverUrl?: string;
   durationMs?: number;
-  source: 'spotify' | 'audius' | 'deezer' | 'link';
+  source: 'spotify' | 'audius' | 'deezer' | 'youtube' | 'local' | 'link';
   streamUrl?: string;
   spotifyUri?: string;
   externalUrl?: string;
@@ -107,7 +107,7 @@ export async function fetchSpotifyToken(): Promise<{
 
 export async function searchMusicCatalog(
   query: string,
-  provider: 'spotify' | 'audius' | 'deezer'
+  provider: 'spotify' | 'audius' | 'deezer' | 'youtube'
 ): Promise<ReadingTrack[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];

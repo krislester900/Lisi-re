@@ -162,16 +162,22 @@ export function parseMusicSource(rawUrl: string): ParsedMusicSource {
     return { type: 'audio', originalUrl: url };
   }
 
-  // YouTube (watch, youtu.be, music.youtube, shorts, embed, live)
+  // YouTube (watch, youtu.be, music.youtube, m.youtube, youtube-nocookie, shorts, embed, live)
   const ytShort = url.match(/youtu\.be\/([a-zA-Z0-9_-]{6,})/);
   const ytLong = url.match(/[?&]v=([a-zA-Z0-9_-]{6,})/);
-  const ytPath = url.match(/youtube\.com\/(?:shorts|embed|live)\/([a-zA-Z0-9_-]{6,})/);
+  const ytPath = url.match(/(?:youtube(?:-nocookie)?\.com)\/(?:shorts|embed|live|v)\/([a-zA-Z0-9_-]{6,})/);
   const ytId = ytShort?.[1] || ytLong?.[1] || ytPath?.[1];
   if (ytId) {
+    const originParam =
+      typeof window !== 'undefined' && window.location?.origin
+        ? `&origin=${encodeURIComponent(window.location.origin)}`
+        : '';
     return {
       type: 'youtube',
       trackId: ytId,
-      embedUrl: `https://www.youtube.com/embed/${ytId}?autoplay=1&enablejsapi=1&playsinline=1`,
+      embedUrl: `https://www.youtube.com/embed/${encodeURIComponent(
+        ytId
+      )}?autoplay=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1${originParam}`,
       originalUrl: url,
     };
   }

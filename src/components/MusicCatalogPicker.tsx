@@ -45,11 +45,11 @@ function formatMs(ms: number): string {
 }
 
 function resolvePlayableUrlForSaving(track: ReadingTrack, maxLen: number): string {
-  // For Spotify: open.spotify.com URLs play cleanly via embed/OAuth even after preview expiry and stay well under 500 chars
+  // For Spotify & YouTube: canonical URLs stay clean, under 500 chars, and open/embed reliably
   // For Audius: streamUrl is /api/music/audius/stream/{id} (full track, plays directly in <audio>)
   // For Deezer: streamUrl is the audio preview URL (.mp3) so the wall player plays natively without login
   const preferred =
-    track.source === 'spotify'
+    track.source === 'spotify' || track.source === 'youtube'
       ? track.externalUrl || track.streamUrl || ''
       : track.streamUrl || track.externalUrl || '';
   return preferred.slice(0, maxLen);
@@ -57,8 +57,10 @@ function resolvePlayableUrlForSaving(track: ReadingTrack, maxLen: number): strin
 
 const SOURCE_LABELS: Record<ReadingTrack['source'], string> = {
   audius: 'Audius (gratuit)',
+  youtube: 'YouTube',
   spotify: 'Spotify',
   deezer: 'Deezer',
+  local: 'Appareil local',
   link: 'Lien audio',
 };
 
@@ -130,7 +132,7 @@ export function MusicCatalogPicker({
   const runSearch = useCallback(
     async (query: string, targetTab: MusicProviderTab) => {
       const trimmed = query.trim();
-      if (!trimmed || targetTab === 'link') return;
+      if (!trimmed || targetTab === 'link' || targetTab === 'local') return;
       setSearchError(null);
       setSearching(true);
       try {
@@ -272,6 +274,7 @@ export function MusicCatalogPicker({
         {(
           [
             { id: 'audius', label: 'Audius · Gratuit' },
+            { id: 'youtube', label: 'YouTube' },
             { id: 'spotify', label: 'Spotify' },
             { id: 'deezer', label: 'Deezer' },
             { id: 'link', label: 'SoundCloud / Lien' },
@@ -345,10 +348,15 @@ export function MusicCatalogPicker({
         </div>
       )}
 
-      {/* Audius / Deezer info note */}
+      {/* Audius / YouTube / Deezer info note */}
       {providerTab === 'audius' && (
         <p className="text-[11px] text-stone-600">
           Audius est ouvert sans clé ni abonnement : chaque morceau se lit en entier directement sur votre mur et en mode zen.
+        </p>
+      )}
+      {providerTab === 'youtube' && (
+        <p className="text-[11px] text-stone-600">
+          Recherchez directement n’importe quelle musique, bande-son ou ambiance sur YouTube pour l’épingler sur votre mur.
         </p>
       )}
       {providerTab === 'deezer' && (
@@ -411,9 +419,11 @@ export function MusicCatalogPicker({
                 placeholder={
                   providerTab === 'spotify'
                     ? 'Chercher un titre ou artiste sur Spotify…'
-                    : providerTab === 'deezer'
-                      ? 'Chercher sur Deezer…'
-                      : 'Chercher un morceau ou un artiste sur Audius…'
+                    : providerTab === 'youtube'
+                      ? 'Chercher une musique ou ambiance sur YouTube…'
+                      : providerTab === 'deezer'
+                        ? 'Chercher sur Deezer…'
+                        : 'Chercher un morceau ou un artiste sur Audius…'
                 }
                 aria-label="Rechercher une musique pour votre mur"
                 className="w-full min-h-[38px] pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"

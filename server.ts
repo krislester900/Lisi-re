@@ -45,7 +45,7 @@ interface NormalizedTrack {
   album?: string;
   coverUrl?: string;
   durationMs?: number;
-  source: 'spotify' | 'audius' | 'deezer';
+  source: 'spotify' | 'audius' | 'deezer' | 'youtube';
   streamUrl?: string;
   spotifyUri?: string;
   externalUrl?: string;
@@ -400,6 +400,178 @@ async function fetchDeezerTracks(query: string): Promise<NormalizedTrack[]> {
     externalUrl: item.link,
     isPreview: true,
   }));
+}
+
+function parseYouTubeDurationTextToMs(text?: string): number | undefined {
+  if (!text) return undefined;
+  const parts = text
+    .trim()
+    .split(':')
+    .map((p) => Number(p));
+  if (parts.some((n) => !Number.isFinite(n) || n < 0)) return undefined;
+  if (parts.length === 2) {
+    return (parts[0] * 60 + parts[1]) * 1000;
+  }
+  if (parts.length === 3) {
+    return (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
+  }
+  return undefined;
+}
+
+function extractYtInitialDataJson(html: string): Record<string, unknown> | null {
+  const markers = ['var ytInitialData = ', 'window["ytInitialData"] = '];
+  for (const marker of markers) {
+    const startIdx = html.indexOf(marker);
+    if (startIdx === -1) continue;
+    const jsonStart = html.indexOf('{', startIdx + marker.length);
+    if (jsonStart === -1) continue;
+    const scriptEnd = html.indexOf('</script>', jsonStart);
+    if (scriptEnd === -1) continue;
+    let rawSlice = html.slice(jsonStart, scriptEnd).trim();
+    if (rawSlice.endsWith(';')) {
+      rawSlice = rawSlice.slice(0, -1).trim();
+    }
+    try {
+      return JSON.parse(rawSlice) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function fetchYouTubeTracks(query: string): Promise<NormalizedTrack[]> {
+  const safeQuery = query.trim().slice(0, 120);
+  if (!safeQuery) return [];
+
+  const apiKey = (process.env.YOUTUBE_API_KEY || '').trim();
+  if (apiKey) {
+    const apiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=12&q=${encodeURIComponent(
+      safeQuery
+    )}&key=${encodeURIComponent(apiKey)}`;
+    const apiResp = await fetch(apiUrl, { signal: AbortSignal.timeout(6500) });
+    if (apiResp.ok) {
+      const json = (await apiResp.json()) as {
+        items?: Array<{
+          id?: { videoId?: string };
+          snippet?: {
+            title?: string;
+            channelTitle?: string;
+            thumbnails?: { medium?: { url?: string }; default?: { url?: string } };
+          };
+        }>;
+      };
+      return (json.items ?? [])
+        .filter((item) => item.id?.videoId && /^[a-zA-Z0-9_-]{6,20}$/.test(item.id.videoId))
+        .map((item) => {
+          const videoId = item.id!.videoId!;
+          return {
+            id: `youtube_${videoId}`,
+            title: item.snippet?.title || 'Vidéo YouTube',
+            artist: item.snippet?.channelTitle || 'YouTube',
+            coverUrl:
+              item.snippet?.thumbnails?.medium?.url ||
+              item.snippet?.thumbnails?.default?.url ||
+              `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            source: 'youtube' as const,
+            externalUrl: `https://www.youtube.com/watch?v=${videoId}`,
+            isPreview: false,
+          };
+        });
+    }
+  }
+
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(
+    safeQuery
+  )}&sp=EgIQAQ%3D%3D&hl=fr&gl=FR`;
+  const resp = await fetch(searchUrl, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+    },
+    signal: AbortSignal.timeout(7500),
+  });
+
+  if (!resp.ok) {
+    throw new Error('Recherche YouTube momentanément indisponible.');
+  }
+
+  const html = await resp.text();
+  const data = extractYtInitialDataJson(html) as {
+    contents?: {
+      twoColumnSearchResultsRenderer?: {
+        primaryContents?: {
+          sectionListRenderer?: {
+            contents?: Array<{
+              itemSectionRenderer?: {
+                contents?: Array<{
+                  videoRenderer?: {
+                    videoId?: string;
+                    title?: { runs?: Array<{ text?: string }>; simpleText?: string };
+                    ownerText?: { runs?: Array<{ text?: string }> };
+                    longBylineText?: { runs?: Array<{ text?: string }> };
+                    lengthText?: { simpleText?: string };
+                    thumbnail?: { thumbnails?: Array<{ url?: string }> };
+                  };
+                }>;
+              };
+            }>;
+          };
+        };
+      };
+    };
+  } | null;
+
+  const sections =
+    data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer
+      ?.contents ?? [];
+
+  const tracks: NormalizedTrack[] = [];
+  const seenIds = new Set<string>();
+
+  for (const section of sections) {
+    const items = section.itemSectionRenderer?.contents ?? [];
+    for (const entry of items) {
+      const video = entry.videoRenderer;
+      const videoId = video?.videoId;
+      if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId) || seenIds.has(videoId)) {
+        continue;
+      }
+      seenIds.add(videoId);
+
+      const title =
+        video.title?.runs?.map((r) => r.text || '').join('').trim() ||
+        video.title?.simpleText?.trim() ||
+        'Titre YouTube';
+      const artist =
+        video.ownerText?.runs?.[0]?.text?.trim() ||
+        video.longBylineText?.runs?.[0]?.text?.trim() ||
+        'Chaîne YouTube';
+      const durationMs = parseYouTubeDurationTextToMs(video.lengthText?.simpleText);
+      const thumbUrl =
+        video.thumbnail?.thumbnails?.[video.thumbnail.thumbnails.length - 1]?.url ||
+        video.thumbnail?.thumbnails?.[0]?.url ||
+        `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+      tracks.push({
+        id: `youtube_${videoId}`,
+        title,
+        artist,
+        coverUrl: thumbUrl,
+        durationMs,
+        source: 'youtube',
+        externalUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        isPreview: false,
+      });
+
+      if (tracks.length >= 12) {
+        return tracks;
+      }
+    }
+  }
+
+  return tracks;
 }
 
 export function createApiApp(): express.Express {
@@ -920,7 +1092,7 @@ export function createApiApp(): express.Express {
   });
 
   app.get('/api/music/search', async (req: Request, res: Response) => {
-    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 120) : '';
     const source = typeof req.query.source === 'string' ? req.query.source : 'audius';
     if (!q) {
       res.json({ tracks: [] });
@@ -930,6 +1102,11 @@ export function createApiApp(): express.Express {
     try {
       if (source === 'deezer') {
         const tracks = await fetchDeezerTracks(q);
+        res.json({ tracks });
+        return;
+      }
+      if (source === 'youtube') {
+        const tracks = await fetchYouTubeTracks(q);
         res.json({ tracks });
         return;
       }

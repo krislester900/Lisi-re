@@ -90,7 +90,7 @@ export function SalonRoomView({
       return (
         story.title.toLowerCase().includes(q) ||
         story.excerpt.toLowerCase().includes(q) ||
-        story.authorName.toLowerCase().includes(q)
+        (!story.isAnonymous && story.authorName.toLowerCase().includes(q))
       );
     });
   }, [allInSalon, formatFilter, searchQuery]);
@@ -549,13 +549,17 @@ export function SalonRoomView({
                           </>
                         )}
                         <span aria-hidden="true">·</span>
-                        <button
-                          type="button"
-                          onClick={() => onOpenMemberWall(leadStory.authorId)}
-                          className="font-medium text-stone-800 hover:underline"
-                        >
-                          Par {leadStory.authorName}
-                        </button>
+                        {leadStory.isAnonymous ? (
+                          <span className="font-medium text-stone-600">Par Auteur anonyme</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onOpenMemberWall(leadStory.authorId)}
+                            className="font-medium text-stone-800 hover:underline"
+                          >
+                            Par {leadStory.authorName}
+                          </button>
+                        )}
                         <span aria-hidden="true">·</span>
                         <span>{leadStory.readingMinutes} min de lecture</span>
                         <span aria-hidden="true">·</span>
@@ -688,13 +692,17 @@ export function SalonRoomView({
                               </>
                             )}
                             <span aria-hidden="true">·</span>
-                            <button
-                              type="button"
-                              onClick={() => onOpenMemberWall(story.authorId)}
-                              className="font-medium text-stone-800 hover:underline"
-                            >
-                              {story.authorName}
-                            </button>
+                            {story.isAnonymous ? (
+                              <span className="font-medium text-stone-600">Auteur anonyme</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onOpenMemberWall(story.authorId)}
+                                className="font-medium text-stone-800 hover:underline"
+                              >
+                                {story.authorName}
+                              </button>
+                            )}
                             <span aria-hidden="true">·</span>
                             <span>{story.readingMinutes} min</span>
                             <span aria-hidden="true">·</span>

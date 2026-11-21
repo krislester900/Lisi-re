@@ -629,7 +629,9 @@ export function ProfileWallView({
     );
   }
 
-  const publicStories = memberStories.filter((s) => s.visibility === 'public');
+  const publicStories = memberStories.filter(
+    (s) => s.visibility === 'public' && (isOwner || !s.isAnonymous)
+  );
   const isAnyMusicPlaying = Boolean(activeTrackId);
 
   return (
@@ -1422,6 +1424,15 @@ export function ProfileWallView({
                             <span className="tabular-nums">
                               {story.chapterCount ?? 1} chapitre
                               {(story.chapterCount ?? 1) > 1 ? 's' : ''}
+                            </span>
+                          </>
+                        )}
+                        {isOwner && story.isAnonymous && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex items-center gap-1 text-stone-700 font-medium">
+                              <EyeOff className="w-3 h-3" />
+                              <span>Anonyme (masqué aux visiteurs)</span>
                             </span>
                           </>
                         )}

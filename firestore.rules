@@ -180,7 +180,7 @@ service cloud.firestore {
           'storyId', 'authorId', 'authorName', 'title', 'excerpt', 'content',
           'theme', 'customSalonId', 'customSalonName', 'customSalonVisibility', 'storyScope',
           'storyFormat', 'releaseCadence', 'seriesStatus',
-          'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility',
+          'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility', 'isAnonymous',
           'readingMinutes', 'resonanceCount', 'echoCount', 'lastEchoId',
           'viewCount', 'lastViewId', 'createdAt', 'updatedAt'
         ])
@@ -202,6 +202,7 @@ service cloud.firestore {
         && (!('lastChapterId' in data) || isValidId(data.lastChapterId))
         && data.promptQuestion is string && data.promptQuestion.size() <= 240
         && data.visibility in ['public', 'private']
+        && (!('isAnonymous' in data) || data.isAnonymous is bool)
         && data.readingMinutes is int && data.readingMinutes >= 1 && data.readingMinutes <= 60
         && data.resonanceCount is int && data.resonanceCount >= 0
         && data.echoCount is int && data.echoCount >= 0
@@ -673,7 +674,7 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'authorName', 'title', 'excerpt', 'content', 'theme', 'storyScope',
               'storyFormat', 'releaseCadence', 'seriesStatus',
-              'promptQuestion', 'visibility', 'readingMinutes', 'updatedAt'
+              'promptQuestion', 'visibility', 'isAnonymous', 'readingMinutes', 'updatedAt'
             ])
           )
           ||

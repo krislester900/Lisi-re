@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Compass, Feather, Globe, Lock, X } from 'lucide-react';
+import { BookOpen, Compass, EyeOff, Feather, Globe, Lock, User as UserIcon, X } from 'lucide-react';
 import { createStory, updateStory } from '../lib/storyService';
 import {
   ACCENT_TONE_PALETTES,
@@ -69,6 +69,7 @@ export function StoryComposerModal({
   const [content, setContent] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [visibility, setVisibility] = useState<StoryVisibility>('public');
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [selectedCustomSalonId, setSelectedCustomSalonId] = useState<string | null>(
     initialCustomSalonId
   );
@@ -106,6 +107,7 @@ export function StoryComposerModal({
       setContent(editingStory.content);
       setExcerpt(editingStory.excerpt);
       setVisibility(editingStory.visibility);
+      setIsAnonymous(Boolean(editingStory.isAnonymous));
       setSelectedCustomSalonId(editingStory.customSalonId ?? null);
       setShowDestinationPicker(false);
     } else {
@@ -133,6 +135,7 @@ export function StoryComposerModal({
       setSelectedCustomSalonId(initialCustomSalonId ?? null);
       setShowDestinationPicker(!initialCustomSalonId);
       setVisibility(initialCs?.visibility === 'private' ? 'private' : 'public');
+      setIsAnonymous(false);
     }
   }, [
     isOpen,
@@ -221,6 +224,7 @@ export function StoryComposerModal({
         seriesStatus: storyFormat === 'confession' ? 'complet' : seriesStatus,
         promptQuestion,
         visibility: effectiveVisibility,
+        isAnonymous,
       };
       if (editingStory) {
         await updateStory(editingStory.storyId, authorName, payload);
@@ -657,6 +661,43 @@ export function StoryComposerModal({
               placeholder="Laissé vide, les premières lignes de votre texte seront utilisées."
               className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
             />
+          </div>
+
+          {/* Anonymity Toggle: Available for both Confessions and Romans */}
+          <div className="bg-white border border-stone-200 rounded-md p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {isAnonymous ? (
+                  <EyeOff className="w-4 h-4 text-[#1B365D] shrink-0" />
+                ) : (
+                  <UserIcon className="w-4 h-4 text-stone-500 shrink-0" />
+                )}
+                <span className="text-sm font-medium text-stone-900">
+                  Mode anonyme ({storyFormat === 'roman' ? 'roman' : 'confession'})
+                </span>
+              </div>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {isAnonymous
+                  ? `Votre nom (${authorName}) est masqué sur la fiche de lecture, dans les salons et hors de votre mur public : le récit s’affiche sous « Auteur anonyme ».`
+                  : `Votre nom (${authorName}) sera affiché avec un lien vers votre mur personnel.`}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isAnonymous}
+              aria-label="Publier ce récit en mode anonyme"
+              onClick={() => setIsAnonymous((prev) => !prev)}
+              className={`min-h-[40px] px-4 py-2 rounded-md border text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 self-start sm:self-center ${
+                isAnonymous
+                  ? 'bg-[#1B365D] text-white border-[#1B365D] hover:bg-[#132744]'
+                  : 'bg-[#FBF9F5] text-stone-800 border-stone-300 hover:border-stone-500'
+              }`}
+            >
+              <EyeOff className="w-3.5 h-3.5" />
+              <span>{isAnonymous ? 'Mode anonyme activé' : 'Publier anonymement'}</span>
+            </button>
           </div>
 
           <div className="pt-2 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

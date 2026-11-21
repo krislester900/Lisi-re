@@ -253,6 +253,7 @@ export function JournalView({
         seriesStatus: story.seriesStatus,
         promptQuestion: story.promptQuestion,
         visibility: nextVis,
+        isAnonymous: Boolean(story.isAnonymous),
       });
     } catch (err) {
       setStoryActionError(
@@ -645,6 +646,12 @@ export function JournalView({
                               </>
                             )}
                           </span>
+                          {story.isAnonymous && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-stone-300 bg-stone-50 text-[11px] font-medium text-stone-700">
+                              <EyeOff className="w-3 h-3" />
+                              <span>Anonyme</span>
+                            </span>
+                          )}
                         </div>
 
                         <h3 className="font-display text-xl font-medium text-stone-900">

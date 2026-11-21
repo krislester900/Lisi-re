@@ -59,6 +59,7 @@ export function MembersDirectoryView({
   const storyCountByAuthor = useMemo(() => {
     const map: Record<string, number> = {};
     for (const s of publicStories) {
+      if (s.isAnonymous) continue;
       map[s.authorId] = (map[s.authorId] || 0) + 1;
     }
     return map;
@@ -81,7 +82,7 @@ export function MembersDirectoryView({
     const isOwnSelected = Boolean(user && user.uid === selectedMemberId);
     const memberStories = isOwnSelected
       ? myStories
-      : publicStories.filter((s) => s.authorId === selectedMemberId);
+      : publicStories.filter((s) => s.authorId === selectedMemberId && !s.isAnonymous);
 
     return (
       <ProfileWallView

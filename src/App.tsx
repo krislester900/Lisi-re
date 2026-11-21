@@ -376,7 +376,7 @@ function SalonApp() {
       return (
         story.title.toLowerCase().includes(q) ||
         story.excerpt.toLowerCase().includes(q) ||
-        story.authorName.toLowerCase().includes(q)
+        (!story.isAnonymous && story.authorName.toLowerCase().includes(q))
       );
     });
   }, [openFeedStories, themeFilter, searchQuery]);
@@ -1492,13 +1492,17 @@ function SalonApp() {
                                 : ''}
                             </span>
                             <span aria-hidden="true">·</span>
-                            <button
-                              type="button"
-                              onClick={() => openMemberWall(leadStory.authorId)}
-                              className="hover:underline hover:text-stone-900"
-                            >
-                              Par {leadStory.authorName}
-                            </button>
+                            {leadStory.isAnonymous ? (
+                              <span className="text-stone-600">Par Auteur anonyme</span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openMemberWall(leadStory.authorId)}
+                                className="hover:underline hover:text-stone-900"
+                              >
+                                Par {leadStory.authorName}
+                              </button>
+                            )}
                             <span aria-hidden="true">·</span>
                             <span>{leadStory.readingMinutes} min de lecture</span>
                             <span aria-hidden="true">·</span>
@@ -1665,13 +1669,17 @@ function SalonApp() {
                                     {format === 'roman' ? ` · ${story.chapterCount ?? 1} ch.` : ''}
                                   </span>
                                   <span aria-hidden="true">·</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => openMemberWall(story.authorId)}
-                                    className="hover:underline hover:text-stone-900"
-                                  >
-                                    {story.authorName}
-                                  </button>
+                                  {story.isAnonymous ? (
+                                    <span className="text-stone-600">Auteur anonyme</span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => openMemberWall(story.authorId)}
+                                      className="hover:underline hover:text-stone-900"
+                                    >
+                                      {story.authorName}
+                                    </button>
+                                  )}
                                   <span aria-hidden="true">·</span>
                                   <span>{story.readingMinutes} min</span>
                                   <span aria-hidden="true">·</span>

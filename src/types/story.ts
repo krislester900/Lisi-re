@@ -83,6 +83,7 @@ export interface Story {
   lastChapterId?: string;
   promptQuestion: string;
   visibility: StoryVisibility;
+  isAnonymous?: boolean;
   readingMinutes: number;
   resonanceCount: number;
   echoCount: number;

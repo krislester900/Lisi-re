@@ -199,7 +199,7 @@ export function ImmersiveMusicPlayer({
     if (parsed.type === 'youtube' || parsed.type === 'soundcloud') {
       return (
         <div
-          className={`mt-2.5 rounded-xl px-3.5 py-2.5 border flex items-center justify-between gap-3 ${
+          className={`mt-2.5 rounded-xl px-3.5 py-2 border flex items-center justify-between gap-3 ${
             variant === 'wall-widget'
               ? 'bg-[#1F1E1C] border-white/15 text-white'
               : darkSurface
@@ -211,10 +211,10 @@ export function ImmersiveMusicPlayer({
             <Disc3 className="w-4 h-4 text-white/90 lisiere-disc-spin shrink-0" />
             <div className="min-w-0">
               <p className="text-xs font-medium text-white truncate">
-                Lecteur audio immersif · {title}
+                Lecture en cours · {title}
               </p>
               <p className="text-[11px] text-stone-300 truncate">
-                Son diffusé sans interface vidéo externe
+                {parsed.type === 'youtube' ? 'Lecteur YouTube' : 'Lecteur SoundCloud'}
               </p>
             </div>
           </div>
@@ -294,15 +294,18 @@ export function ImmersiveMusicPlayer({
 
       {renderCustomAudioBar()}
 
-      {/* Hidden immersive stream for YouTube and SoundCloud: zero platform branding shown */}
+      {/* Visible embedded player for YouTube and SoundCloud so mobile & desktop browsers allow playback */}
       {isActive && (parsed.type === 'youtube' || parsed.type === 'soundcloud') && parsed.embedUrl && (
-        <div className="sr-only" aria-hidden="true">
+        <div className="rounded-xl overflow-hidden border border-stone-200/80 bg-black mt-2">
           <iframe
-            title={`Lecture audio de ${title}`}
+            title={`Lecteur audio de ${title}`}
             src={parsed.embedUrl}
-            allow="autoplay; encrypted-media"
-            width="1"
-            height="1"
+            width="100%"
+            height={parsed.type === 'youtube' ? 190 : 80}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+            className="block w-full border-0"
           />
         </div>
       )}

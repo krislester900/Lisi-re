@@ -3,12 +3,17 @@ import {
   Disc3,
   ExternalLink,
   Link2,
+  Maximize2,
+  Minimize2,
   Music2,
   Pause,
   Play,
   Repeat,
   Search,
+  Smartphone,
+  Trash2,
   Unplug,
+  Upload,
   Volume2,
   VolumeX,
   X,
@@ -28,6 +33,12 @@ import {
   searchMusicCatalog,
   startSpotifyPlayback,
 } from '../lib/musicService';
+import {
+  addLocalAudioFiles,
+  loadLocalAudioTracks,
+  removeLocalAudioTrack,
+  revokeLocalTrackUrls,
+} from '../lib/localAudioStore';
 import { parseMusicSource } from '../lib/storageService';
 
 export interface AuthorMusicInfo {
@@ -66,6 +77,12 @@ export interface ReadingAudioController {
   spotifyDeviceId: string | null;
   playbackError: string | null;
   clearPlaybackError: () => void;
+  localTracks: ReadingTrack[];
+  localBusy: boolean;
+  localError: string | null;
+  clearLocalError: () => void;
+  addLocalFiles: (files: FileList | File[]) => Promise<void>;
+  removeLocalTrack: (track: ReadingTrack) => Promise<void>;
   refreshProviders: () => Promise<void>;
   playTrack: (track: ReadingTrack) => Promise<void>;
   togglePlayPause: () => Promise<void>;
@@ -94,6 +111,13 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   const [durationMs, setDurationMs] = useState(0);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const [embedCompact, setEmbedCompact] = useState(false);
+
+  const [localTracks, setLocalTracks] = useState<ReadingTrack[]>([]);
+  const [localBusy, setLocalBusy] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const localTracksRef = useRef<ReadingTrack[]>([]);
+  localTracksRef.current = localTracks;
 
   const refreshProviders = useCallback(async () => {
     try {
@@ -108,6 +132,30 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     if (!storyOpen) return;
     void refreshProviders();
   }, [storyOpen, refreshProviders]);
+
+  useEffect(() => {
+    if (!storyOpen) return;
+    let cancelled = false;
+    void loadLocalAudioTracks().then((tracks) => {
+      if (cancelled) {
+        revokeLocalTrackUrls(tracks);
+        return;
+      }
+      setLocalTracks((prev) => {
+        revokeLocalTrackUrls(prev);
+        return tracks;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storyOpen]);
+
+  useEffect(() => {
+    return () => {
+      revokeLocalTrackUrls(localTracksRef.current);
+    };
+  }, []);
 
   // Listen for OAuth popup completion
   useEffect(() => {
@@ -227,12 +275,17 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
       spotifyPlayerRef.current.disconnect();
       spotifyPlayerRef.current = null;
     }
+    if (localTracksRef.current.length > 0) {
+      revokeLocalTrackUrls(localTracksRef.current);
+      setLocalTracks([]);
+    }
     setSpotifyDeviceId(null);
     setActiveTrack(null);
     setIsPlaying(false);
     setCurrentTimeMs(0);
     setDurationMs(0);
     setPlaybackError(null);
+    setLocalError(null);
   }, [storyOpen]);
 
   // Sync mute state to audio and Spotify SDK
@@ -245,19 +298,19 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     }
   }, [isMuted]);
 
-  const stopAllEngines = useCallback(async () => {
+  const stopAllEnginesSync = useCallback(() => {
     if (audioElementRef.current) {
       audioElementRef.current.pause();
     }
     if (spotifyPlayerRef.current) {
-      await spotifyPlayerRef.current.pause().catch(() => {});
+      void spotifyPlayerRef.current.pause().catch(() => {});
     }
   }, []);
 
   const playTrack = useCallback(
     async (track: ReadingTrack) => {
       setPlaybackError(null);
-      await stopAllEngines();
+      stopAllEnginesSync();
       setActiveTrack(track);
       setCurrentTimeMs(0);
       setDurationMs(track.durationMs || 0);
@@ -298,8 +351,8 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
         return;
       }
 
-      // 2. Link-based tracks (SoundCloud / YouTube / Spotify link / Deezer link / MP3)
-      if (track.source === 'link' && track.externalUrl) {
+      // 2. YouTube search tracks or link-based tracks (YouTube / SoundCloud / Spotify / Deezer / MP3)
+      if ((track.source === 'youtube' || track.source === 'link') && track.externalUrl) {
         const parsed = parseMusicSource(track.externalUrl);
         if (parsed.type === 'audio' && parsed.originalUrl && audioElementRef.current) {
           audioElementRef.current.src = parsed.originalUrl;
@@ -313,7 +366,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
         return;
       }
 
-      // 3. Direct audio streams (Audius full tracks, Deezer preview)
+      // 3. Direct audio streams (Audius full tracks, Deezer preview, local phone files)
       if (track.streamUrl && audioElementRef.current) {
         audioElementRef.current.src = track.streamUrl;
         try {
@@ -329,7 +382,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
       setPlaybackError('Aucun flux audio lisible directement pour ce morceau.');
       setIsPlaying(false);
     },
-    [providers?.spotify.connected, providers?.spotify.user?.product, spotifyDeviceId, stopAllEngines]
+    [providers?.spotify.connected, providers?.spotify.user?.product, spotifyDeviceId, stopAllEnginesSync]
   );
 
   const togglePlayPause = useCallback(async () => {
@@ -347,16 +400,17 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     }
 
     const parsedLink =
-      activeTrack.source === 'link' && activeTrack.externalUrl
+      (activeTrack.source === 'youtube' || activeTrack.source === 'link') && activeTrack.externalUrl
         ? parseMusicSource(activeTrack.externalUrl)
         : null;
 
     if (
-      parsedLink &&
-      (parsedLink.type === 'youtube' ||
-        parsedLink.type === 'soundcloud' ||
-        parsedLink.type === 'spotify' ||
-        parsedLink.type === 'deezer')
+      activeTrack.source === 'youtube' ||
+      (parsedLink &&
+        (parsedLink.type === 'youtube' ||
+          parsedLink.type === 'soundcloud' ||
+          parsedLink.type === 'spotify' ||
+          parsedLink.type === 'deezer'))
     ) {
       setIsPlaying((prev) => !prev);
       return;
@@ -374,13 +428,13 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
   }, [activeTrack, isPlaying, spotifyDeviceId]);
 
   const stopTrack = useCallback(async () => {
-    await stopAllEngines();
+    stopAllEnginesSync();
     setActiveTrack(null);
     setIsPlaying(false);
     setCurrentTimeMs(0);
     setDurationMs(0);
     setPlaybackError(null);
-  }, [stopAllEngines]);
+  }, [stopAllEnginesSync]);
 
   const seekToMs = useCallback(
     async (ms: number) => {
@@ -445,9 +499,47 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     [playTrack]
   );
 
+  const addLocalFiles = useCallback(
+    async (files: FileList | File[]) => {
+      setLocalError(null);
+      setLocalBusy(true);
+      try {
+        const { added, skippedCount } = await addLocalAudioFiles(files);
+        if (added.length > 0) {
+          setLocalTracks((prev) => [...added, ...prev]);
+          await playTrack(added[0]);
+        }
+        if (skippedCount > 0) {
+          setLocalError(
+            `${skippedCount} fichier${skippedCount > 1 ? 's' : ''} ignoré${skippedCount > 1 ? 's' : ''} (formats acceptés : MP3, M4A, WAV, OGG, AAC, FLAC).`
+          );
+        } else if (added.length === 0) {
+          setLocalError('Aucun fichier audio compatible n’a été sélectionné.');
+        }
+      } catch {
+        setLocalError('Impossible de charger ce fichier audio depuis votre appareil.');
+      } finally {
+        setLocalBusy(false);
+      }
+    },
+    [playTrack]
+  );
+
+  const removeLocalTrack = useCallback(
+    async (track: ReadingTrack) => {
+      if (activeTrack?.id === track.id) {
+        await stopTrack();
+      }
+      await removeLocalAudioTrack(track);
+      setLocalTracks((prev) => prev.filter((t) => t.id !== track.id));
+    },
+    [activeTrack?.id, stopTrack]
+  );
+
   const renderHiddenStreams = useCallback(() => {
     const parsed =
-      activeTrack?.source === 'link' && activeTrack.externalUrl
+      (activeTrack?.source === 'youtube' || activeTrack?.source === 'link') &&
+      activeTrack.externalUrl
         ? parseMusicSource(activeTrack.externalUrl)
         : activeTrack?.source === 'spotify' &&
             !spotifyDeviceId &&
@@ -455,6 +547,12 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
             activeTrack.externalUrl
           ? parseMusicSource(activeTrack.externalUrl)
           : null;
+
+    const showExternalDock =
+      isPlaying &&
+      parsed &&
+      (parsed.type === 'youtube' || parsed.type === 'soundcloud') &&
+      Boolean(parsed.embedUrl);
 
     return (
       <>
@@ -474,24 +572,62 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
           className="hidden"
         />
 
-        {/* Hidden SoundCloud / YouTube background stream */}
-        {isPlaying &&
-          parsed &&
-          (parsed.type === 'soundcloud' || parsed.type === 'youtube') &&
-          parsed.embedUrl && (
-            <div className="sr-only" aria-hidden="true">
-              <iframe
-                title={`Lecture audio de ${activeTrack?.title || 'musique'}`}
-                src={parsed.embedUrl}
-                allow="autoplay; encrypted-media"
-                width="1"
-                height="1"
-              />
+        {/* Persistent visible compact dock so YouTube / SoundCloud keep playing reliably in both standard and Zen mode */}
+        {showExternalDock && parsed?.embedUrl && (
+          <div
+            className={`fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-[60] rounded-lg border border-stone-700 bg-[#171614] text-white shadow-2xl overflow-hidden transition-all duration-200 ${
+              embedCompact ? 'w-[210px]' : 'w-[268px] sm:w-[300px]'
+            }`}
+            aria-label="Lecteur audio intégré"
+          >
+            <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 border-b border-white/10 bg-[#1F1E1C]">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Disc3 className="w-3.5 h-3.5 text-amber-300 lisiere-disc-spin shrink-0" />
+                <span className="text-[11px] font-medium truncate">
+                  {activeTrack?.title || (parsed.type === 'youtube' ? 'YouTube' : 'SoundCloud')}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEmbedCompact((prev) => !prev)}
+                  aria-label={embedCompact ? 'Agrandir le lecteur' : 'Réduire le lecteur'}
+                  title={embedCompact ? 'Agrandir' : 'Réduire'}
+                  className="p-1 rounded text-stone-300 hover:text-white hover:bg-white/10"
+                >
+                  {embedCompact ? (
+                    <Maximize2 className="w-3 h-3" />
+                  ) : (
+                    <Minimize2 className="w-3 h-3" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void stopTrack()}
+                  aria-label="Fermer et arrêter la musique"
+                  title="Arrêter"
+                  className="p-1 rounded text-stone-300 hover:text-white hover:bg-white/10"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
             </div>
-          )}
+            <iframe
+              key={parsed.embedUrl}
+              title={`Lecture audio de ${activeTrack?.title || 'musique'}`}
+              src={parsed.embedUrl}
+              width="100%"
+              height={parsed.type === 'youtube' ? (embedCompact ? 118 : 158) : 80}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+              className="block w-full border-0 bg-black"
+            />
+          </div>
+        )}
       </>
     );
-  }, [activeTrack, isPlaying, isLooping, spotifyDeviceId]);
+  }, [activeTrack, embedCompact, isPlaying, isLooping, spotifyDeviceId, stopTrack]);
 
   return {
     activeTrack,
@@ -504,6 +640,12 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     spotifyDeviceId,
     playbackError,
     clearPlaybackError: () => setPlaybackError(null),
+    localTracks,
+    localBusy,
+    localError,
+    clearLocalError: () => setLocalError(null),
+    addLocalFiles,
+    removeLocalTrack,
     refreshProviders,
     playTrack,
     togglePlayPause,
@@ -543,6 +685,8 @@ export function ReadingMusicPanel({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkTitle, setLinkTitle] = useState('');
 
+  const localFileInputRef = useRef<HTMLInputElement | null>(null);
+
   const {
     activeTrack,
     isPlaying,
@@ -554,6 +698,12 @@ export function ReadingMusicPanel({
     spotifyDeviceId,
     playbackError,
     clearPlaybackError,
+    localTracks,
+    localBusy,
+    localError,
+    clearLocalError,
+    addLocalFiles,
+    removeLocalTrack,
     playTrack,
     togglePlayPause,
     stopTrack,
@@ -568,7 +718,7 @@ export function ReadingMusicPanel({
   const runSearch = useCallback(
     async (query: string, targetTab: MusicProviderTab = providerTab) => {
       const trimmed = query.trim();
-      if (!trimmed || targetTab === 'link') return;
+      if (!trimmed || targetTab === 'link' || targetTab === 'local') return;
       setSearchError(null);
       setSearching(true);
       try {
@@ -625,8 +775,9 @@ export function ReadingMusicPanel({
 
   const handlePresetClick = (presetQuery: string) => {
     setSearchInput(presetQuery);
-    const searchTarget = providerTab === 'link' ? 'audius' : providerTab;
-    if (providerTab === 'link') setProviderTab('audius');
+    const searchTarget =
+      providerTab === 'link' || providerTab === 'local' ? 'audius' : providerTab;
+    if (providerTab === 'link' || providerTab === 'local') setProviderTab('audius');
     void runSearch(presetQuery, searchTarget);
   };
 
@@ -642,7 +793,7 @@ export function ReadingMusicPanel({
         : parsed.type === 'spotify'
           ? 'Piste Spotify'
           : parsed.type === 'youtube'
-            ? 'Ambiance audio'
+            ? 'Ambiance YouTube'
             : 'Lien musical');
 
     void playTrack({
@@ -656,7 +807,8 @@ export function ReadingMusicPanel({
 
   const parsedActiveEmbed =
     activeTrack &&
-    ((activeTrack.source === 'link' && activeTrack.externalUrl) ||
+    (((activeTrack.source === 'youtube' || activeTrack.source === 'link') &&
+      activeTrack.externalUrl) ||
       (activeTrack.source === 'spotify' &&
         !spotifyDeviceId &&
         !activeTrack.streamUrl &&
@@ -859,6 +1011,8 @@ export function ReadingMusicPanel({
         {(
           [
             { id: 'audius', label: 'Musique gratuite' },
+            { id: 'youtube', label: 'YouTube' },
+            { id: 'local', label: 'Mon téléphone' },
             { id: 'spotify', label: 'Spotify' },
             { id: 'deezer', label: 'Deezer' },
             { id: 'link', label: 'SoundCloud / Lien' },
@@ -872,6 +1026,9 @@ export function ReadingMusicPanel({
             onClick={() => {
               setProviderTab(tab.id);
               setSearchError(null);
+              if (tab.id === 'youtube' || tab.id === 'audius' || tab.id === 'deezer') {
+                void runSearch(searchInput.trim() || 'piano ambient', tab.id);
+              }
             }}
             className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
               providerTab === tab.id
@@ -949,8 +1106,138 @@ export function ReadingMusicPanel({
         </div>
       )}
 
-      {/* Search bar or SoundCloud / Direct Link input */}
-      {providerTab === 'link' ? (
+      {/* Search bar, Phone audio library, or SoundCloud / Direct Link input */}
+      {providerTab === 'local' ? (
+        <div className="space-y-3">
+          <input
+            ref={localFileInputRef}
+            type="file"
+            accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac,.opus,.webm"
+            multiple
+            onChange={(e) => {
+              const files = e.target.files;
+              if (files && files.length > 0) {
+                void addLocalFiles(files);
+              }
+              e.target.value = '';
+            }}
+            className="hidden"
+          />
+
+          <div className="rounded-md border border-dashed border-stone-300 bg-[#FBF9F5] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-md bg-white border border-stone-200 flex items-center justify-center shrink-0 text-[#1B365D]">
+                <Smartphone className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-stone-900">
+                  Musiques depuis votre téléphone ou ordinateur
+                </p>
+                <p className="text-[11px] text-stone-600">
+                  Importez vos fichiers MP3, M4A, WAV ou OGG. Ils restent privés sur cet appareil et se lisent en mode zen.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={localBusy}
+              onClick={() => localFileInputRef.current?.click()}
+              className="min-h-[38px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] disabled:opacity-50 text-xs font-medium inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>{localBusy ? 'Chargement…' : 'Ajouter un fichier audio'}</span>
+            </button>
+          </div>
+
+          {localError && (
+            <div
+              role="alert"
+              className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 flex items-start justify-between gap-2"
+            >
+              <span>{localError}</span>
+              <button
+                type="button"
+                onClick={clearLocalError}
+                aria-label="Fermer le message"
+                className="text-amber-800 hover:text-amber-950 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {localTracks.length > 0 ? (
+            <ul className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5] max-h-56 overflow-y-auto">
+              {localTracks.map((track) => {
+                const isCurrent = activeTrack?.id === track.id;
+                return (
+                  <li
+                    key={track.id}
+                    className="flex items-center justify-between gap-2.5 px-3 py-2 hover:bg-white transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded bg-stone-200/80 flex items-center justify-center shrink-0 text-[#1B365D]">
+                        <Smartphone className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-stone-900 truncate">{track.title}</p>
+                        <p className="text-[11px] text-stone-500 truncate tabular-nums">
+                          {track.artist}
+                          {track.durationMs ? ` · ${formatMs(track.durationMs)}` : ''}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => void removeLocalTrack(track)}
+                        aria-label={`Supprimer ${track.title}`}
+                        title="Retirer de cet appareil"
+                        className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 bg-white text-stone-500 hover:text-red-700 hover:border-red-200"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isCurrent) {
+                            void togglePlayPause();
+                          } else {
+                            void playTrack(track);
+                          }
+                        }}
+                        className={`min-h-[32px] px-2.5 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
+                          isCurrent && isPlaying
+                            ? 'bg-stone-900 text-white'
+                            : 'bg-[#1B365D] text-white hover:bg-[#132744]'
+                        }`}
+                      >
+                        {isCurrent && isPlaying ? (
+                          <>
+                            <Pause className="w-3 h-3" />
+                            <span>Pause</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3 h-3 fill-current" />
+                            <span>Lire</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-xs text-stone-500 text-center py-3">
+              Aucune musique ajoutée pour le moment. Choisissez un fichier sur votre téléphone pour l’écouter pendant votre lecture.
+            </p>
+          )}
+        </div>
+      ) : providerTab === 'link' ? (
         <form onSubmit={handlePlayCustomLink} className="space-y-2.5">
           <div className="space-y-2">
             <input
@@ -981,7 +1268,7 @@ export function ReadingMusicPanel({
             </div>
           </div>
           <p className="text-[11px] text-stone-500">
-            Les liens SoundCloud et YouTube diffusent uniquement le son en arrière-plan pour préserver le calme de lecture.
+            Les liens YouTube et SoundCloud s’affichent dans un mini-lecteur discret au bas de l’écran afin d’assurer une lecture fiable sur mobile et ordinateur.
           </p>
         </form>
       ) : (
@@ -996,9 +1283,11 @@ export function ReadingMusicPanel({
                 placeholder={
                   providerTab === 'spotify'
                     ? 'Chercher un titre ou un artiste sur Spotify…'
-                    : providerTab === 'deezer'
-                      ? 'Chercher sur Deezer…'
-                      : 'Chercher un morceau pour accompagner votre lecture…'
+                    : providerTab === 'youtube'
+                      ? 'Chercher une musique, bande-son ou ambiance sur YouTube…'
+                      : providerTab === 'deezer'
+                        ? 'Chercher sur Deezer…'
+                        : 'Chercher un morceau pour accompagner votre lecture…'
                 }
                 aria-label="Rechercher une musique pour la lecture"
                 className="w-full min-h-[40px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
