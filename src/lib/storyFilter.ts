@@ -1,5 +1,5 @@
-import { THEME_MAP } from './themes';
-import { Story, StoryFormat, StoryThemeId } from '../types/story';
+import { NOVEL_GENRE_LABELS, THEME_MAP } from './themes';
+import { NovelGenre, Story, StoryFormat, StoryThemeId } from '../types/story';
 
 export type StorySortMode =
   | 'recent'
@@ -14,10 +14,14 @@ export type StoryFormatFilter = 'all' | StoryFormat;
 export type StoryDurationFilter = 'all' | 'short' | 'medium' | 'long';
 export type StorySignatureFilter = 'all' | 'named' | 'anonymous';
 export type StoryOriginFilter = 'all' | 'hors-salon' | 'salons-publics';
+export type StoryNovelGenreFilter = 'all' | NovelGenre;
+export type StorySeriesStatusFilter = 'all' | 'en-cours' | 'termine';
 
 export interface StoryFilterState {
   sortMode: StorySortMode;
   format: StoryFormatFilter;
+  novelGenre: StoryNovelGenreFilter;
+  seriesStatus: StorySeriesStatusFilter;
   duration: StoryDurationFilter;
   signature: StorySignatureFilter;
   theme: 'all' | StoryThemeId;
@@ -33,6 +37,8 @@ export function createDefaultStoryFilterState(
   return {
     sortMode: initialSort,
     format: 'all',
+    novelGenre: 'all',
+    seriesStatus: 'all',
     duration: 'all',
     signature: 'all',
     theme: 'all',
@@ -45,6 +51,8 @@ export function createDefaultStoryFilterState(
 export function countActiveStoryFilters(state: StoryFilterState): number {
   let count = 0;
   if (state.format !== 'all') count += 1;
+  if (state.novelGenre !== 'all') count += 1;
+  if (state.seriesStatus !== 'all') count += 1;
   if (state.duration !== 'all') count += 1;
   if (state.signature !== 'all') count += 1;
   if (state.theme !== 'all') count += 1;
@@ -128,6 +136,17 @@ export function filterAndSortStories(stories: Story[], state: StoryFilterState):
     const fmt: StoryFormat = story.storyFormat ?? 'confession';
     if (state.format !== 'all' && fmt !== state.format) return false;
 
+    if (state.novelGenre !== 'all') {
+      if (fmt !== 'roman') return false;
+      if ((story.novelGenre ?? 'contemporain') !== state.novelGenre) return false;
+    }
+
+    if (state.seriesStatus !== 'all') {
+      if (fmt !== 'roman') return false;
+      const effectiveStatus = story.seriesStatus === 'termine' ? 'termine' : 'en-cours';
+      if (effectiveStatus !== state.seriesStatus) return false;
+    }
+
     const mins = story.readingMinutes ?? 1;
     if (state.duration === 'short' && mins > 3) return false;
     if (state.duration === 'medium' && (mins < 4 || mins > 8)) return false;
@@ -150,12 +169,17 @@ export function filterAndSortStories(stories: Story[], state: StoryFilterState):
       story.customSalonName ||
       (isHorsSalon ? 'Hors salon Pêle-mêle' : THEME_MAP[story.theme]?.salonName || '')
     ).toLowerCase();
+    const genreLabel =
+      fmt === 'roman' && story.novelGenre
+        ? (NOVEL_GENRE_LABELS[story.novelGenre] || '').toLowerCase()
+        : '';
 
     return (
       story.title.toLowerCase().includes(q) ||
       story.excerpt.toLowerCase().includes(q) ||
       (!story.isAnonymous && story.authorName.toLowerCase().includes(q)) ||
-      salonLabel.includes(q)
+      salonLabel.includes(q) ||
+      (genreLabel && genreLabel.includes(q))
     );
   });
 

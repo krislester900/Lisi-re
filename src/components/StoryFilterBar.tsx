@@ -14,11 +14,13 @@ import {
   StoryDurationFilter,
   StoryFilterState,
   StoryFormatFilter,
+  StoryNovelGenreFilter,
   StoryOriginFilter,
+  StorySeriesStatusFilter,
   StorySignatureFilter,
   StorySortMode,
 } from '../lib/storyFilter';
-import { STORY_THEMES } from '../lib/themes';
+import { NOVEL_GENRE_LABELS, NOVEL_GENRES, STORY_THEMES } from '../lib/themes';
 import { StoryThemeId } from '../types/story';
 
 interface StoryFilterBarProps {
@@ -69,6 +71,8 @@ export function StoryFilterBar({
       ...value,
       sortMode: defaultSort,
       format: 'all',
+      novelGenre: 'all',
+      seriesStatus: 'all',
       duration: 'all',
       signature: 'all',
       theme: 'all',
@@ -181,7 +185,15 @@ export function StoryFilterBar({
                   <button
                     key={fmt.id}
                     type="button"
-                    onClick={() => onChange({ ...value, format: fmt.id })}
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        format: fmt.id,
+                        ...(fmt.id === 'confession'
+                          ? { novelGenre: 'all', seriesStatus: 'all' }
+                          : {}),
+                      })
+                    }
                     className={`min-h-[32px] px-3 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                       value.format === fmt.id
                         ? 'bg-stone-900 text-white border-stone-900'
@@ -282,6 +294,85 @@ export function StoryFilterBar({
                 >
                   Plus longs d’abord
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Genre & Status for Novels */}
+          <div className="pt-3 border-t border-stone-100 grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="lg:col-span-8 space-y-1.5">
+              <p className="text-[11px] uppercase tracking-widest text-stone-500">
+                Type de roman (poème, drame, romance…)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onChange({ ...value, novelGenre: 'all' })}
+                  className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
+                    value.novelGenre === 'all'
+                      ? 'bg-stone-900 text-white border-stone-900'
+                      : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                  }`}
+                >
+                  Tous genres
+                </button>
+                {NOVEL_GENRES.map((genre) => (
+                  <button
+                    key={genre}
+                    type="button"
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        novelGenre: genre as StoryNovelGenreFilter,
+                        format: value.format === 'confession' ? 'roman' : value.format,
+                      })
+                    }
+                    className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
+                      value.novelGenre === genre
+                        ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                    }`}
+                  >
+                    {NOVEL_GENRE_LABELS[genre]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 space-y-1.5">
+              <p className="text-[11px] uppercase tracking-widest text-stone-500">
+                Statut du roman
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { id: 'all', label: 'Tous' },
+                    { id: 'en-cours', label: 'En cours' },
+                    { id: 'termine', label: 'Terminés' },
+                  ] as Array<{ id: StorySeriesStatusFilter; label: string }>
+                ).map((st) => (
+                  <button
+                    key={st.id}
+                    type="button"
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        seriesStatus: st.id,
+                        format:
+                          st.id !== 'all' && value.format === 'confession'
+                            ? 'roman'
+                            : value.format,
+                      })
+                    }
+                    className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
+                      value.seriesStatus === st.id
+                        ? 'bg-stone-900 text-white border-stone-900'
+                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
               </div>
             </div>
           </div>

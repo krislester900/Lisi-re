@@ -27,6 +27,7 @@ import { JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
 import { MembersDirectoryView } from './components/MembersDirectoryView';
+import { NovelCoverArt } from './components/NovelCoverArt';
 import { PeleMeleStoriesView } from './components/PeleMeleStoriesView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
 import { RepostModal } from './components/RepostModal';
@@ -58,6 +59,8 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
+  NOVEL_GENRE_LABELS,
+  SERIES_STATUS_LABELS,
   STORY_FORMAT_LABELS,
   STORY_THEMES,
   THEME_MAP,
@@ -68,6 +71,7 @@ import {
   PublicProfile,
   Story,
   StoryBookmark,
+  StoryFormat,
   StoryQuote,
   StoryRepost,
   StoryThemeId,
@@ -213,6 +217,9 @@ function SalonApp() {
     prompt?: string;
     starter?: string;
     customSalonId?: string | null;
+    format?: StoryFormat;
+    romanMode?: 'new' | 'append';
+    novelId?: string | null;
   }>({ theme: 'creation', scope: 'salon', customSalonId: null });
 
   const [customSalonModalOpen, setCustomSalonModalOpen] = useState(false);
@@ -323,6 +330,9 @@ function SalonApp() {
     prompt?: string;
     starter?: string;
     customSalonId?: string | null;
+    format?: StoryFormat;
+    romanMode?: 'new' | 'append';
+    novelId?: string | null;
     edit?: Story | null;
   }) => {
     if (!user) {
@@ -336,6 +346,9 @@ function SalonApp() {
       prompt: options?.prompt,
       starter: options?.starter,
       customSalonId: options?.customSalonId ?? null,
+      format: options?.format ?? 'confession',
+      romanMode: options?.romanMode ?? 'new',
+      novelId: options?.novelId ?? null,
     });
     setComposerOpen(true);
   };
@@ -1483,8 +1496,14 @@ function SalonApp() {
                             <span aria-hidden="true">·</span>
                             <span className="font-medium text-stone-700">
                               {STORY_FORMAT_LABELS[leadStory.storyFormat ?? 'confession'].label}
+                              {(leadStory.storyFormat ?? 'confession') === 'roman' &&
+                              leadStory.novelGenre
+                                ? ` · ${NOVEL_GENRE_LABELS[leadStory.novelGenre]}`
+                                : ''}
                               {(leadStory.storyFormat ?? 'confession') === 'roman'
-                                ? ` · ${leadStory.chapterCount ?? 1} chap.`
+                                ? ` · ${leadStory.chapterCount ?? 1} chap. · ${
+                                    SERIES_STATUS_LABELS[leadStory.seriesStatus ?? 'en-cours']
+                                  }`
                                 : ''}
                             </span>
                             <span aria-hidden="true">·</span>
@@ -1505,16 +1524,41 @@ function SalonApp() {
                             <span>{formatFrenchDate(leadStory.createdAt?.toDate() ?? null)}</span>
                           </div>
 
-                          <h2
-                            className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
-                            style={{ textWrap: 'balance' }}
-                          >
-                            {leadStory.title}
-                          </h2>
+                          {leadStory.storyFormat === 'roman' && leadStory.coverUrl ? (
+                            <div className="flex flex-col sm:flex-row items-start gap-5">
+                              <NovelCoverArt
+                                coverUrl={leadStory.coverUrl}
+                                title={leadStory.title}
+                                genre={leadStory.novelGenre}
+                                size="md"
+                              />
+                              <div className="min-w-0 flex-1 space-y-3">
+                                <h2
+                                  className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
+                                  style={{ textWrap: 'balance' }}
+                                >
+                                  {leadStory.title}
+                                </h2>
 
-                          <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
-                            {leadStory.excerpt}
-                          </p>
+                                <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
+                                  {leadStory.excerpt}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <h2
+                                className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
+                                style={{ textWrap: 'balance' }}
+                              >
+                                {leadStory.title}
+                              </h2>
+
+                              <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
+                                {leadStory.excerpt}
+                              </p>
+                            </>
+                          )}
                         </div>
 
                         <div className="lg:col-span-4 lg:border-l lg:border-stone-200 lg:pl-8 flex flex-col justify-between h-full space-y-6">
@@ -1662,7 +1706,14 @@ function SalonApp() {
                                   <span aria-hidden="true">·</span>
                                   <span className="font-medium text-stone-700">
                                     {STORY_FORMAT_LABELS[format].label}
-                                    {format === 'roman' ? ` · ${story.chapterCount ?? 1} ch.` : ''}
+                                    {format === 'roman' && story.novelGenre
+                                      ? ` · ${NOVEL_GENRE_LABELS[story.novelGenre]}`
+                                      : ''}
+                                    {format === 'roman'
+                                      ? ` · ${story.chapterCount ?? 1} ch. · ${
+                                          SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']
+                                        }`
+                                      : ''}
                                   </span>
                                   <span aria-hidden="true">·</span>
                                   {story.isAnonymous ? (
@@ -1682,10 +1733,34 @@ function SalonApp() {
                                   <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
                                 </div>
 
-                                <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
-                                  {story.title}
-                                </h3>
-                                <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
+                                {format === 'roman' && story.coverUrl ? (
+                                  <div className="flex items-start gap-4">
+                                    <NovelCoverArt
+                                      coverUrl={story.coverUrl}
+                                      title={story.title}
+                                      genre={story.novelGenre}
+                                      accentColor={originPalette?.textAccent ?? '#1B365D'}
+                                      size="sm"
+                                    />
+                                    <div className="min-w-0 flex-1 space-y-2">
+                                      <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                        {story.title}
+                                      </h3>
+                                      <p className="text-sm text-stone-600 leading-relaxed">
+                                        {story.excerpt}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                      {story.title}
+                                    </h3>
+                                    <p className="text-sm text-stone-600 leading-relaxed">
+                                      {story.excerpt}
+                                    </p>
+                                  </>
+                                )}
                               </div>
 
                               <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
@@ -1800,6 +1875,16 @@ function SalonApp() {
             onReadStory={(story) => setReadingStory(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onEditStory={(story) => void openComposer({ edit: story })}
+            onAddChapterToNovel={(story) =>
+              void openComposer({
+                format: 'roman',
+                romanMode: 'append',
+                novelId: story.storyId,
+                theme: story.theme,
+                scope: story.storyScope,
+                customSalonId: story.customSalonId ?? null,
+              })
+            }
             onNewStory={() => void openComposer()}
             onOpenExchange={(exchangeId) => {
               setSelectedExchangeId(exchangeId);
@@ -1881,6 +1966,7 @@ function SalonApp() {
         story={readingStory}
         onClose={() => setReadingStory(null)}
         existingExchanges={exchanges}
+        existingStories={[...publicStories, ...myStories]}
         customSalons={customSalons}
         userQuotes={userQuotes}
         isBookmarked={Boolean(readingStory && bookmarkedStoryIds.has(readingStory.storyId))}
@@ -1934,9 +2020,19 @@ function SalonApp() {
           initialScope={composerDefaults.scope}
           initialPrompt={composerDefaults.prompt}
           initialStarter={composerDefaults.starter}
+          initialFormat={composerDefaults.format ?? 'confession'}
+          initialRomanMode={composerDefaults.romanMode ?? 'new'}
+          initialNovelId={composerDefaults.novelId ?? null}
           customSalons={customSalons}
           initialCustomSalonId={composerDefaults.customSalonId ?? null}
+          myStories={myStories}
+          publicStories={publicStories}
           editingStory={editingStory}
+          onChapterSaved={(novel) => {
+            showNotice(
+              `Le chapitre ${(novel.chapterCount ?? 1) + 1} a été ajouté à « ${novel.title} ».`
+            );
+          }}
           onSaved={(_storyId, visibility, savedTheme, savedCustomSalonId, savedScope) => {
             if (savedCustomSalonId) {
               enterCustomSalon(savedCustomSalonId);

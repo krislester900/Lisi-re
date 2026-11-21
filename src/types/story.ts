@@ -15,6 +15,19 @@ export type ReleaseCadence = 'unique' | 'hebdomadaire' | 'bihebdomadaire' | 'lib
 
 export type SeriesStatus = 'complet' | 'en-cours' | 'termine';
 
+export type NovelGenre =
+  | 'contemporain'
+  | 'drame'
+  | 'romance'
+  | 'poeme'
+  | 'historique'
+  | 'fantastique'
+  | 'polar'
+  | 'essai'
+  | 'autre';
+
+export type PlagiarismReportReason = 'copie-interne' | 'oeuvre-publiee' | 'autre';
+
 export type EchoReplyType = 'comment' | 'resonance' | 'question' | 'experience';
 
 export type ExchangeKind = 'story' | 'direct';
@@ -77,6 +90,9 @@ export interface Story {
   customSalonName?: string;
   customSalonVisibility?: CustomSalonVisibility;
   storyFormat?: StoryFormat;
+  novelGenre?: NovelGenre;
+  coverUrl?: string;
+  plagiarismAttested?: boolean;
   releaseCadence?: ReleaseCadence;
   seriesStatus?: SeriesStatus;
   chapterCount?: number;
@@ -92,6 +108,16 @@ export interface Story {
   lastViewId?: string;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
+}
+
+export interface PlagiarismReport {
+  storyId: string;
+  reporterId: string;
+  reporterName: string;
+  reason: PlagiarismReportReason;
+  details: string;
+  referenceUrl: string;
+  createdAt: Timestamp | null;
 }
 
 export interface CustomSalon {
@@ -297,4 +323,7 @@ export const FIELD_LIMITS = {
   salonRequestNote: { max: 300 },
   repostNote: { max: 280 },
   quoteText: { min: 3, max: 800 },
+  coverUrl: { max: 160000 },
+  plagiarismDetails: { min: 10, max: 600 },
+  plagiarismRefUrl: { max: 300 },
 } as const;

@@ -20,10 +20,13 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
+  NOVEL_GENRE_LABELS,
+  SERIES_STATUS_LABELS,
   STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
 import { CustomSalon, Story, StoryFormat, StoryThemeId } from '../types/story';
+import { NovelCoverArt } from './NovelCoverArt';
 import { StoryFilterBar } from './StoryFilterBar';
 
 interface PeleMeleStoriesViewProps {
@@ -280,23 +283,59 @@ export function PeleMeleStoriesView({
                     <span aria-hidden="true">·</span>
                     <span className="font-medium text-stone-700">
                       {STORY_FORMAT_LABELS[format].label}
-                      {format === 'roman' ? ` · ${story.chapterCount ?? 1} ch.` : ''}
+                      {format === 'roman' && story.novelGenre
+                        ? ` · ${NOVEL_GENRE_LABELS[story.novelGenre]}`
+                        : ''}
+                      {format === 'roman'
+                        ? ` · ${story.chapterCount ?? 1} ch. · ${
+                            SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']
+                          }`
+                        : ''}
                     </span>
                   </div>
 
-                  <h2 className="font-display text-2xl font-medium text-stone-900 leading-snug">
-                    <button
-                      type="button"
-                      onClick={() => onReadStory(story)}
-                      className="text-left hover:underline focus-visible:outline-none"
-                    >
-                      {story.title}
-                    </button>
-                  </h2>
+                  {format === 'roman' && story.coverUrl ? (
+                    <div className="flex items-start gap-4">
+                      <NovelCoverArt
+                        coverUrl={story.coverUrl}
+                        title={story.title}
+                        genre={story.novelGenre}
+                        accentColor={accentColor}
+                        size="sm"
+                      />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <h2 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                          <button
+                            type="button"
+                            onClick={() => onReadStory(story)}
+                            className="text-left hover:underline focus-visible:outline-none"
+                          >
+                            {story.title}
+                          </button>
+                        </h2>
 
-                  <p className="text-sm text-stone-600 leading-relaxed line-clamp-4">
-                    {story.excerpt}
-                  </p>
+                        <p className="text-sm text-stone-600 leading-relaxed line-clamp-4">
+                          {story.excerpt}
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <h2 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                        <button
+                          type="button"
+                          onClick={() => onReadStory(story)}
+                          className="text-left hover:underline focus-visible:outline-none"
+                        >
+                          {story.title}
+                        </button>
+                      </h2>
+
+                      <p className="text-sm text-stone-600 leading-relaxed line-clamp-4">
+                        {story.excerpt}
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <div className="space-y-4 pt-3 border-t border-stone-100">

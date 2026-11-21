@@ -31,6 +31,8 @@ import {
   ExchangeStatus,
   FIELD_LIMITS,
   ID_PATTERN,
+  NovelGenre,
+  PlagiarismReportReason,
   PublicProfile,
   ReleaseCadence,
   SalonMember,
@@ -393,6 +395,9 @@ export interface StoryInput {
   storyScope?: StoryScope;
   customSalon?: StoryCustomSalonTarget | null;
   storyFormat?: StoryFormat;
+  novelGenre?: NovelGenre;
+  coverUrl?: string;
+  plagiarismAttested?: boolean;
   releaseCadence?: ReleaseCadence;
   seriesStatus?: SeriesStatus;
   promptQuestion: string;
@@ -437,7 +442,7 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     input.customSalon?.visibility === 'private' ? 'private' : input.visibility;
   const storyScope: StoryScope = input.customSalon ? 'salon' : (input.storyScope ?? 'salon');
 
-  return {
+  const result: Record<string, unknown> = {
     authorName: isAnonymous ? 'Auteur anonyme' : cleanAuthorName,
     isAnonymous,
     title,
@@ -452,6 +457,18 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     visibility: effectiveVisibility,
     readingMinutes,
   };
+
+  if (storyFormat === 'roman') {
+    result.novelGenre = input.novelGenre ?? 'contemporain';
+    result.coverUrl = clampString(input.coverUrl ?? '', FIELD_LIMITS.coverUrl.max);
+    if (input.plagiarismAttested !== undefined) {
+      result.plagiarismAttested = Boolean(input.plagiarismAttested);
+    }
+  } else if (input.coverUrl !== undefined) {
+    result.coverUrl = '';
+  }
+
+  return result;
 }
 
 export async function createStory(
@@ -614,6 +631,58 @@ export async function addStoryChapter(params: {
     return chapterId;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function updateNovelSeriesStatus(
+  storyId: string,
+  seriesStatus: SeriesStatus
+): Promise<void> {
+  assertValidId(storyId, 'storyId');
+  const path = `stories/${storyId}`;
+  try {
+    await updateDoc(doc(db, 'stories', storyId), {
+      seriesStatus,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function submitPlagiarismReport(params: {
+  storyId: string;
+  reporterId: string;
+  reporterName: string;
+  reason: PlagiarismReportReason;
+  details: string;
+  referenceUrl: string;
+}): Promise<void> {
+  assertValidId(params.storyId, 'storyId');
+  assertValidId(params.reporterId, 'reporterId');
+
+  const details = clampString(params.details, FIELD_LIMITS.plagiarismDetails.max);
+  if (details.length < FIELD_LIMITS.plagiarismDetails.min) {
+    throw new Error('Précisez votre signalement en au moins 10 caractères.');
+  }
+
+  const rawName = clampString(params.reporterName, FIELD_LIMITS.displayName.max);
+  const reporterName = rawName.length >= FIELD_LIMITS.displayName.min ? rawName : 'Lecteur';
+  const referenceUrl = clampString(params.referenceUrl, FIELD_LIMITS.plagiarismRefUrl.max);
+  const path = `stories/${params.storyId}/plagiarismReports/${params.reporterId}`;
+
+  try {
+    await setDoc(doc(db, 'stories', params.storyId, 'plagiarismReports', params.reporterId), {
+      storyId: params.storyId,
+      reporterId: params.reporterId,
+      reporterName,
+      reason: params.reason,
+      details,
+      referenceUrl,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
   }
 }
 

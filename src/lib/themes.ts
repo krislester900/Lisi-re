@@ -1,5 +1,6 @@
 import {
   EchoReplyType,
+  NovelGenre,
   ReleaseCadence,
   SeriesStatus,
   StoryFormat,
@@ -359,6 +360,30 @@ export const SERIES_STATUS_LABELS: Record<SeriesStatus, string> = {
   complet: 'Complet',
   'en-cours': 'En cours de parution',
   termine: 'Terminé',
+};
+
+export const NOVEL_GENRES: NovelGenre[] = [
+  'drame',
+  'poeme',
+  'romance',
+  'contemporain',
+  'historique',
+  'fantastique',
+  'polar',
+  'essai',
+  'autre',
+];
+
+export const NOVEL_GENRE_LABELS: Record<NovelGenre, string> = {
+  drame: 'Drame',
+  poeme: 'Poème & vers',
+  romance: 'Romance',
+  contemporain: 'Contemporain',
+  historique: 'Historique',
+  fantastique: 'Fantastique',
+  polar: 'Polar & mystère',
+  essai: 'Essai & récit',
+  autre: 'Autre genre',
 };
 
 export function formatFrenchDate(date: Date | null): string {

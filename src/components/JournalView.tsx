@@ -27,13 +27,16 @@ import {
   deleteStoryQuote,
   deleteStoryRepost,
   removeStoryBookmark,
+  updateNovelSeriesStatus,
   updateRepostVisibility,
   updateStory,
 } from '../lib/storyService';
 import {
   formatCumulativeMinutes,
   formatFrenchDate,
+  NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
+  SERIES_STATUS_LABELS,
   STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
@@ -44,6 +47,7 @@ import {
   StoryQuote,
   StoryRepost,
 } from '../types/story';
+import { NovelCoverArt } from './NovelCoverArt';
 import { StoryAnalyticsChart } from './StoryAnalyticsChart';
 
 interface JournalViewProps {
@@ -55,13 +59,20 @@ interface JournalViewProps {
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
   onEditStory: (story: Story) => void;
+  onAddChapterToNovel?: (story: Story) => void;
   onNewStory: () => void;
   onOpenExchange: (exchangeId: string) => void;
   onOpenMyProfile?: () => void;
 }
 
 type JournalSubTab = 'stories' | 'bookmarks' | 'quotes' | 'reposts' | 'stats';
-type StoryFilter = 'all' | 'public' | 'private' | 'roman';
+type StoryFilter =
+  | 'all'
+  | 'public'
+  | 'private'
+  | 'roman'
+  | 'roman-en-cours'
+  | 'roman-termine';
 type RepostFilter = 'all' | 'public' | 'private';
 
 export function JournalView({
@@ -72,6 +83,7 @@ export function JournalView({
   onReadStory,
   onOpenStoryById,
   onEditStory,
+  onAddChapterToNovel,
   onNewStory,
   onOpenMyProfile,
 }: JournalViewProps) {
@@ -108,6 +120,18 @@ export function JournalView({
     () => myStories.filter((s) => s.storyFormat === 'roman').length,
     [myStories]
   );
+  const ongoingRomanCount = useMemo(
+    () =>
+      myStories.filter(
+        (s) => s.storyFormat === 'roman' && (s.seriesStatus ?? 'en-cours') === 'en-cours'
+      ).length,
+    [myStories]
+  );
+  const finishedRomanCount = useMemo(
+    () =>
+      myStories.filter((s) => s.storyFormat === 'roman' && s.seriesStatus === 'termine').length,
+    [myStories]
+  );
   const totalViewsReceived = useMemo(
     () => myStories.reduce((sum, s) => sum + (s.viewCount ?? 0), 0),
     [myStories]
@@ -127,6 +151,18 @@ export function JournalView({
       if (storyFilter === 'public' && story.visibility !== 'public') return false;
       if (storyFilter === 'private' && story.visibility !== 'private') return false;
       if (storyFilter === 'roman' && story.storyFormat !== 'roman') return false;
+      if (
+        storyFilter === 'roman-en-cours' &&
+        (story.storyFormat !== 'roman' || (story.seriesStatus ?? 'en-cours') !== 'en-cours')
+      ) {
+        return false;
+      }
+      if (
+        storyFilter === 'roman-termine' &&
+        (story.storyFormat !== 'roman' || story.seriesStatus !== 'termine')
+      ) {
+        return false;
+      }
       if (!q) return true;
       const salonLabel = (
         story.customSalonName ||
@@ -134,10 +170,12 @@ export function JournalView({
           ? 'Hors salon Pêle-mêle'
           : THEME_MAP[story.theme]?.salonName || '')
       ).toLowerCase();
+      const genreLabel = story.novelGenre ? NOVEL_GENRE_LABELS[story.novelGenre].toLowerCase() : '';
       return (
         story.title.toLowerCase().includes(q) ||
         story.excerpt.toLowerCase().includes(q) ||
-        salonLabel.includes(q)
+        salonLabel.includes(q) ||
+        genreLabel.includes(q)
       );
     });
     return sortStories(list, storySort);
@@ -306,6 +344,9 @@ export function JournalView({
               }
             : null,
         storyFormat: story.storyFormat,
+        novelGenre: story.novelGenre,
+        coverUrl: story.coverUrl,
+        plagiarismAttested: story.plagiarismAttested,
         releaseCadence: story.releaseCadence,
         seriesStatus: story.seriesStatus,
         promptQuestion: story.promptQuestion,
@@ -315,6 +356,22 @@ export function JournalView({
     } catch (err) {
       setStoryActionError(
         err instanceof Error ? err.message : 'Impossible de modifier la visibilité de ce récit.'
+      );
+    } finally {
+      setBusyStoryId(null);
+    }
+  };
+
+  const handleToggleSeriesStatus = async (story: Story) => {
+    if (busyStoryId || story.storyFormat !== 'roman') return;
+    setStoryActionError(null);
+    setBusyStoryId(story.storyId);
+    try {
+      const nextStatus = story.seriesStatus === 'termine' ? 'en-cours' : 'termine';
+      await updateNovelSeriesStatus(story.storyId, nextStatus);
+    } catch (err) {
+      setStoryActionError(
+        err instanceof Error ? err.message : 'Impossible de mettre à jour le statut du roman.'
       );
     } finally {
       setBusyStoryId(null);
@@ -568,7 +625,25 @@ export function JournalView({
                         { id: 'public', label: `Publiés (${publicCount})` },
                         { id: 'private', label: `Brouillons (${draftCount})` },
                         ...(romanCount > 0
-                          ? [{ id: 'roman' as const, label: `Romans (${romanCount})` }]
+                          ? [
+                              { id: 'roman' as const, label: `Romans (${romanCount})` },
+                              ...(ongoingRomanCount > 0
+                                ? [
+                                    {
+                                      id: 'roman-en-cours' as const,
+                                      label: `En cours (${ongoingRomanCount})`,
+                                    },
+                                  ]
+                                : []),
+                              ...(finishedRomanCount > 0
+                                ? [
+                                    {
+                                      id: 'roman-termine' as const,
+                                      label: `Terminés (${finishedRomanCount})`,
+                                    },
+                                  ]
+                                : []),
+                            ]
                           : []),
                       ] as const
                     ).map((opt) => (
@@ -687,11 +762,18 @@ export function JournalView({
                             </span>
                             <span aria-hidden="true">·</span>
                             <span>{formatLabel}</span>
+                            {story.storyFormat === 'roman' && story.novelGenre && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
+                              </>
+                            )}
                             {story.storyFormat === 'roman' && (
                               <>
                                 <span aria-hidden="true">·</span>
                                 <span className="tabular-nums">
                                   {story.chapterCount ?? 1} chap. ·{' '}
+                                  {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']} ·{' '}
                                   {RELEASE_CADENCE_LABELS[story.releaseCadence ?? 'hebdomadaire']}
                                 </span>
                               </>
@@ -700,54 +782,69 @@ export function JournalView({
                             <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
                           </div>
 
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded border text-[11px] font-medium ${
-                              isDraft
-                                ? 'border-stone-300 bg-stone-100 text-stone-700'
-                                : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D]'
-                            }`}
-                          >
-                            {isDraft ? (
-                              <>
-                                <Lock className="w-3 h-3" />
-                                <span>Brouillon privé</span>
-                              </>
-                            ) : story.customSalonVisibility === 'private' ? (
-                              <>
-                                <Lock className="w-3 h-3" />
-                                <span>Salon privé</span>
-                              </>
-                            ) : (
-                              <>
-                                <Globe className="w-3 h-3" />
-                                <span>
-                                  {story.storyScope === 'pelemele' && !story.customSalonId
-                                    ? 'Publié · Pêle-mêle'
-                                    : 'Publié'}
-                                </span>
-                              </>
-                            )}
-                          </span>
-                          {story.isAnonymous && (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-stone-300 bg-stone-50 text-[11px] font-medium text-stone-700">
-                              <EyeOff className="w-3 h-3" />
-                              <span>Anonyme</span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded border text-[11px] font-medium ${
+                                isDraft
+                                  ? 'border-stone-300 bg-stone-100 text-stone-700'
+                                  : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D]'
+                              }`}
+                            >
+                              {isDraft ? (
+                                <>
+                                  <Lock className="w-3 h-3" />
+                                  <span>Brouillon privé</span>
+                                </>
+                              ) : story.customSalonVisibility === 'private' ? (
+                                <>
+                                  <Lock className="w-3 h-3" />
+                                  <span>Salon privé</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Globe className="w-3 h-3" />
+                                  <span>
+                                    {story.storyScope === 'pelemele' && !story.customSalonId
+                                      ? 'Publié · Pêle-mêle'
+                                      : 'Publié'}
+                                  </span>
+                                </>
+                              )}
                             </span>
-                          )}
+                            {story.isAnonymous && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-stone-300 bg-stone-50 text-[11px] font-medium text-stone-700">
+                                <EyeOff className="w-3 h-3" />
+                                <span>Anonyme</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <h3 className="font-display text-xl font-medium text-stone-900">
-                          <button
-                            type="button"
-                            onClick={() => onReadStory(story)}
-                            className="text-left hover:underline"
-                          >
-                            {story.title}
-                          </button>
-                        </h3>
-                        <p className="text-sm text-stone-600 leading-relaxed line-clamp-2">
-                          {story.excerpt}
-                        </p>
+                        <div className="flex items-start gap-4">
+                          {story.storyFormat === 'roman' && (
+                            <NovelCoverArt
+                              coverUrl={story.coverUrl}
+                              title={story.title}
+                              genre={story.novelGenre}
+                              size="sm"
+                              showFallbackWhenMissing={true}
+                            />
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <h3 className="font-display text-xl font-medium text-stone-900">
+                              <button
+                                type="button"
+                                onClick={() => onReadStory(story)}
+                                className="text-left hover:underline"
+                              >
+                                {story.title}
+                              </button>
+                            </h3>
+                            <p className="text-sm text-stone-600 leading-relaxed line-clamp-2">
+                              {story.excerpt}
+                            </p>
+                          </div>
+                        </div>
 
                         <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
                           <div className="flex flex-wrap items-center gap-2">
@@ -761,6 +858,33 @@ export function JournalView({
                                 {story.storyFormat === 'roman' ? 'Lire / Chapitres' : 'Lire'}
                               </span>
                             </button>
+
+                            {story.storyFormat === 'roman' && onAddChapterToNovel && (
+                              <button
+                                type="button"
+                                onClick={() => onAddChapterToNovel(story)}
+                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Chapitre {(story.chapterCount ?? 1) + 1}</span>
+                              </button>
+                            )}
+
+                            {story.storyFormat === 'roman' && (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => void handleToggleSeriesStatus(story)}
+                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>
+                                  {story.seriesStatus === 'termine'
+                                    ? 'Rouvrir en cours'
+                                    : 'Marquer terminé'}
+                                </span>
+                              </button>
+                            )}
 
                             <button
                               type="button"

@@ -19,6 +19,7 @@ import {
 import {
   formatCumulativeMinutes,
   formatFrenchDate,
+  NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
   SERIES_STATUS_LABELS,
   STORY_FORMAT_LABELS,
@@ -26,6 +27,7 @@ import {
   THEME_MAP,
 } from '../lib/themes';
 import { Story, StoryThemeId } from '../types/story';
+import { NovelCoverArt } from './NovelCoverArt';
 import { SalonChatPanel } from './SalonChatPanel';
 import { SalonEmblem } from './SalonEmblem';
 import { StoryFilterBar } from './StoryFilterBar';
@@ -499,6 +501,12 @@ export function SalonRoomView({
                         >
                           {STORY_FORMAT_LABELS[leadStory.storyFormat ?? 'confession']?.label}
                         </span>
+                        {leadStory.storyFormat === 'roman' && leadStory.novelGenre && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>{NOVEL_GENRE_LABELS[leadStory.novelGenre]}</span>
+                          </>
+                        )}
                         {leadStory.storyFormat === 'roman' && (
                           <>
                             <span aria-hidden="true">·</span>
@@ -530,16 +538,42 @@ export function SalonRoomView({
                         <span>{formatFrenchDate(leadStory.createdAt?.toDate() ?? null)}</span>
                       </div>
 
-                      <h3
-                        className="font-display text-3xl font-medium text-stone-900 leading-tight"
-                        style={{ textWrap: 'balance' }}
-                      >
-                        {leadStory.title}
-                      </h3>
+                      {leadStory.storyFormat === 'roman' && leadStory.coverUrl ? (
+                        <div className="flex flex-col sm:flex-row items-start gap-5">
+                          <NovelCoverArt
+                            coverUrl={leadStory.coverUrl}
+                            title={leadStory.title}
+                            genre={leadStory.novelGenre}
+                            accentColor={salon.palette.accent}
+                            size="md"
+                          />
+                          <div className="min-w-0 flex-1 space-y-3">
+                            <h3
+                              className="font-display text-3xl font-medium text-stone-900 leading-tight"
+                              style={{ textWrap: 'balance' }}
+                            >
+                              {leadStory.title}
+                            </h3>
 
-                      <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
-                        {leadStory.excerpt}
-                      </p>
+                            <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
+                              {leadStory.excerpt}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <h3
+                            className="font-display text-3xl font-medium text-stone-900 leading-tight"
+                            style={{ textWrap: 'balance' }}
+                          >
+                            {leadStory.title}
+                          </h3>
+
+                          <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
+                            {leadStory.excerpt}
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     <div className="lg:col-span-4 lg:border-l lg:border-stone-200 lg:pl-8 flex flex-col justify-between h-full space-y-6">
@@ -647,11 +681,18 @@ export function SalonRoomView({
                             >
                               {STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}
                             </span>
+                            {story.storyFormat === 'roman' && story.novelGenre && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
+                              </>
+                            )}
                             {story.storyFormat === 'roman' && (
                               <>
                                 <span aria-hidden="true">·</span>
                                 <span className="tabular-nums">
-                                  {story.chapterCount ?? 1} chap.
+                                  {story.chapterCount ?? 1} chap. ·{' '}
+                                  {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}
                                 </span>
                               </>
                             )}
@@ -673,10 +714,34 @@ export function SalonRoomView({
                             <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
                           </div>
 
-                          <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
-                            {story.title}
-                          </h3>
-                          <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
+                          {story.storyFormat === 'roman' && story.coverUrl ? (
+                            <div className="flex items-start gap-4">
+                              <NovelCoverArt
+                                coverUrl={story.coverUrl}
+                                title={story.title}
+                                genre={story.novelGenre}
+                                accentColor={salon.palette.accent}
+                                size="sm"
+                              />
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                  {story.title}
+                                </h3>
+                                <p className="text-sm text-stone-600 leading-relaxed">
+                                  {story.excerpt}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                {story.title}
+                              </h3>
+                              <p className="text-sm text-stone-600 leading-relaxed">
+                                {story.excerpt}
+                              </p>
+                            </>
+                          )}
                         </div>
 
                         <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">

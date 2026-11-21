@@ -219,6 +219,17 @@
           "type": "string",
           "enum": ["confession", "roman"]
         },
+        "novelGenre": {
+          "type": "string",
+          "enum": ["poeme", "drame", "romance", "historique", "fantastique", "polar", "contemporain", "essai", "autre"]
+        },
+        "coverUrl": {
+          "type": "string",
+          "maxLength": 160000
+        },
+        "plagiarismAttested": {
+          "type": "boolean"
+        },
         "releaseCadence": {
           "type": "string",
           "enum": ["unique", "hebdomadaire", "bihebdomadaire", "libre"]
@@ -1083,6 +1094,46 @@
         "storyTheme",
         "createdAt"
       ]
+    },
+    "PlagiarismReport": {
+      "title": "PlagiarismReport",
+      "description": "A reader-submitted plagiarism report on a public serialized novel.",
+      "type": "object",
+      "properties": {
+        "storyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reporterId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reporterName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "reason": {
+          "type": "string",
+          "enum": ["copie-interne", "oeuvre-publiee", "autre"]
+        },
+        "details": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 600
+        },
+        "referenceUrl": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["storyId", "reporterId", "reporterName", "reason", "details", "referenceUrl", "createdAt"]
     }
   },
   "firestore": {
@@ -1151,6 +1202,12 @@
         "$ref": "#/entities/Echo"
       },
       "description": "Public comments and thoughtful replies attached to a public story."
+    },
+    "/stories/{storyId}/plagiarismReports/{userId}": {
+      "schema": {
+        "$ref": "#/entities/PlagiarismReport"
+      },
+      "description": "Anti-plagiarism reports filed by verified readers on public novels."
     },
     "/salons/{salonId}/messages/{messageId}": {
       "schema": {

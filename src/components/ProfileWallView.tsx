@@ -32,7 +32,13 @@ import {
   updatePublicProfile,
   updateRepostVisibility,
 } from '../lib/storyService';
-import { formatFrenchDate, STORY_FORMAT_LABELS, THEME_MAP } from '../lib/themes';
+import {
+  formatFrenchDate,
+  NOVEL_GENRE_LABELS,
+  SERIES_STATUS_LABELS,
+  STORY_FORMAT_LABELS,
+  THEME_MAP,
+} from '../lib/themes';
 import {
   Exchange,
   FIELD_LIMITS,
@@ -45,6 +51,7 @@ import {
 } from '../types/story';
 import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
+import { NovelCoverArt } from './NovelCoverArt';
 
 import { Settings } from 'lucide-react';
 
@@ -1418,12 +1425,18 @@ export function ProfileWallView({
                         </span>
                         <span aria-hidden="true">·</span>
                         <span>{formatLabel}</span>
+                        {story.storyFormat === 'roman' && story.novelGenre && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
+                          </>
+                        )}
                         {story.storyFormat === 'roman' && (
                           <>
                             <span aria-hidden="true">·</span>
                             <span className="tabular-nums">
-                              {story.chapterCount ?? 1} chapitre
-                              {(story.chapterCount ?? 1) > 1 ? 's' : ''}
+                              {story.chapterCount ?? 1} chap. ·{' '}
+                              {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}
                             </span>
                           </>
                         )}
@@ -1437,10 +1450,31 @@ export function ProfileWallView({
                           </>
                         )}
                       </div>
-                      <h3 className="font-display text-xl font-medium text-stone-900">
-                        {story.title}
-                      </h3>
-                      <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
+                      {story.storyFormat === 'roman' && story.coverUrl ? (
+                        <div className="flex items-start gap-4">
+                          <NovelCoverArt
+                            coverUrl={story.coverUrl}
+                            title={story.title}
+                            genre={story.novelGenre}
+                            size="sm"
+                          />
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <h3 className="font-display text-xl font-medium text-stone-900">
+                              {story.title}
+                            </h3>
+                            <p className="text-sm text-stone-600 leading-relaxed">
+                              {story.excerpt}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <h3 className="font-display text-xl font-medium text-stone-900">
+                            {story.title}
+                          </h3>
+                          <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
+                        </>
+                      )}
                     </div>
 
                     <div className="pt-3 border-t border-stone-100 flex items-center justify-between">

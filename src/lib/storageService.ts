@@ -109,6 +109,53 @@ export async function compressAvatarForProfile(file: File): Promise<string> {
   );
 }
 
+export async function compressNovelCover(file: File): Promise<string> {
+  const img = await loadImageFromFile(file);
+  const srcWidth = img.width || 1;
+  const srcHeight = img.height || 1;
+  const targetRatio = 2 / 3;
+  const srcRatio = srcWidth / srcHeight;
+
+  let cropW = srcWidth;
+  let cropH = srcHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (srcRatio > targetRatio) {
+    cropW = Math.round(srcHeight * targetRatio);
+    offsetX = Math.max(0, Math.round((srcWidth - cropW) / 2));
+  } else if (srcRatio < targetRatio) {
+    cropH = Math.round(srcWidth / targetRatio);
+    offsetY = Math.max(0, Math.round((srcHeight - cropH) / 2));
+  }
+
+  const targetWidths = [560, 460, 380, 300];
+  const qualities = [0.82, 0.7, 0.56];
+
+  for (const width of targetWidths) {
+    const height = Math.round(width * 1.5);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      throw new Error('Traitement d’image indisponible sur ce navigateur.');
+    }
+    ctx.drawImage(img, offsetX, offsetY, cropW, cropH, 0, 0, width, height);
+
+    for (const quality of qualities) {
+      const compressed = canvas.toDataURL('image/jpeg', quality);
+      if (compressed.length <= MAX_WALL_DATA_URL_CHARS) {
+        return compressed;
+      }
+    }
+  }
+
+  throw new Error(
+    'Cette couverture reste trop lourde après compression. Essayez une autre image ou collez un lien.'
+  );
+}
+
 export interface ParsedMusicSource {
   type: 'audio' | 'youtube' | 'soundcloud' | 'spotify' | 'deezer' | 'link' | 'none';
   trackId?: string;

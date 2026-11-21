@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowUpRight,
   Bookmark,
   BookOpen,
@@ -8,6 +9,7 @@ import {
   Disc3,
   Eye,
   EyeOff,
+  Flag,
   Heart,
   Highlighter,
   Maximize2,
@@ -19,12 +21,15 @@ import {
   Plus,
   Quote,
   Repeat2,
+  ShieldCheck,
   Trash2,
   User as UserIcon,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { checkNovelPlagiarism } from '../lib/plagiarismCheck';
 import { ReadingMusicPanel, useReadingAudioEngine } from './ReadingMusicPanel';
+import { NovelCoverArt } from './NovelCoverArt';
 import {
   addStoryChapter,
   addStoryEcho,
@@ -35,15 +40,18 @@ import {
   fetchPublicProfile,
   formatLocalDateKey,
   recordStoryView,
+  submitPlagiarismReport,
   subscribeToStoryChapters,
   subscribeToStoryEchoes,
   subscribeToUserResonance,
   toggleStoryResonance,
+  updateNovelSeriesStatus,
 } from '../lib/storyService';
 import {
   ACCENT_TONE_PALETTES,
   ECHO_TYPE_LABELS,
   formatFrenchDate,
+  NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
   SERIES_STATUS_LABELS,
   STORY_FORMAT_LABELS,
@@ -56,6 +64,7 @@ import {
   EchoReplyType,
   Exchange,
   FIELD_LIMITS,
+  PlagiarismReportReason,
   PublicProfile,
   SeriesStatus,
   Story,
@@ -67,6 +76,7 @@ interface StoryReaderModalProps {
   story: Story | null;
   onClose: () => void;
   existingExchanges: Exchange[];
+  existingStories?: Story[];
   customSalons?: CustomSalon[];
   userQuotes?: StoryQuote[];
   isBookmarked?: boolean;
@@ -84,6 +94,7 @@ export function StoryReaderModal({
   story,
   onClose,
   existingExchanges,
+  existingStories = [],
   customSalons = [],
   userQuotes = [],
   isBookmarked = false,
@@ -121,8 +132,20 @@ export function StoryReaderModal({
   const [chapterContent, setChapterContent] = useState('');
   const [chapterNote, setChapterNote] = useState('');
   const [markCompleted, setMarkCompleted] = useState(false);
+  const [chapterPlagiarismAttested, setChapterPlagiarismAttested] = useState(false);
   const [chapterBusy, setChapterBusy] = useState(false);
   const [chapterError, setChapterError] = useState<string | null>(null);
+  const [statusToggleBusy, setStatusToggleBusy] = useState(false);
+  const [statusToggleError, setStatusToggleError] = useState<string | null>(null);
+
+  // Reader anti-plagiarism reporting state (for public novels)
+  const [showReportForm, setShowReportForm] = useState(false);
+  const [reportReason, setReportReason] = useState<PlagiarismReportReason>('oeuvre-publiee');
+  const [reportDetails, setReportDetails] = useState('');
+  const [reportRefUrl, setReportRefUrl] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [reportSubmitted, setReportSubmitted] = useState(false);
   const [zenMode, setZenMode] = useState(false);
   const [zenTheme, setZenTheme] = useState<'paper' | 'sepia' | 'night'>(() => {
     try {
@@ -228,7 +251,15 @@ export function StoryReaderModal({
     setChapterContent('');
     setChapterNote('');
     setMarkCompleted(false);
+    setChapterPlagiarismAttested(false);
     setChapterError(null);
+    setStatusToggleError(null);
+    setShowReportForm(false);
+    setReportReason('oeuvre-publiee');
+    setReportDetails('');
+    setReportRefUrl('');
+    setReportError(null);
+    setReportSubmitted(false);
     setPendingSelection(null);
     setActiveQuotePopover(null);
     setQuoteFeedback(null);
@@ -454,6 +485,19 @@ export function StoryReaderModal({
     onClose,
   ]);
 
+  const chapterPlagiarismCheck = useMemo(() => {
+    if (!story || story.storyFormat !== 'roman' || chapterContent.trim().length < 20) {
+      return null;
+    }
+    return checkNovelPlagiarism({
+      candidateText: chapterContent,
+      candidateTitle: chapterTitle,
+      currentAuthorId: user?.uid ?? story.authorId,
+      existingStories,
+      excludeStoryId: story.storyId,
+    });
+  }, [story, chapterContent, chapterTitle, user?.uid, existingStories]);
+
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
@@ -575,6 +619,21 @@ export function StoryReaderModal({
       setChapterError('Le chapitre doit contenir au moins 20 caractères.');
       return;
     }
+    if (!chapterPlagiarismAttested) {
+      setChapterError(
+        'Veuillez confirmer la charte anti-plagiat en certifiant que ce chapitre est original.'
+      );
+      return;
+    }
+    if (
+      chapterPlagiarismCheck?.isSuspicious &&
+      !chapterPlagiarismCheck.matchedIsOwnStory
+    ) {
+      setChapterError(
+        `Publication bloquée : une similitude élevée (${chapterPlagiarismCheck.similarityPercent} %) a été détectée avec « ${chapterPlagiarismCheck.matchedStoryTitle} ».`
+      );
+      return;
+    }
 
     setChapterBusy(true);
     try {
@@ -592,6 +651,7 @@ export function StoryReaderModal({
       setChapterTitle('');
       setChapterContent('');
       setChapterNote('');
+      setChapterPlagiarismAttested(false);
       setShowChapterForm(false);
       setActiveChapterIdx(nextNum - 1);
     } catch (err) {
@@ -600,6 +660,56 @@ export function StoryReaderModal({
       );
     } finally {
       setChapterBusy(false);
+    }
+  };
+
+  const handleToggleSeriesStatus = async () => {
+    if (!user || !isAuthor || !isRoman || statusToggleBusy) return;
+    setStatusToggleError(null);
+    setStatusToggleBusy(true);
+    try {
+      const nextStatus: SeriesStatus = story.seriesStatus === 'termine' ? 'en-cours' : 'termine';
+      await updateNovelSeriesStatus(story.storyId, nextStatus);
+    } catch (err) {
+      setStatusToggleError(
+        err instanceof Error ? err.message : 'Impossible de modifier le statut du roman.'
+      );
+    } finally {
+      setStatusToggleBusy(false);
+    }
+  };
+
+  const handleSubmitPlagiarismReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      await signInWithGoogle();
+      return;
+    }
+    setReportError(null);
+    if (reportDetails.trim().length < FIELD_LIMITS.plagiarismDetails.min) {
+      setReportError('Précisez votre signalement en au moins 10 caractères.');
+      return;
+    }
+    setReportBusy(true);
+    try {
+      await submitPlagiarismReport({
+        storyId: story.storyId,
+        reporterId: user.uid,
+        reporterName: profile?.displayName || user.displayName || 'Lecteur',
+        reason: reportReason,
+        details: reportDetails,
+        referenceUrl: reportRefUrl,
+      });
+      setReportSubmitted(true);
+      setShowReportForm(false);
+      setReportDetails('');
+      setReportRefUrl('');
+    } catch (err) {
+      setReportError(
+        err instanceof Error ? err.message : 'Impossible d’envoyer ce signalement.'
+      );
+    } finally {
+      setReportBusy(false);
     }
   };
 
@@ -1241,6 +1351,12 @@ export function StoryReaderModal({
                 )}
                 <span aria-hidden="true">·</span>
                 <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
+                {isRoman && story.novelGenre && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
+                  </>
+                )}
                 <span aria-hidden="true">·</span>
                 <span className="whitespace-nowrap tabular-nums">{displayedMinutes} min de lecture</span>
                 <span aria-hidden="true">·</span>
@@ -1357,23 +1473,55 @@ export function StoryReaderModal({
           }
         >
           <article className={zenMode ? 'max-w-[62ch] mx-auto' : 'max-w-prose mx-auto'}>
-            {!zenMode && story.promptQuestion && (
-              <p className="text-xs text-stone-500 mb-3 italic">
-                En réponse au fil : « {story.promptQuestion} »
-              </p>
-            )}
+            {!zenMode && isRoman && story.coverUrl ? (
+              <div className="flex flex-col sm:flex-row items-start gap-5 mb-5">
+                <NovelCoverArt
+                  coverUrl={story.coverUrl}
+                  title={story.title}
+                  genre={story.novelGenre}
+                  size="lg"
+                />
+                <div className="min-w-0 flex-1 space-y-2">
+                  {story.promptQuestion && (
+                    <p className="text-xs text-stone-500 italic">
+                      En réponse au fil : « {story.promptQuestion} »
+                    </p>
+                  )}
+                  <h1
+                    id="reader-story-title"
+                    className="font-display text-3xl sm:text-4xl font-medium leading-tight text-stone-900"
+                    style={{ textWrap: 'balance' }}
+                  >
+                    {story.title}
+                  </h1>
+                  {story.novelGenre && (
+                    <p className="text-xs uppercase tracking-widest text-stone-500">
+                      Roman · {NOVEL_GENRE_LABELS[story.novelGenre]}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                {!zenMode && story.promptQuestion && (
+                  <p className="text-xs text-stone-500 mb-3 italic">
+                    En réponse au fil : « {story.promptQuestion} »
+                  </p>
+                )}
 
-            <h1
-              id="reader-story-title"
-              className={`font-display text-3xl sm:text-4xl font-medium leading-tight ${
-                zenMode
-                  ? `mb-8 sm:mb-10 ${zenTheme === 'night' ? 'text-[#F5F0E6]' : 'text-stone-900'}`
-                  : 'mb-4 text-stone-900'
-              }`}
-              style={{ textWrap: 'balance' }}
-            >
-              {story.title}
-            </h1>
+                <h1
+                  id="reader-story-title"
+                  className={`font-display text-3xl sm:text-4xl font-medium leading-tight ${
+                    zenMode
+                      ? `mb-8 sm:mb-10 ${zenTheme === 'night' ? 'text-[#F5F0E6]' : 'text-stone-900'}`
+                      : 'mb-4 text-stone-900'
+                  }`}
+                  style={{ textWrap: 'balance' }}
+                >
+                  {story.title}
+                </h1>
+              </>
+            )}
 
             {!zenMode && (
               <div className="pb-5 border-b border-stone-200 mb-6 space-y-4">
@@ -1421,16 +1569,36 @@ export function StoryReaderModal({
                   </div>
 
                   {isRoman && isAuthor && (
-                    <button
-                      type="button"
-                      onClick={() => setShowChapterForm((prev) => !prev)}
-                      className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Publier le chapitre {totalChapters + 1}</span>
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={statusToggleBusy}
+                        onClick={() => void handleToggleSeriesStatus()}
+                        className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-800 bg-white border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>
+                          {story.seriesStatus === 'termine'
+                            ? 'Rouvrir en cours'
+                            : 'Marquer terminé'}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowChapterForm((prev) => !prev)}
+                        className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Publier le chapitre {totalChapters + 1}</span>
+                      </button>
+                    </div>
                   )}
                 </div>
+                {statusToggleError && (
+                  <p role="alert" className="text-xs text-red-700">
+                    {statusToggleError}
+                  </p>
+                )}
 
                 {/* Quick Zen Reading & Ambient Music Invitation Bar */}
                 <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white border border-stone-200 rounded-md px-3.5 py-2.5">
@@ -1646,6 +1814,39 @@ export function StoryReaderModal({
                     className="rounded border-stone-300"
                   />
                   <span>Marquer ce roman comme terminé après ce chapitre</span>
+                </label>
+
+                {chapterPlagiarismCheck &&
+                  (chapterPlagiarismCheck.isSuspicious ||
+                    chapterPlagiarismCheck.isModerateOverlap) &&
+                  !chapterPlagiarismCheck.matchedIsOwnStory && (
+                    <div
+                      role="status"
+                      className={`rounded-md border px-3 py-2 text-xs flex items-start gap-2 ${
+                        chapterPlagiarismCheck.isSuspicious
+                          ? 'bg-red-50 border-red-200 text-red-900'
+                          : 'bg-amber-50 border-amber-200 text-amber-900'
+                      }`}
+                    >
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>
+                        {chapterPlagiarismCheck.isSuspicious
+                          ? `Similitude très élevée (${chapterPlagiarismCheck.similarityPercent} %) détectée avec « ${chapterPlagiarismCheck.matchedStoryTitle} ». Publiez un chapitre original.`
+                          : `Attention : ${chapterPlagiarismCheck.similarityPercent} % de passages proches de « ${chapterPlagiarismCheck.matchedStoryTitle} ».`}
+                      </span>
+                    </div>
+                  )}
+
+                <label className="flex items-start gap-2 text-xs text-stone-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={chapterPlagiarismAttested}
+                    onChange={(e) => setChapterPlagiarismAttested(e.target.checked)}
+                    className="mt-0.5 rounded border-stone-300 text-[#1B365D]"
+                  />
+                  <span>
+                    Je certifie que ce chapitre est une création originale conforme à la politique anti-plagiat des romans de Lisière.
+                  </span>
                 </label>
 
                 {chapterError && (
@@ -1888,6 +2089,149 @@ export function StoryReaderModal({
                     {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
                   </span>
                 </div>
+              </div>
+            )}
+
+            {/* Novel Originality Charter & Reader Plagiarism Reporting */}
+            {!zenMode && isRoman && story.visibility === 'public' && (
+              <div className="mt-5 p-3.5 bg-white border border-stone-200 rounded-md space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-stone-600">
+                  <span className="inline-flex items-center gap-1.5 text-stone-700">
+                    <ShieldCheck className="w-4 h-4 text-[#1B365D] shrink-0" />
+                    <span>
+                      {story.plagiarismAttested
+                        ? 'Œuvre originale certifiée · Charte anti-plagiat des romans'
+                        : 'Soumis à la charte anti-plagiat des romans de Lisière'}
+                    </span>
+                  </span>
+
+                  {!isAuthor && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!user) {
+                          void signInWithGoogle();
+                          return;
+                        }
+                        setReportError(null);
+                        setShowReportForm((prev) => !prev);
+                      }}
+                      className="text-xs font-medium text-stone-600 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <Flag className="w-3.5 h-3.5" />
+                      <span>
+                        {reportSubmitted
+                          ? 'Signalement transmis'
+                          : showReportForm
+                            ? 'Fermer'
+                            : 'Signaler un plagiat'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                {reportSubmitted && !showReportForm && (
+                  <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                    Merci. Votre signalement pour plagiat a bien été enregistré pour vérification.
+                  </p>
+                )}
+
+                {showReportForm && !isAuthor && (
+                  <form
+                    onSubmit={handleSubmitPlagiarismReport}
+                    className="pt-3 border-t border-stone-200 space-y-3"
+                  >
+                    <p className="text-xs text-stone-700 font-medium">
+                      Signaler une atteinte aux droits d’auteur sur ce roman
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="plagiarism-reason"
+                          className="block text-[11px] uppercase tracking-widest text-stone-500 mb-1"
+                        >
+                          Motif
+                        </label>
+                        <select
+                          id="plagiarism-reason"
+                          value={reportReason}
+                          onChange={(e) =>
+                            setReportReason(e.target.value as PlagiarismReportReason)
+                          }
+                          className="w-full min-h-[36px] px-2.5 py-1 bg-[#FBF9F5] border border-stone-200 rounded text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                        >
+                          <option value="oeuvre-publiee">
+                            Copie d’une œuvre publiée ailleurs
+                          </option>
+                          <option value="copie-interne">
+                            Copie d’un autre texte sur Lisière
+                          </option>
+                          <option value="autre">Autre infraction aux droits d’auteur</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="plagiarism-ref"
+                          className="block text-[11px] uppercase tracking-widest text-stone-500 mb-1"
+                        >
+                          Lien ou source originale (facultatif)
+                        </label>
+                        <input
+                          id="plagiarism-ref"
+                          type="text"
+                          maxLength={FIELD_LIMITS.plagiarismRefUrl.max}
+                          value={reportRefUrl}
+                          onChange={(e) => setReportRefUrl(e.target.value)}
+                          placeholder="Titre du livre, auteur ou URL…"
+                          className="w-full min-h-[36px] px-2.5 py-1 bg-[#FBF9F5] border border-stone-200 rounded text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="plagiarism-details"
+                        className="block text-[11px] uppercase tracking-widest text-stone-500 mb-1"
+                      >
+                        Précisions (passages concernés, contexte)
+                      </label>
+                      <textarea
+                        id="plagiarism-details"
+                        rows={3}
+                        required
+                        maxLength={FIELD_LIMITS.plagiarismDetails.max}
+                        value={reportDetails}
+                        onChange={(e) => setReportDetails(e.target.value)}
+                        placeholder="Indiquez quel passage ou ouvrage semble copié…"
+                        className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                      />
+                    </div>
+
+                    {reportError && (
+                      <p role="alert" className="text-xs text-red-700">
+                        {reportError}
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowReportForm(false)}
+                        className="min-h-[34px] px-3 py-1 text-xs text-stone-600 hover:text-stone-900"
+                      >
+                        Annuler
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={reportBusy}
+                        className="min-h-[34px] px-3.5 py-1 text-xs font-medium text-white bg-red-800 rounded hover:bg-red-900 disabled:opacity-60"
+                      >
+                        {reportBusy ? 'Envoi…' : 'Envoyer le signalement'}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             )}
 

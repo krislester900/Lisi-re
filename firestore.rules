@@ -209,7 +209,8 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'storyId', 'authorId', 'authorName', 'title', 'excerpt', 'content',
           'theme', 'customSalonId', 'customSalonName', 'customSalonVisibility', 'storyScope',
-          'storyFormat', 'releaseCadence', 'seriesStatus',
+          'storyFormat', 'novelGenre', 'coverUrl', 'plagiarismAttested',
+          'releaseCadence', 'seriesStatus',
           'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility', 'isAnonymous',
           'readingMinutes', 'resonanceCount', 'echoCount', 'lastEchoId',
           'viewCount', 'lastViewId', 'createdAt', 'updatedAt'
@@ -226,6 +227,9 @@ service cloud.firestore {
         && (!('customSalonVisibility' in data) || data.customSalonVisibility in ['public', 'private'])
         && (!('storyScope' in data) || data.storyScope in ['salon', 'pelemele'])
         && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
+        && (!('novelGenre' in data) || data.novelGenre in ['poeme', 'drame', 'romance', 'historique', 'fantastique', 'polar', 'contemporain', 'essai', 'autre'])
+        && (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() <= 160000))
+        && (!('plagiarismAttested' in data) || data.plagiarismAttested is bool)
         && (!('releaseCadence' in data) || data.releaseCadence in ['unique', 'hebdomadaire', 'bihebdomadaire', 'libre'])
         && (!('seriesStatus' in data) || data.seriesStatus in ['complet', 'en-cours', 'termine'])
         && (!('chapterCount' in data) || (data.chapterCount is int && data.chapterCount >= 0 && data.chapterCount <= 500))
@@ -305,6 +309,22 @@ service cloud.firestore {
         && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60
         && data.replyType in ['comment', 'resonance', 'question', 'experience']
         && data.content is string && data.content.size() >= 2 && data.content.size() <= 1500
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPlagiarismReport(data) {
+      return data.keys().hasAll([
+          'storyId', 'reporterId', 'reporterName', 'reason', 'details', 'referenceUrl', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'storyId', 'reporterId', 'reporterName', 'reason', 'details', 'referenceUrl', 'createdAt'
+        ])
+        && isValidId(data.storyId)
+        && isValidId(data.reporterId)
+        && data.reporterName is string && data.reporterName.size() >= 2 && data.reporterName.size() <= 60
+        && data.reason in ['copie-interne', 'oeuvre-publiee', 'autre']
+        && data.details is string && data.details.size() >= 10 && data.details.size() <= 600
+        && data.referenceUrl is string && data.referenceUrl.size() <= 300
         && data.createdAt is timestamp;
     }
 
@@ -725,7 +745,8 @@ service cloud.firestore {
               || ('chapterCount' in existing() && 'chapterCount' in incoming() && incoming().chapterCount == existing().chapterCount))
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'authorName', 'title', 'excerpt', 'content', 'theme', 'storyScope',
-              'storyFormat', 'releaseCadence', 'seriesStatus',
+              'storyFormat', 'novelGenre', 'coverUrl', 'plagiarismAttested',
+              'releaseCadence', 'seriesStatus',
               'promptQuestion', 'visibility', 'isAnonymous', 'readingMinutes', 'updatedAt'
             ])
           )
@@ -923,6 +944,31 @@ service cloud.firestore {
           && incoming().createdAt == request.time
           && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
           && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.lastEchoId == echoId;
+        allow update: if false;
+        allow delete: if false;
+      }
+
+      // Reader anti-plagiarism reports for public serialized novels
+      match /plagiarismReports/{userId} {
+        allow get: if isSignedIn()
+          && isValidId(storyId)
+          && isValidId(userId)
+          && (
+            isOwner(userId)
+            || get(/databases/$(database)/documents/stories/$(storyId)).data.authorId == request.auth.uid
+          );
+        allow list: if isSignedIn()
+          && resource.data.reporterId == request.auth.uid;
+        allow create: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(userId)
+          && isOwner(userId)
+          && isValidPlagiarismReport(incoming())
+          && incoming().storyId == storyId
+          && incoming().reporterId == request.auth.uid
+          && incoming().createdAt == request.time
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
+          && get(/databases/$(database)/documents/stories/$(storyId)).data.storyFormat == 'roman';
         allow update: if false;
         allow delete: if false;
       }
