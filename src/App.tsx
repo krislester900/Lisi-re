@@ -14,7 +14,6 @@ import {
   MessageCircle,
   Plus,
   Repeat2,
-  Search,
   ShieldCheck,
   Users,
   X,
@@ -34,10 +33,16 @@ import { RepostModal } from './components/RepostModal';
 import { SalonEmblem } from './components/SalonEmblem';
 import { SalonRoomView } from './components/SalonRoomView';
 import { StoryComposerModal } from './components/StoryComposerModal';
+import { StoryFilterBar } from './components/StoryFilterBar';
 import { StoryReaderModal } from './components/StoryReaderModal';
 import { ThemesView } from './components/ThemesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { db } from './lib/firebase';
+import {
+  createDefaultStoryFilterState,
+  filterAndSortStories,
+  StoryFilterState,
+} from './lib/storyFilter';
 import {
   buildDirectExchangeId,
   subscribeToCustomSalons,
@@ -189,8 +194,9 @@ function SalonApp() {
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [storiesLoaded, setStoriesLoaded] = useState(false);
 
-  const [themeFilter, setThemeFilter] = useState<'all' | StoryThemeId>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [feedFilter, setFeedFilter] = useState<StoryFilterState>(() =>
+    createDefaultStoryFilterState('recent')
+  );
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [salonImgFailedMap, setSalonImgFailedMap] = useState<Record<string, boolean>>({});
 
@@ -374,18 +380,10 @@ function SalonApp() {
     });
   }, [publicStories, customSalons]);
 
-  const filteredPublicStories = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return openFeedStories.filter((story) => {
-      if (themeFilter !== 'all' && story.theme !== themeFilter) return false;
-      if (!q) return true;
-      return (
-        story.title.toLowerCase().includes(q) ||
-        story.excerpt.toLowerCase().includes(q) ||
-        (!story.isAnonymous && story.authorName.toLowerCase().includes(q))
-      );
-    });
-  }, [openFeedStories, themeFilter, searchQuery]);
+  const filteredPublicStories = useMemo(
+    () => filterAndSortStories(openFeedStories, feedFilter),
+    [openFeedStories, feedFilter]
+  );
 
   const storyCountsBySalon = useMemo(() => {
     const counts: Record<StoryThemeId, number> = {
@@ -1358,17 +1356,14 @@ function SalonApp() {
               </div>
             ) : (
               <div className="pt-8 border-t border-stone-200 space-y-8">
-                {/* Filter & Search Toolbar */}
-                <section
-                  aria-label="Filtrer les récits"
-                  className="flex flex-col lg:flex-row lg:items-center justify-between gap-4"
-                >
-                  <div className="flex flex-wrap items-center gap-1.5">
+                {/* Salon Theme Pills + Multi-Criteria Sort & Filter Toolbar */}
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par salon">
                     <button
                       type="button"
-                      onClick={() => setThemeFilter('all')}
+                      onClick={() => setFeedFilter((prev) => ({ ...prev, theme: 'all' }))}
                       className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                        themeFilter === 'all'
+                        feedFilter.theme === 'all'
                           ? 'bg-stone-900 text-white border-stone-900'
                           : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
                       }`}
@@ -1379,9 +1374,9 @@ function SalonApp() {
                       <button
                         key={t.id}
                         type="button"
-                        onClick={() => setThemeFilter(t.id)}
+                        onClick={() => setFeedFilter((prev) => ({ ...prev, theme: t.id }))}
                         style={
-                          themeFilter === t.id
+                          feedFilter.theme === t.id
                             ? {
                                 backgroundColor: t.palette.accent,
                                 borderColor: t.palette.accent,
@@ -1390,7 +1385,7 @@ function SalonApp() {
                             : undefined
                         }
                         className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                          themeFilter === t.id
+                          feedFilter.theme === t.id
                             ? ''
                             : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
                         }`}
@@ -1400,18 +1395,16 @@ function SalonApp() {
                     ))}
                   </div>
 
-                  <div className="relative w-full lg:w-72 shrink-0">
-                    <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="search"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Rechercher un titre, un auteur…"
-                      aria-label="Rechercher un récit"
-                      className="w-full min-h-[38px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
-                    />
-                  </div>
-                </section>
+                  <StoryFilterBar
+                    value={feedFilter}
+                    onChange={setFeedFilter}
+                    defaultSort="recent"
+                    searchPlaceholder="Rechercher un titre, un auteur…"
+                    ariaLabel="Trier et filtrer les récits publiés"
+                    totalCount={openFeedStories.length}
+                    filteredCount={filteredPublicStories.length}
+                  />
+                </div>
 
                 {filteredPublicStories.length === 0 ? (
                   <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
@@ -1419,14 +1412,11 @@ function SalonApp() {
                       Aucun récit ne correspond à ce filtre
                     </p>
                     <p className="text-sm text-stone-600">
-                      Essayez un autre mot-clé ou réinitialisez le filtre pour voir tous les récits publiés.
+                      Essayez d’autres critères ou réinitialisez les filtres pour voir tous les récits publiés.
                     </p>
                     <button
                       type="button"
-                      onClick={() => {
-                        setThemeFilter('all');
-                        setSearchQuery('');
-                      }}
+                      onClick={() => setFeedFilter(createDefaultStoryFilterState('recent'))}
                       className="min-h-[40px] px-4 py-2 text-sm font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
                     >
                       Afficher tous les récits

@@ -10,9 +10,13 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
-  Search,
   Shuffle,
 } from 'lucide-react';
+import {
+  createDefaultStoryFilterState,
+  filterAndSortStories,
+  StoryFilterState,
+} from '../lib/storyFilter';
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
@@ -20,8 +24,7 @@ import {
   THEME_MAP,
 } from '../lib/themes';
 import { CustomSalon, Story, StoryFormat, StoryThemeId } from '../types/story';
-
-type SortMode = 'shuffled' | 'recent' | 'views' | 'resonances';
+import { StoryFilterBar } from './StoryFilterBar';
 
 interface PeleMeleStoriesViewProps {
   publicStories: Story[];
@@ -39,14 +42,6 @@ interface PeleMeleStoriesViewProps {
   onWriteStory: () => void;
 }
 
-function hashSeed(input: string, seed: number): number {
-  let h = seed >>> 0;
-  for (let i = 0; i < input.length; i += 1) {
-    h = Math.imul(h ^ input.charCodeAt(i), 2654435761);
-  }
-  return (h ^ (h >>> 15)) >>> 0;
-}
-
 export function PeleMeleStoriesView({
   publicStories,
   customSalons,
@@ -62,11 +57,9 @@ export function PeleMeleStoriesView({
   onBackToSalons,
   onWriteStory,
 }: PeleMeleStoriesViewProps) {
-  const [sortMode, setSortMode] = useState<SortMode>('shuffled');
-  const [shuffleSeed, setShuffleSeed] = useState<number>(() => Date.now() % 100000);
-  const [formatFilter, setFormatFilter] = useState<'all' | StoryFormat>('all');
-  const [originFilter, setOriginFilter] = useState<'all' | 'hors-salon' | 'salons-publics'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filterState, setFilterState] = useState<StoryFilterState>(() =>
+    createDefaultStoryFilterState('shuffled', Date.now() % 100000)
+  );
 
   // Strictly only stories outside private salons (hors salons + public salons)
   const peleMeleEligibleStories = useMemo(() => {
@@ -81,47 +74,17 @@ export function PeleMeleStoriesView({
     });
   }, [publicStories, customSalons]);
 
-  const displayedStories = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const filtered = peleMeleEligibleStories.filter((story) => {
-      const fmt: StoryFormat = story.storyFormat ?? 'confession';
-      if (formatFilter !== 'all' && fmt !== formatFilter) return false;
-      const isHorsSalon = story.storyScope === 'pelemele' && !story.customSalonId;
-      if (originFilter === 'hors-salon' && !isHorsSalon) return false;
-      if (originFilter === 'salons-publics' && isHorsSalon) return false;
-      if (!q) return true;
-      const salonLabel = (
-        story.customSalonName ||
-        (isHorsSalon ? 'Hors salon Pêle-mêle' : THEME_MAP[story.theme]?.salonName || '')
-      ).toLowerCase();
-      return (
-        story.title.toLowerCase().includes(q) ||
-        story.excerpt.toLowerCase().includes(q) ||
-        (!story.isAnonymous && story.authorName.toLowerCase().includes(q)) ||
-        salonLabel.includes(q)
-      );
-    });
-
-    const copy = [...filtered];
-    if (sortMode === 'shuffled') {
-      copy.sort((a, b) => hashSeed(a.storyId, shuffleSeed) - hashSeed(b.storyId, shuffleSeed));
-    } else if (sortMode === 'views') {
-      copy.sort((a, b) => (b.viewCount ?? 0) - (a.viewCount ?? 0));
-    } else if (sortMode === 'resonances') {
-      copy.sort((a, b) => (b.resonanceCount ?? 0) - (a.resonanceCount ?? 0));
-    } else {
-      copy.sort((a, b) => {
-        const aMs = (a.updatedAt || a.createdAt)?.toMillis() ?? 0;
-        const bMs = (b.updatedAt || b.createdAt)?.toMillis() ?? 0;
-        return bMs - aMs;
-      });
-    }
-    return copy;
-  }, [peleMeleEligibleStories, formatFilter, originFilter, searchQuery, sortMode, shuffleSeed]);
+  const displayedStories = useMemo(
+    () => filterAndSortStories(peleMeleEligibleStories, filterState),
+    [peleMeleEligibleStories, filterState]
+  );
 
   const handleReshuffle = () => {
-    setSortMode('shuffled');
-    setShuffleSeed((prev) => (prev * 1664525 + 1013904223) >>> 0);
+    setFilterState((prev) => ({
+      ...prev,
+      sortMode: 'shuffled',
+      shuffleSeed: ((prev.shuffleSeed * 1664525 + 1013904223) >>> 0) || 1,
+    }));
   };
 
   return (
@@ -195,95 +158,19 @@ export function PeleMeleStoriesView({
         </div>
       </section>
 
-      {/* Toolbar: Sort mode, Format filter, Search */}
-      <section
-        aria-label="Trier et filtrer les histoires pêle-mêle"
-        className="flex flex-col lg:flex-row lg:items-center justify-between gap-4"
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex flex-wrap items-center gap-1 p-1 bg-stone-100 rounded-md">
-            {(
-              [
-                { id: 'shuffled', label: 'Pêle-mêle' },
-                { id: 'recent', label: 'Récents' },
-                { id: 'views', label: 'Plus lus' },
-                { id: 'resonances', label: 'Plus résonnants' },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setSortMode(opt.id)}
-                className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
-                  sortMode === opt.id
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {(
-              [
-                { id: 'all', label: 'Tout' },
-                { id: 'hors-salon', label: 'Hors salons' },
-                { id: 'salons-publics', label: 'Salons publics' },
-              ] as const
-            ).map((orig) => (
-              <button
-                key={orig.id}
-                type="button"
-                onClick={() => setOriginFilter(orig.id)}
-                className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                  originFilter === orig.id
-                    ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                    : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                }`}
-              >
-                {orig.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {(
-              [
-                { id: 'all', label: 'Tous formats' },
-                { id: 'roman', label: 'Romans' },
-                { id: 'confession', label: 'Confessions' },
-              ] as const
-            ).map((fmt) => (
-              <button
-                key={fmt.id}
-                type="button"
-                onClick={() => setFormatFilter(fmt.id)}
-                className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                  formatFilter === fmt.id
-                    ? 'bg-stone-900 text-white border-stone-900'
-                    : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                }`}
-              >
-                {fmt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="relative w-full lg:w-72 shrink-0">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Titre, auteur ou salon…"
-            aria-label="Rechercher dans les histoires pêle-mêle"
-            className="w-full min-h-[38px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
-          />
-        </div>
-      </section>
+      {/* Toolbar: Sort mode, Multi-criteria Filters, Search */}
+      <StoryFilterBar
+        value={filterState}
+        onChange={setFilterState}
+        defaultSort="shuffled"
+        allowShuffle={true}
+        showOriginFilter={true}
+        showThemeFilter={true}
+        searchPlaceholder="Titre, auteur ou salon…"
+        ariaLabel="Trier et filtrer les histoires pêle-mêle"
+        totalCount={peleMeleEligibleStories.length}
+        filteredCount={displayedStories.length}
+      />
 
       {/* Content */}
       {!storiesLoaded ? (
@@ -313,11 +200,11 @@ export function PeleMeleStoriesView({
           </p>
           <button
             type="button"
-            onClick={() => {
-              setSearchQuery('');
-              setFormatFilter('all');
-              setOriginFilter('all');
-            }}
+            onClick={() =>
+              setFilterState((prev) =>
+                createDefaultStoryFilterState('shuffled', prev.shuffleSeed)
+              )
+            }
             className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
           >
             Réinitialiser les filtres

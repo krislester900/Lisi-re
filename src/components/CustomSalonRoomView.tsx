@@ -15,7 +15,6 @@ import {
   MessageSquare,
   Pencil,
   Repeat2,
-  Search,
   Send,
   ShieldCheck,
   Trash2,
@@ -25,6 +24,11 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  createDefaultStoryFilterState,
+  filterAndSortStories,
+  StoryFilterState,
+} from '../lib/storyFilter';
 import {
   deleteCustomSalon,
   deleteCustomSalonMessage,
@@ -48,8 +52,8 @@ import {
   FIELD_LIMITS,
   SalonMember,
   Story,
-  StoryFormat,
 } from '../types/story';
+import { StoryFilterBar } from './StoryFilterBar';
 
 interface CustomSalonRoomViewProps {
   salon: CustomSalon | null;
@@ -89,8 +93,9 @@ export function CustomSalonRoomView({
   const [messages, setMessages] = useState<CustomSalonMessage[]>([]);
 
   const [roomSection, setRoomSection] = useState<'stories' | 'chat' | 'members'>('stories');
-  const [formatFilter, setFormatFilter] = useState<'all' | StoryFormat>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filterState, setFilterState] = useState<StoryFilterState>(() =>
+    createDefaultStoryFilterState('recent')
+  );
 
   const [requestNote, setRequestNote] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
@@ -115,8 +120,7 @@ export function CustomSalonRoomView({
 
   useEffect(() => {
     setRoomSection('stories');
-    setSearchQuery('');
-    setFormatFilter('all');
+    setFilterState(createDefaultStoryFilterState('recent'));
     setActionFeedback(null);
     setActionError(null);
     setConfirmDelete(false);
@@ -177,19 +181,10 @@ export function CustomSalonRoomView({
     return subscribeToCustomSalonMessages(salon.salonId, setMessages);
   }, [salon?.salonId, user?.uid, canViewContent]);
 
-  const filteredStories = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return stories.filter((story) => {
-      const fmt: StoryFormat = story.storyFormat ?? 'confession';
-      if (formatFilter !== 'all' && fmt !== formatFilter) return false;
-      if (!q) return true;
-      return (
-        story.title.toLowerCase().includes(q) ||
-        story.excerpt.toLowerCase().includes(q) ||
-        (!story.isAnonymous && story.authorName.toLowerCase().includes(q))
-      );
-    });
-  }, [stories, formatFilter, searchQuery]);
+  const filteredStories = useMemo(
+    () => filterAndSortStories(stories, filterState),
+    [stories, filterState]
+  );
 
   const pendingRequests = useMemo(
     () => ownerMembers.filter((m) => m.status === 'pending'),
@@ -679,47 +674,21 @@ export function CustomSalonRoomView({
                 </button>
               )}
             </div>
-
-            {roomSection === 'stories' && stories.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {(
-                  [
-                    { id: 'all', label: 'Tous' },
-                    { id: 'roman', label: 'Romans' },
-                    { id: 'confession', label: 'Confessions' },
-                  ] as const
-                ).map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setFormatFilter(opt.id)}
-                    className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
-                      formatFilter === opt.id
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
 
           {/* Section 1: Stories */}
           {roomSection === 'stories' && (
             <section className="space-y-6">
-              {stories.length > 1 && (
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Rechercher dans ce salon…"
-                    className="w-full min-h-[38px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
-                  />
-                </div>
+              {stories.length > 0 && (
+                <StoryFilterBar
+                  value={filterState}
+                  onChange={setFilterState}
+                  defaultSort="recent"
+                  searchPlaceholder="Rechercher dans ce salon…"
+                  ariaLabel={`Trier et filtrer les récits de ${salon.name}`}
+                  totalCount={stories.length}
+                  filteredCount={filteredStories.length}
+                />
               )}
 
               {stories.length === 0 ? (
@@ -740,10 +709,17 @@ export function CustomSalonRoomView({
                   </button>
                 </div>
               ) : filteredStories.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center">
+                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
                   <p className="text-sm text-stone-600">
                     Aucun récit ne correspond à ce filtre dans ce salon.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => setFilterState(createDefaultStoryFilterState('recent'))}
+                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                  >
+                    Réinitialiser les filtres
+                  </button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

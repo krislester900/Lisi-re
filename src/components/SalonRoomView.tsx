@@ -10,8 +10,12 @@ import {
   MessageCircle,
   MessageSquare,
   Repeat2,
-  Search,
 } from 'lucide-react';
+import {
+  createDefaultStoryFilterState,
+  filterAndSortStories,
+  StoryFilterState,
+} from '../lib/storyFilter';
 import {
   formatCumulativeMinutes,
   formatFrenchDate,
@@ -21,9 +25,10 @@ import {
   STORY_THEMES,
   THEME_MAP,
 } from '../lib/themes';
-import { Story, StoryFormat, StoryThemeId } from '../types/story';
+import { Story, StoryThemeId } from '../types/story';
 import { SalonChatPanel } from './SalonChatPanel';
 import { SalonEmblem } from './SalonEmblem';
+import { StoryFilterBar } from './StoryFilterBar';
 
 interface SalonRoomViewProps {
   salonId: StoryThemeId;
@@ -52,14 +57,14 @@ export function SalonRoomView({
   onWriteInSalon,
   onOpenMemberWall,
 }: SalonRoomViewProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [formatFilter, setFormatFilter] = useState<'all' | StoryFormat>('all');
+  const [filterState, setFilterState] = useState<StoryFilterState>(() =>
+    createDefaultStoryFilterState('recent')
+  );
   const [roomSection, setRoomSection] = useState<'stories' | 'chat'>('stories');
   const [imgFailed, setImgFailed] = useState(false);
 
   useEffect(() => {
-    setSearchQuery('');
-    setFormatFilter('all');
+    setFilterState(createDefaultStoryFilterState('recent'));
     setRoomSection('stories');
     setImgFailed(false);
   }, [salonId]);
@@ -81,19 +86,10 @@ export function SalonRoomView({
     [publicStories, salonId]
   );
 
-  const salonStories = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return allInSalon.filter((story) => {
-      const fmt: StoryFormat = story.storyFormat ?? 'confession';
-      if (formatFilter !== 'all' && fmt !== formatFilter) return false;
-      if (!q) return true;
-      return (
-        story.title.toLowerCase().includes(q) ||
-        story.excerpt.toLowerCase().includes(q) ||
-        (!story.isAnonymous && story.authorName.toLowerCase().includes(q))
-      );
-    });
-  }, [allInSalon, formatFilter, searchQuery]);
+  const salonStories = useMemo(
+    () => filterAndSortStories(allInSalon, filterState),
+    [allInSalon, filterState]
+  );
 
   const totalInSalon = allInSalon.length;
   const totalEchoesInSalon = useMemo(
@@ -367,31 +363,6 @@ export function SalonRoomView({
             <span>Chat du salon (texte)</span>
           </button>
         </div>
-
-        {roomSection === 'stories' && totalInSalon > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            {(
-              [
-                { id: 'all', label: 'Tous' },
-                { id: 'roman', label: 'Romans' },
-                { id: 'confession', label: 'Confessions' },
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setFormatFilter(opt.id)}
-                className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
-                  formatFilter === opt.id
-                    ? 'bg-stone-900 text-white border-stone-900'
-                    : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Section A: Public Text-Only Salon Chat */}
@@ -488,23 +459,19 @@ export function SalonRoomView({
           </section>
         ) : (
           <section className="space-y-8" aria-label={`Récits dans ${salon.salonName}`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-4">
               <h2 className="font-display text-2xl font-medium text-stone-900">
                 Histoires et romans du salon
               </h2>
-              {totalInSalon > 1 && (
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Rechercher dans ce salon…"
-                    aria-label="Rechercher un récit dans ce salon"
-                    className="w-full min-h-[38px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
-                  />
-                </div>
-              )}
+              <StoryFilterBar
+                value={filterState}
+                onChange={setFilterState}
+                defaultSort="recent"
+                searchPlaceholder="Rechercher dans ce salon…"
+                ariaLabel={`Trier et filtrer les récits dans ${salon.salonName}`}
+                totalCount={totalInSalon}
+                filteredCount={salonStories.length}
+              />
             </div>
 
             {salonStories.length === 0 ? (
@@ -514,10 +481,7 @@ export function SalonRoomView({
                 </p>
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setFormatFilter('all');
-                  }}
+                  onClick={() => setFilterState(createDefaultStoryFilterState('recent'))}
                   className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
                 >
                   Réinitialiser les filtres

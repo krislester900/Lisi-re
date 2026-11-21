@@ -21,6 +21,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { sortStories, StorySortMode } from '../lib/storyFilter';
 import {
   deleteStory,
   deleteStoryQuote,
@@ -77,6 +78,7 @@ export function JournalView({
   const { user, profile, signInWithGoogle, logOut } = useAuth();
   const [subTab, setSubTab] = useState<JournalSubTab>('stories');
   const [storyFilter, setStoryFilter] = useState<StoryFilter>('all');
+  const [storySort, setStorySort] = useState<StorySortMode>('recent');
   const [storySearch, setStorySearch] = useState('');
   const [bookmarkSearch, setBookmarkSearch] = useState('');
   const [quoteSearch, setQuoteSearch] = useState('');
@@ -121,7 +123,7 @@ export function JournalView({
 
   const filteredStories = useMemo(() => {
     const q = storySearch.trim().toLowerCase();
-    return myStories.filter((story) => {
+    const list = myStories.filter((story) => {
       if (storyFilter === 'public' && story.visibility !== 'public') return false;
       if (storyFilter === 'private' && story.visibility !== 'private') return false;
       if (storyFilter === 'roman' && story.storyFormat !== 'roman') return false;
@@ -138,7 +140,8 @@ export function JournalView({
         salonLabel.includes(q)
       );
     });
-  }, [myStories, storyFilter, storySearch]);
+    return sortStories(list, storySort);
+  }, [myStories, storyFilter, storySearch, storySort]);
 
   const filteredBookmarks = useMemo(() => {
     const q = bookmarkSearch.trim().toLowerCase();
@@ -584,19 +587,37 @@ export function JournalView({
                     ))}
                   </div>
 
-                  {myStories.length > 1 && (
-                    <div className="relative w-full sm:w-60 shrink-0">
-                      <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="search"
-                        value={storySearch}
-                        onChange={(e) => setStorySearch(e.target.value)}
-                        placeholder="Filtrer mes textes…"
-                        aria-label="Rechercher dans mes écrits"
-                        className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
-                      />
-                    </div>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {myStories.length > 1 && (
+                      <select
+                        value={storySort}
+                        onChange={(e) => setStorySort(e.target.value as StorySortMode)}
+                        aria-label="Trier mes écrits"
+                        className="min-h-[34px] px-2.5 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                      >
+                        <option value="recent">Plus récents</option>
+                        <option value="views">Plus vus</option>
+                        <option value="resonances">Plus aimés</option>
+                        <option value="echoes">Plus commentés</option>
+                        <option value="shortest">Plus courts</option>
+                        <option value="longest">Plus longs</option>
+                      </select>
+                    )}
+
+                    {myStories.length > 1 && (
+                      <div className="relative w-full sm:w-52 shrink-0">
+                        <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="search"
+                          value={storySearch}
+                          onChange={(e) => setStorySearch(e.target.value)}
+                          placeholder="Filtrer mes textes…"
+                          aria-label="Rechercher dans mes écrits"
+                          className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
