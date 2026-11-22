@@ -1,4 +1,5 @@
 import {
+  ModerationAiVerdict,
   ModerationCaseStatus,
   ModerationGravityLevel,
   ModerationReportCategory,
@@ -12,6 +13,27 @@ export const MODERATION_ADMIN_EMAIL = 'krislester900@gmail.com';
 export function isModerationAdminEmail(email?: string | null): boolean {
   return Boolean(email && email.trim().toLowerCase() === MODERATION_ADMIN_EMAIL);
 }
+
+export const MODERATION_AI_VERDICT_LABELS: Record<
+  ModerationAiVerdict,
+  { label: string; shortLabel: string; toneClass: string }
+> = {
+  outrage_confirme: {
+    label: 'IA : Acte outrageant détecté',
+    shortLabel: 'IA : Outrage détecté',
+    toneClass: 'border-red-300 bg-red-50 text-red-900',
+  },
+  incertain_a_verifier: {
+    label: 'IA : Cas ambigu — intervention admin requise',
+    shortLabel: 'IA : Intervention requise',
+    toneClass: 'border-amber-300 bg-amber-50 text-amber-950',
+  },
+  aucun_outrage: {
+    label: 'IA : Aucun manquement caractérisé',
+    shortLabel: 'IA : Aucun outrage',
+    toneClass: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+  },
+};
 
 export const MODERATION_CATEGORY_LABELS: Record<
   ModerationReportCategory,

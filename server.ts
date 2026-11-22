@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
+import { analyzeModerationCaseWithGemini, verifyFirebaseIdToken } from './api-helpers.ts';
 
 const resolvedFilename =
   typeof __filename !== 'undefined'
@@ -577,7 +578,7 @@ async function fetchYouTubeTracks(query: string): Promise<NormalizedTrack[]> {
 export function createApiApp(): express.Express {
   const app = express();
   app.set('trust proxy', 1);
-  app.use(express.json());
+  app.use(express.json({ limit: '256kb' }));
 
   app.get('/api/music/providers', async (req: Request, res: Response) => {
     const creds = getSpotifyCredentials();
@@ -1115,6 +1116,47 @@ export function createApiApp(): express.Express {
     } catch (err) {
       res.status(502).json({
         error: err instanceof Error ? err.message : 'Erreur lors de la recherche musicale.',
+      });
+    }
+  });
+
+  app.post('/api/moderation/analyze', async (req: Request, res: Response) => {
+    const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!bearerToken) {
+      res.status(401).json({ error: 'Authentification requise pour lancer l’analyse IA.' });
+      return;
+    }
+
+    const caller = await verifyFirebaseIdToken(bearerToken);
+    if (!caller) {
+      res.status(401).json({ error: 'Session expirée ou jeton Firebase invalide.' });
+      return;
+    }
+
+    const body = (req.body || {}) as {
+      targetType?: string;
+      category?: string;
+      targetUserName?: string;
+      targetExcerpt?: string;
+      description?: string;
+    };
+
+    try {
+      const analysis = await analyzeModerationCaseWithGemini({
+        apiKey: process.env.GEMINI_API_KEY || '',
+        targetType: body.targetType || 'story',
+        category: body.category || 'autre',
+        targetUserName: body.targetUserName || 'Membre',
+        targetExcerpt: body.targetExcerpt || '',
+        description: body.description || '',
+      });
+      res.json({ analysis });
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
+      res.status(status).json({
+        error: e.message || 'Impossible de contacter le service de modération IA.',
       });
     }
   });

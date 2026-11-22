@@ -1290,6 +1290,44 @@
           "type": "string",
           "format": "date-time"
         },
+        "aiAnalysis": {
+          "type": "object",
+          "properties": {
+            "analyzedAtIso": { "type": "string", "maxLength": 40 },
+            "model": { "type": "string", "maxLength": 60 },
+            "verdict": {
+              "type": "string",
+              "enum": ["outrage_confirme", "incertain_a_verifier", "aucun_outrage"]
+            },
+            "confidencePercent": { "type": "integer" },
+            "recommendedAction": {
+              "type": "string",
+              "enum": ["avertir", "examen_manuel", "classer"]
+            },
+            "suggestedGravity": {
+              "type": "string",
+              "enum": ["aucune", "moderee", "grave", "critique"]
+            },
+            "suggestedCriteria": { "type": "array" },
+            "summary": { "type": "string", "maxLength": 1000 },
+            "suggestedDecisionReason": { "type": "string", "maxLength": 800 },
+            "needsAdminIntervention": { "type": "boolean" },
+            "interventionReason": { "type": "string", "maxLength": 400 }
+          },
+          "required": [
+            "analyzedAtIso",
+            "model",
+            "verdict",
+            "confidencePercent",
+            "recommendedAction",
+            "suggestedGravity",
+            "suggestedCriteria",
+            "summary",
+            "suggestedDecisionReason",
+            "needsAdminIntervention",
+            "interventionReason"
+          ]
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"

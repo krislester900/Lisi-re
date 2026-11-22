@@ -16,7 +16,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { auth, db } from './firebase';
 import { handleFirestoreError, OperationType } from './firestoreErrors';
 import { estimateReadingMinutes } from './themes';
 import {
@@ -32,6 +32,7 @@ import {
   FIELD_LIMITS,
   ID_PATTERN,
   MemberWarning,
+  ModerationAiAnalysis,
   ModerationCase,
   ModerationGravityLevel,
   ModerationReportCategory,
@@ -2367,6 +2368,102 @@ export function subscribeToAllModerationCases(
   );
 }
 
+function sanitizeModerationAiAnalysis(raw: ModerationAiAnalysis): ModerationAiAnalysis {
+  const verdict =
+    raw.verdict === 'outrage_confirme' ||
+    raw.verdict === 'incertain_a_verifier' ||
+    raw.verdict === 'aucun_outrage'
+      ? raw.verdict
+      : 'incertain_a_verifier';
+  const recommendedAction =
+    raw.recommendedAction === 'avertir' ||
+    raw.recommendedAction === 'examen_manuel' ||
+    raw.recommendedAction === 'classer'
+      ? raw.recommendedAction
+      : 'examen_manuel';
+  const suggestedGravity =
+    raw.suggestedGravity === 'aucune' ||
+    raw.suggestedGravity === 'moderee' ||
+    raw.suggestedGravity === 'grave' ||
+    raw.suggestedGravity === 'critique'
+      ? raw.suggestedGravity
+      : 'aucune';
+  const confidenceNum = Number(raw.confidencePercent);
+  const confidencePercent = Number.isFinite(confidenceNum)
+    ? Math.max(0, Math.min(100, Math.round(confidenceNum)))
+    : 50;
+
+  return {
+    analyzedAtIso: clampString(raw.analyzedAtIso || new Date().toISOString(), 40),
+    model: clampString(raw.model || 'gemini-4-hydrogen', 60),
+    verdict,
+    confidencePercent,
+    recommendedAction,
+    suggestedGravity,
+    suggestedCriteria: Array.isArray(raw.suggestedCriteria)
+      ? raw.suggestedCriteria
+          .map((c) => clampString(String(c), 80))
+          .filter(Boolean)
+          .slice(0, 6)
+      : [],
+    summary: clampString(raw.summary || '', 1000),
+    suggestedDecisionReason: clampString(raw.suggestedDecisionReason || '', 800),
+    needsAdminIntervention: Boolean(raw.needsAdminIntervention),
+    interventionReason: clampString(raw.interventionReason || '', 400),
+  };
+}
+
+export async function requestModerationAiAnalysis(params: {
+  targetType: ModerationTargetType;
+  category: ModerationReportCategory;
+  targetUserName: string;
+  targetExcerpt: string;
+  description: string;
+}): Promise<ModerationAiAnalysis> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Connexion requise pour analyser ce signalement par IA.');
+  }
+
+  const idToken = await currentUser.getIdToken();
+  const resp = await fetch('/api/moderation/analyze', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      targetType: params.targetType,
+      category: params.category,
+      targetUserName: params.targetUserName,
+      targetExcerpt: params.targetExcerpt,
+      description: params.description,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const contentType = resp.headers.get('content-type') || '';
+  const rawText = await resp.text();
+  if (!contentType.includes('application/json') && rawText.trimStart().startsWith('<')) {
+    throw new Error(
+      'Le service IA du serveur (/api/moderation/analyze) n’est pas actif sur cet hébergement statique.'
+    );
+  }
+
+  let parsed: { analysis?: ModerationAiAnalysis; error?: string } = {};
+  try {
+    parsed = JSON.parse(rawText) as { analysis?: ModerationAiAnalysis; error?: string };
+  } catch {
+    throw new Error('Réponse invalide reçue du service de modération IA.');
+  }
+
+  if (!resp.ok || !parsed.analysis) {
+    throw new Error(parsed.error || 'Analyse IA indisponible pour le moment.');
+  }
+
+  return sanitizeModerationAiAnalysis(parsed.analysis);
+}
+
 export async function submitModerationCase(params: {
   reporterId: string;
   reporterName: string;
@@ -2378,6 +2475,7 @@ export async function submitModerationCase(params: {
   targetExcerpt: string;
   category: ModerationReportCategory;
   description: string;
+  aiAnalysis?: ModerationAiAnalysis;
 }): Promise<string> {
   assertValidId(params.reporterId, 'reporterId');
   assertValidId(params.targetUserId, 'targetUserId');
@@ -2403,32 +2501,54 @@ export async function submitModerationCase(params: {
   const caseId = generateSafeId('case');
   const path = `moderationCases/${caseId}`;
 
+  const payload: Record<string, unknown> = {
+    caseId,
+    reporterId: params.reporterId,
+    reporterName,
+    targetUserId: params.targetUserId,
+    targetUserName,
+    targetType: params.targetType,
+    targetId: params.targetId,
+    targetContextId,
+    targetExcerpt,
+    category: params.category,
+    description,
+    status: 'open',
+    reviewStep: 'recu',
+    evaluationCriteria: [],
+    gravityLevel: 'aucune',
+    caseNotes: '',
+    decisionReason: '',
+    warningIssued: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (params.aiAnalysis) {
+    payload.aiAnalysis = sanitizeModerationAiAnalysis(params.aiAnalysis);
+  }
+
   try {
-    await setDoc(doc(db, 'moderationCases', caseId), {
-      caseId,
-      reporterId: params.reporterId,
-      reporterName,
-      targetUserId: params.targetUserId,
-      targetUserName,
-      targetType: params.targetType,
-      targetId: params.targetId,
-      targetContextId,
-      targetExcerpt,
-      category: params.category,
-      description,
-      status: 'open',
-      reviewStep: 'recu',
-      evaluationCriteria: [],
-      gravityLevel: 'aucune',
-      caseNotes: '',
-      decisionReason: '',
-      warningIssued: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    await setDoc(doc(db, 'moderationCases', caseId), payload);
     return caseId;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function saveModerationCaseAiAnalysis(
+  caseId: string,
+  aiAnalysis: ModerationAiAnalysis
+): Promise<void> {
+  assertValidId(caseId, 'caseId');
+  const path = `moderationCases/${caseId}`;
+  try {
+    await updateDoc(doc(db, 'moderationCases', caseId), {
+      aiAnalysis: sanitizeModerationAiAnalysis(aiAnalysis),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 

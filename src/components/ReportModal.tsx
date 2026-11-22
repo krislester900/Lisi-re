@@ -4,11 +4,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { MODERATION_CATEGORY_LABELS, MODERATION_TARGET_LABELS } from '../lib/moderationLabels';
 import {
   formatFriendlyFirestoreError,
+  requestModerationAiAnalysis,
   submitModerationCase,
   upsertUserRelationship,
 } from '../lib/storyService';
 import {
   FIELD_LIMITS,
+  ModerationAiAnalysis,
   ModerationReportCategory,
   ModerationTargetType,
 } from '../types/story';
@@ -84,17 +86,33 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
     setBusy(true);
     try {
       const reporterName = profile?.displayName || user.displayName || 'Membre';
+      const resolvedTargetName = draft.isAnonymousTarget ? 'Auteur anonyme' : draft.targetUserName;
+
+      let aiAnalysis: ModerationAiAnalysis | undefined;
+      try {
+        aiAnalysis = await requestModerationAiAnalysis({
+          targetType: draft.targetType,
+          category,
+          targetUserName: resolvedTargetName,
+          targetExcerpt: draft.targetExcerpt,
+          description,
+        });
+      } catch {
+        // AI pre-triage is optional at submission; admin can still run or handle the case manually.
+      }
+
       const caseId = await submitModerationCase({
         reporterId: user.uid,
         reporterName,
         targetUserId: draft.targetUserId,
-        targetUserName: draft.isAnonymousTarget ? 'Auteur anonyme' : draft.targetUserName,
+        targetUserName: resolvedTargetName,
         targetType: draft.targetType,
         targetId: draft.targetId,
         targetContextId: draft.targetContextId,
         targetExcerpt: draft.targetExcerpt,
         category,
         description,
+        aiAnalysis,
       });
 
       let blockedNow = false;

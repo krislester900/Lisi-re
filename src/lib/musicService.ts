@@ -37,13 +37,24 @@ export const READING_MOOD_PRESETS: Array<{ label: string; query: string }> = [
   { label: 'Classique', query: 'debussy chopin nocturne' },
 ];
 
+class MissingServerApiError extends Error {
+  constructor() {
+    super(
+      'Le service serveur (/api) n’est pas actif sur cet hébergement statique. Activez le Worker Cloudflare (wrangler.jsonc) ou utilisez « Musique gratuite » / « Mon téléphone ».'
+    );
+    this.name = 'MissingServerApiError';
+  }
+}
+
 async function parseJsonSafe<T>(resp: Response, fallbackError: string): Promise<T> {
   const contentType = resp.headers.get('content-type') || '';
   const rawText = await resp.text();
-  if (!contentType.includes('application/json') && rawText.trimStart().startsWith('<')) {
-    throw new Error(
-      'Le service musical du serveur est indisponible sur cet hébergement (API introuvable). Redéployez le projet complet avec ses fonctions serveur.'
-    );
+  if (
+    (!contentType.includes('application/json') && rawText.trimStart().startsWith('<')) ||
+    resp.status === 404 ||
+    resp.status === 405
+  ) {
+    throw new MissingServerApiError();
   }
   try {
     return JSON.parse(rawText) as T;
@@ -52,15 +63,94 @@ async function parseJsonSafe<T>(resp: Response, fallbackError: string): Promise<
   }
 }
 
-export async function fetchMusicProvidersStatus(): Promise<MusicProvidersStatus> {
-  const resp = await fetch('/api/music/providers', { credentials: 'include' });
-  if (!resp.ok) {
-    throw new Error('Impossible de vérifier les services musicaux.');
+async function searchAudiusDirectly(query: string): Promise<ReadingTrack[]> {
+  const endpoints = [
+    `https://api.audius.co/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=Lisiere`,
+  ];
+
+  try {
+    const hostsResp = await fetch('https://api.audius.co', { signal: AbortSignal.timeout(3000) });
+    if (hostsResp.ok) {
+      const hostsJson = (await hostsResp.json()) as { data?: string[] };
+      if (Array.isArray(hostsJson.data)) {
+        for (const host of hostsJson.data.slice(0, 2)) {
+          endpoints.push(
+            `${host.replace(/\/+$/, '')}/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=Lisiere`
+          );
+        }
+      }
+    }
+  } catch {
+    // Fallback to primary discovery endpoint
   }
-  return parseJsonSafe<MusicProvidersStatus>(
-    resp,
-    'Impossible de vérifier les services musicaux.'
-  );
+
+  for (const endpoint of endpoints) {
+    try {
+      const resp = await fetch(endpoint, { signal: AbortSignal.timeout(5500) });
+      if (!resp.ok) continue;
+      const json = (await resp.json()) as {
+        data?: Array<{
+          id: string;
+          title: string;
+          duration?: number;
+          genre?: string;
+          permalink?: string;
+          is_delete?: boolean;
+          is_available?: boolean;
+          is_streamable?: boolean;
+          access?: { stream?: boolean };
+          stream?: { url?: string | null } | null;
+          artwork?: { '150x150'?: string; '480x480'?: string };
+          user?: { name?: string; handle?: string };
+        }>;
+      };
+
+      const items = (json.data ?? [])
+        .filter(
+          (item) =>
+            Boolean(item.id) &&
+            !item.is_delete &&
+            item.is_available !== false &&
+            item.is_streamable !== false &&
+            item.access?.stream !== false
+        )
+        .slice(0, 12);
+
+      return items.map((item) => ({
+        id: `audius_${item.id}`,
+        title: item.title || 'Morceau sans titre',
+        artist: item.user?.name || item.user?.handle || 'Artiste indépendant',
+        album: item.genre || undefined,
+        coverUrl: item.artwork?.['150x150'] || item.artwork?.['480x480'],
+        durationMs: item.duration ? item.duration * 1000 : undefined,
+        source: 'audius' as const,
+        streamUrl:
+          item.stream?.url ||
+          `https://api.audius.co/v1/tracks/${encodeURIComponent(item.id)}/stream?app_name=Lisiere`,
+        externalUrl: item.permalink ? `https://audius.co${item.permalink}` : undefined,
+        isPreview: false,
+      }));
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error('Catalogue Audius momentanément indisponible.');
+}
+
+export async function fetchMusicProvidersStatus(): Promise<MusicProvidersStatus> {
+  try {
+    const resp = await fetch('/api/music/providers', { credentials: 'include' });
+    if (!resp.ok) {
+      return { spotify: { configured: false, connected: false, callbackUrl: '', user: null } };
+    }
+    return await parseJsonSafe<MusicProvidersStatus>(
+      resp,
+      'Impossible de vérifier les services musicaux.'
+    );
+  } catch {
+    return { spotify: { configured: false, connected: false, callbackUrl: '', user: null } };
+  }
 }
 
 export async function fetchSpotifyAuthUrl(): Promise<{ url: string; callbackUrl: string }> {
@@ -117,15 +207,22 @@ export async function searchMusicCatalog(
       ? `/api/spotify/search?q=${encodeURIComponent(trimmed)}`
       : `/api/music/search?source=${encodeURIComponent(provider)}&q=${encodeURIComponent(trimmed)}`;
 
-  const resp = await fetch(endpoint, { credentials: 'include' });
-  const data = await parseJsonSafe<{ tracks?: ReadingTrack[]; error?: string }>(
-    resp,
-    'Recherche musicale indisponible.'
-  );
-  if (!resp.ok) {
-    throw new Error(data.error || 'Recherche musicale indisponible.');
+  try {
+    const resp = await fetch(endpoint, { credentials: 'include' });
+    const data = await parseJsonSafe<{ tracks?: ReadingTrack[]; error?: string }>(
+      resp,
+      'Recherche musicale indisponible.'
+    );
+    if (!resp.ok) {
+      throw new Error(data.error || 'Recherche musicale indisponible.');
+    }
+    return data.tracks ?? [];
+  } catch (err) {
+    if (err instanceof MissingServerApiError && provider === 'audius') {
+      return searchAudiusDirectly(trimmed);
+    }
+    throw err;
   }
-  return data.tracks ?? [];
 }
 
 export async function fetchSpotifyTopTracks(): Promise<ReadingTrack[]> {

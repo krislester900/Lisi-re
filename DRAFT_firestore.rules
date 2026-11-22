@@ -502,6 +502,39 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidModerationAiAnalysis(ai) {
+      return ai is map
+        && ai.keys().hasAll([
+          'analyzedAtIso', 'model', 'verdict', 'confidencePercent',
+          'recommendedAction', 'suggestedGravity', 'suggestedCriteria',
+          'summary', 'suggestedDecisionReason', 'needsAdminIntervention',
+          'interventionReason'
+        ])
+        && ai.keys().hasOnly([
+          'analyzedAtIso', 'model', 'verdict', 'confidencePercent',
+          'recommendedAction', 'suggestedGravity', 'suggestedCriteria',
+          'summary', 'suggestedDecisionReason', 'needsAdminIntervention',
+          'interventionReason'
+        ])
+        && ai.analyzedAtIso is string && ai.analyzedAtIso.size() <= 40
+        && ai.model is string && ai.model.size() <= 60
+        && ai.verdict in ['outrage_confirme', 'incertain_a_verifier', 'aucun_outrage']
+        && ai.confidencePercent is int && ai.confidencePercent >= 0 && ai.confidencePercent <= 100
+        && ai.recommendedAction in ['avertir', 'examen_manuel', 'classer']
+        && ai.suggestedGravity in ['aucune', 'moderee', 'grave', 'critique']
+        && ai.suggestedCriteria is list && ai.suggestedCriteria.size() <= 6
+        && (ai.suggestedCriteria.size() < 1 || (ai.suggestedCriteria[0] is string && ai.suggestedCriteria[0].size() <= 80))
+        && (ai.suggestedCriteria.size() < 2 || (ai.suggestedCriteria[1] is string && ai.suggestedCriteria[1].size() <= 80))
+        && (ai.suggestedCriteria.size() < 3 || (ai.suggestedCriteria[2] is string && ai.suggestedCriteria[2].size() <= 80))
+        && (ai.suggestedCriteria.size() < 4 || (ai.suggestedCriteria[3] is string && ai.suggestedCriteria[3].size() <= 80))
+        && (ai.suggestedCriteria.size() < 5 || (ai.suggestedCriteria[4] is string && ai.suggestedCriteria[4].size() <= 80))
+        && (ai.suggestedCriteria.size() < 6 || (ai.suggestedCriteria[5] is string && ai.suggestedCriteria[5].size() <= 80))
+        && ai.summary is string && ai.summary.size() <= 1000
+        && ai.suggestedDecisionReason is string && ai.suggestedDecisionReason.size() <= 800
+        && ai.needsAdminIntervention is bool
+        && ai.interventionReason is string && ai.interventionReason.size() <= 400;
+    }
+
     function isValidModerationCase(data) {
       return data.keys().hasAll([
           'caseId', 'reporterId', 'reporterName', 'targetUserId', 'targetUserName',
@@ -516,7 +549,7 @@ service cloud.firestore {
           'category', 'description', 'status', 'reviewStep',
           'evaluationCriteria', 'gravityLevel', 'caseNotes', 'decisionReason',
           'warningIssued', 'warningId', 'reviewerId', 'reviewerName', 'reviewedAt',
-          'createdAt', 'updatedAt'
+          'aiAnalysis', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.caseId)
         && isValidId(data.reporterId)
@@ -551,6 +584,7 @@ service cloud.firestore {
         && (!('reviewerId' in data) || isValidId(data.reviewerId))
         && (!('reviewerName' in data) || (data.reviewerName is string && data.reviewerName.size() >= 2 && data.reviewerName.size() <= 60))
         && (!('reviewedAt' in data) || data.reviewedAt is timestamp)
+        && (!('aiAnalysis' in data) || isValidModerationAiAnalysis(data.aiAnalysis))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -1569,6 +1603,17 @@ service cloud.firestore {
               'reviewedAt', 'updatedAt'
             ])
             && incoming().reviewedAt == request.time
+          )
+          ||
+          // Action D: Save or refresh AI pre-analysis on an active case
+          (
+            incoming().status == existing().status
+            && incoming().reviewStep == existing().reviewStep
+            && incoming().warningIssued == existing().warningIssued
+            && 'aiAnalysis' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'aiAnalysis', 'updatedAt'
+            ])
           )
         );
 

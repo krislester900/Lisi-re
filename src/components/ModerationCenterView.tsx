@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Bot,
   Check,
   CheckCircle2,
   ClipboardCheck,
   FileSearch,
   Flag,
+  Lock,
+  RefreshCw,
   Scale,
   Search,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   User as UserIcon,
   XCircle,
 } from 'lucide-react';
@@ -17,6 +21,8 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   CASE_STUDY_CRITERIA,
   isModerationAdminEmail,
+  MODERATION_ADMIN_EMAIL,
+  MODERATION_AI_VERDICT_LABELS,
   MODERATION_CATEGORY_LABELS,
   MODERATION_GRAVITY_LABELS,
   MODERATION_REVIEW_STEPS,
@@ -28,13 +34,16 @@ import {
   acknowledgeUserWarning,
   dismissModerationCase,
   formatFriendlyFirestoreError,
+  requestModerationAiAnalysis,
   resolveModerationCaseWithWarning,
+  saveModerationCaseAiAnalysis,
   updateModerationCaseStudy,
 } from '../lib/storyService';
 import { formatFrenchDate } from '../lib/themes';
 import {
   FIELD_LIMITS,
   MemberWarning,
+  ModerationAiAnalysis,
   ModerationCase,
   ModerationCaseStatus,
   ModerationGravityLevel,
@@ -49,7 +58,13 @@ interface ModerationCenterViewProps {
   onOpenMemberWall: (userId: string) => void;
 }
 
-type CaseFilter = 'all' | ModerationCaseStatus;
+type CaseFilter = 'all' | 'needs_admin' | ModerationCaseStatus;
+
+function isCaseNeedingManualReview(c: ModerationCase): boolean {
+  if (c.status === 'resolved_warned' || c.status === 'resolved_dismissed') return false;
+  if (!c.aiAnalysis) return true;
+  return c.aiAnalysis.needsAdminIntervention;
+}
 
 export function ModerationCenterView({
   allCases,
@@ -71,6 +86,8 @@ export function ModerationCenterView({
   const [gravityLevel, setGravityLevel] = useState<ModerationGravityLevel>('aucune');
   const [decisionReason, setDecisionReason] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [batchAiBusy, setBatchAiBusy] = useState(false);
   const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(
     null
   );
@@ -79,7 +96,10 @@ export function ModerationCenterView({
   const filteredCases = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return allCases.filter((c) => {
-      if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+      if (statusFilter === 'needs_admin' && !isCaseNeedingManualReview(c)) return false;
+      if (statusFilter !== 'all' && statusFilter !== 'needs_admin' && c.status !== statusFilter) {
+        return false;
+      }
       if (!q) return true;
       return (
         c.targetUserName.toLowerCase().includes(q) ||
@@ -116,6 +136,10 @@ export function ModerationCenterView({
       under_review: allCases.filter((c) => c.status === 'under_review').length,
       resolved_warned: allCases.filter((c) => c.status === 'resolved_warned').length,
       resolved_dismissed: allCases.filter((c) => c.status === 'resolved_dismissed').length,
+      needs_admin: allCases.filter((c) => isCaseNeedingManualReview(c)).length,
+      unanalyzed_active: allCases.filter(
+        (c) => (c.status === 'open' || c.status === 'under_review') && !c.aiAnalysis
+      ).length,
     }),
     [allCases]
   );
@@ -382,20 +406,190 @@ export function ModerationCenterView({
     }
   };
 
+  const handleRunAiAnalysis = async () => {
+    if (!activeCase || aiBusy || busyAction) return;
+    setFeedback(null);
+    setAiBusy(true);
+    try {
+      const analysis = await requestModerationAiAnalysis({
+        targetType: activeCase.targetType,
+        category: activeCase.category,
+        targetUserName: activeCase.targetUserName,
+        targetExcerpt: activeCase.targetExcerpt,
+        description: activeCase.description,
+      });
+      await saveModerationCaseAiAnalysis(activeCase.caseId, analysis);
+      setFeedback({
+        kind: 'success',
+        message: analysis.needsAdminIntervention
+          ? 'Analyse IA terminée : ce dossier requiert votre examen manuel.'
+          : 'Analyse IA terminée : vous pouvez pré-remplir ou valider la recommandation en 1 clic.',
+      });
+    } catch (err) {
+      setFeedback({
+        kind: 'error',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Impossible de lancer l’analyse de modération artificielle.',
+      });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const handleBatchAnalyzePending = async () => {
+    if (batchAiBusy || aiBusy || busyAction) return;
+    const targets = allCases
+      .filter((c) => (c.status === 'open' || c.status === 'under_review') && !c.aiAnalysis)
+      .slice(0, 6);
+    if (targets.length === 0) return;
+
+    setFeedback(null);
+    setBatchAiBusy(true);
+    let analyzedCount = 0;
+    let lastErr: string | null = null;
+
+    for (const item of targets) {
+      try {
+        const analysis = await requestModerationAiAnalysis({
+          targetType: item.targetType,
+          category: item.category,
+          targetUserName: item.targetUserName,
+          targetExcerpt: item.targetExcerpt,
+          description: item.description,
+        });
+        await saveModerationCaseAiAnalysis(item.caseId, analysis);
+        analyzedCount += 1;
+      } catch (err) {
+        lastErr =
+          err instanceof Error ? err.message : 'Erreur lors du pré-tri IA en lot.';
+        break;
+      }
+    }
+
+    setBatchAiBusy(false);
+    if (analyzedCount > 0) {
+      setFeedback({
+        kind: 'success',
+        message: `${analyzedCount} dossier${analyzedCount > 1 ? 's' : ''} pré-analysé${
+          analyzedCount > 1 ? 's' : ''
+        } par l’IA.`,
+      });
+    } else if (lastErr) {
+      setFeedback({ kind: 'error', message: lastErr });
+    }
+  };
+
+  const applyAiSuggestionsToForm = (analysis: ModerationAiAnalysis) => {
+    if (!activeCase || isResolved) return;
+    setCaseNotes(analysis.summary.slice(0, FIELD_LIMITS.moderationNotes.max));
+    setSelectedCriteria(analysis.suggestedCriteria.slice(0, 6));
+    setGravityLevel(analysis.suggestedGravity);
+    setDecisionReason(
+      analysis.suggestedDecisionReason.slice(0, FIELD_LIMITS.moderationDecisionReason.max)
+    );
+    setConfirmWarn(false);
+    setFeedback({
+      kind: 'success',
+      message:
+        'Suggestions de l’IA chargées dans les étapes 2 à 4. Vous pouvez les modifier librement avant de décider.',
+    });
+  };
+
+  const handleApplyAiDecisionDirectly = async (analysis: ModerationAiAnalysis) => {
+    if (!activeCase || busyAction || isResolved) return;
+    setFeedback(null);
+
+    if (analysis.recommendedAction === 'avertir') {
+      const targetSeverity: WarningSeverity =
+        analysis.suggestedGravity === 'critique' ||
+        analysis.suggestedGravity === 'grave' ||
+        analysis.suggestedGravity === 'moderee'
+          ? analysis.suggestedGravity
+          : 'moderee';
+      const safeReason =
+        analysis.suggestedDecisionReason.trim().length >= FIELD_LIMITS.moderationDecisionReason.min
+          ? analysis.suggestedDecisionReason
+          : analysis.summary;
+
+      setBusyAction('ai-apply');
+      try {
+        await resolveModerationCaseWithWarning({
+          moderationCase: activeCase,
+          severity: targetSeverity,
+          evaluationCriteria: analysis.suggestedCriteria,
+          caseNotes: analysis.summary,
+          decisionReason: safeReason,
+          reviewerId: user.uid,
+          reviewerName: `${reviewerName} (validation IA)`,
+        });
+        setFeedback({
+          kind: 'success',
+          message: `Décision IA appliquée : avertissement envoyé à ${activeCase.targetUserName}.`,
+        });
+      } catch (err) {
+        setFeedback({
+          kind: 'error',
+          message: formatFriendlyFirestoreError(err, 'Impossible d’appliquer la décision IA.'),
+        });
+      } finally {
+        setBusyAction(null);
+      }
+      return;
+    }
+
+    if (analysis.recommendedAction === 'classer') {
+      const safeReason =
+        analysis.suggestedDecisionReason.trim().length >= FIELD_LIMITS.moderationDecisionReason.min
+          ? analysis.suggestedDecisionReason
+          : analysis.summary;
+
+      setBusyAction('ai-apply');
+      try {
+        await dismissModerationCase({
+          moderationCase: activeCase,
+          evaluationCriteria: analysis.suggestedCriteria,
+          caseNotes: analysis.summary,
+          decisionReason: safeReason,
+          reviewerId: user.uid,
+          reviewerName: `${reviewerName} (validation IA)`,
+        });
+        setFeedback({
+          kind: 'success',
+          message: 'Décision IA appliquée : le dossier a été classé sans suite.',
+        });
+      } catch (err) {
+        setFeedback({
+          kind: 'error',
+          message: formatFriendlyFirestoreError(err, 'Impossible de classer ce dossier.'),
+        });
+      } finally {
+        setBusyAction(null);
+      }
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 sm:py-10 space-y-6">
       {/* Header + Live Counters */}
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-stone-200">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5 inline-flex items-center gap-1.5">
-            <Scale className="w-3.5 h-3.5 text-[#1B365D]" />
-            <span>Administration · Procédure d’étude de cas de signalement</span>
-          </p>
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-xs uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5">
+              <Scale className="w-3.5 h-3.5 text-[#1B365D]" />
+              <span>Administration · Modération hybride (IA + votre contrôle)</span>
+            </p>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[11px] font-medium text-emerald-900">
+              <Lock className="w-3 h-3" />
+              <span>Onglet visible uniquement par {MODERATION_ADMIN_EMAIL}</span>
+            </span>
+          </div>
           <h1 className="font-display text-3xl font-medium text-stone-900">
             Modération &amp; avertissements officiels
           </h1>
-          <p className="text-sm text-stone-600 mt-1 max-w-2xl">
-            Examinez chaque signalement selon la procédure en 4 étapes : conservation des preuves, analyse des faits, qualification de la gravité et notification motivée au membre.
+          <p className="text-sm text-stone-600 max-w-2xl">
+            La modération artificielle pré-étudie chaque signalement et prépare l’évaluation. Les cas ambigus ou sensibles sont marqués pour votre intervention manuelle, et vous gardez toujours le dernier mot.
           </p>
         </div>
 
@@ -423,12 +617,13 @@ export function ModerationCenterView({
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
+      {/* Filters, Batch AI Triage & Search */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
               { id: 'all', label: `Tous (${allCases.length})` },
+              { id: 'needs_admin', label: `Intervention admin (${counts.needs_admin})` },
               { id: 'open', label: `À étudier (${counts.open})` },
               { id: 'under_review', label: `En cours (${counts.under_review})` },
               { id: 'resolved_warned', label: `Avertis (${counts.resolved_warned})` },
@@ -450,16 +645,34 @@ export function ModerationCenterView({
           ))}
         </div>
 
-        <div className="relative w-full sm:w-64 shrink-0">
-          <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Membre, motif, extrait…"
-            aria-label="Rechercher un dossier de signalement"
-            className="w-full min-h-[36px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
-          />
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {counts.unanalyzed_active > 0 && (
+            <button
+              type="button"
+              disabled={batchAiBusy || aiBusy}
+              onClick={() => void handleBatchAnalyzePending()}
+              className="min-h-[36px] px-3 py-1.5 rounded-md bg-[#F3F6FA] border border-[#CBD6E6] text-[#1B365D] hover:border-[#1B365D] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-60 whitespace-nowrap"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>
+                {batchAiBusy
+                  ? 'Analyse IA en cours…'
+                  : `Pré-analyser par IA (${counts.unanalyzed_active})`}
+              </span>
+            </button>
+          )}
+
+          <div className="relative w-full sm:w-60 shrink-0">
+            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Membre, motif, extrait…"
+              aria-label="Rechercher un dossier de signalement"
+              className="w-full min-h-[36px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+            />
+          </div>
         </div>
       </div>
 
@@ -520,13 +733,24 @@ export function ModerationCenterView({
 
                     <p className="text-xs text-stone-600 line-clamp-2">{c.description}</p>
 
-                    <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500 pt-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-500 pt-1">
                       <span>{MODERATION_TARGET_LABELS[c.targetType]}</span>
-                      {priorWarnCount > 0 && (
-                        <span className="text-red-800 font-medium tabular-nums">
-                          {priorWarnCount} avert. antérieur{priorWarnCount > 1 ? 's' : ''}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {c.aiAnalysis && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded border text-[10px] font-medium ${
+                              MODERATION_AI_VERDICT_LABELS[c.aiAnalysis.verdict].toneClass
+                            }`}
+                          >
+                            {MODERATION_AI_VERDICT_LABELS[c.aiAnalysis.verdict].shortLabel}
+                          </span>
+                        )}
+                        {priorWarnCount > 0 && (
+                          <span className="text-red-800 font-medium tabular-nums">
+                            {priorWarnCount} avert.
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </button>
                 );
@@ -641,6 +865,114 @@ export function ModerationCenterView({
                   {feedback.message}
                 </div>
               )}
+
+              {/* AI-Assisted Moderation Panel ("Modération artificielle" + Admin Override) */}
+              <section className="rounded-md border border-[#CBD6E6] bg-[#F3F6FA]/70 p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-[#1B365D]" />
+                    <span className="text-xs uppercase tracking-widest font-semibold text-[#1B365D]">
+                      Modération artificielle · Pré-analyse IA
+                    </span>
+                  </div>
+
+                  {!isResolved && (
+                    <button
+                      type="button"
+                      disabled={aiBusy || Boolean(busyAction)}
+                      onClick={() => void handleRunAiAnalysis()}
+                      className="min-h-[32px] px-3 py-1 rounded border border-[#1B365D]/30 bg-white text-xs font-medium text-[#1B365D] hover:border-[#1B365D] inline-flex items-center gap-1.5 disabled:opacity-60"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${aiBusy ? 'animate-spin' : ''}`} />
+                      <span>
+                        {aiBusy
+                          ? 'Analyse IA…'
+                          : activeCase.aiAnalysis
+                            ? 'Relancer l’analyse IA'
+                            : 'Analyser avec l’IA'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                {activeCase.aiAnalysis ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span
+                        className={`px-2.5 py-0.5 rounded border font-medium ${
+                          MODERATION_AI_VERDICT_LABELS[activeCase.aiAnalysis.verdict].toneClass
+                        }`}
+                      >
+                        {MODERATION_AI_VERDICT_LABELS[activeCase.aiAnalysis.verdict].label}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700 tabular-nums">
+                        Confiance : {activeCase.aiAnalysis.confidencePercent} %
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700">
+                        Gravité suggérée :{' '}
+                        {MODERATION_GRAVITY_LABELS[activeCase.aiAnalysis.suggestedGravity].label}
+                      </span>
+                      {activeCase.aiAnalysis.needsAdminIntervention && (
+                        <span className="px-2.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-950 font-semibold">
+                          Intervention manuelle recommandée
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs sm:text-sm text-stone-800 leading-relaxed bg-white border border-stone-200 rounded p-3">
+                      {activeCase.aiAnalysis.summary}
+                    </p>
+
+                    {activeCase.aiAnalysis.interventionReason && (
+                      <p className="text-xs text-stone-600">
+                        <strong>Note de triage :</strong> {activeCase.aiAnalysis.interventionReason}
+                      </p>
+                    )}
+
+                    {!isResolved && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => applyAiSuggestionsToForm(activeCase.aiAnalysis!)}
+                          className="min-h-[34px] px-3 py-1.5 rounded bg-white border border-stone-300 text-xs font-medium text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Pré-remplir &amp; reprendre la main manuellement</span>
+                        </button>
+
+                        {(activeCase.aiAnalysis.recommendedAction === 'avertir' ||
+                          activeCase.aiAnalysis.recommendedAction === 'classer') && (
+                          <button
+                            type="button"
+                            disabled={Boolean(busyAction) || aiBusy}
+                            onClick={() =>
+                              void handleApplyAiDecisionDirectly(activeCase.aiAnalysis!)
+                            }
+                            className={`min-h-[34px] px-3.5 py-1.5 rounded text-xs font-medium text-white inline-flex items-center gap-1.5 disabled:opacity-60 ${
+                              activeCase.aiAnalysis.recommendedAction === 'avertir'
+                                ? 'bg-red-800 hover:bg-red-900'
+                                : 'bg-[#1B365D] hover:bg-[#132744]'
+                            }`}
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>
+                              {busyAction === 'ai-apply'
+                                ? 'Application…'
+                                : activeCase.aiAnalysis.recommendedAction === 'avertir'
+                                  ? 'Valider l’avertissement proposé par l’IA'
+                                  : 'Valider le classement proposé par l’IA'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    Ce dossier n’a pas encore été pré-analysé par l’IA. Cliquez sur « Analyser avec l’IA » pour obtenir un résumé factuel, les critères suggérés et une proposition de décision, ou instruisez-le directement manuellement ci-dessous.
+                  </p>
+                )}
+              </section>
 
               {/* Step 1: Preserved Facts & Reporter Statement */}
               <section className="bg-[#FBF9F5] border border-stone-200 rounded-md p-4 space-y-3">

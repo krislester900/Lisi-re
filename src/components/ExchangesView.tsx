@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Archive,
+  ArrowLeft,
   Ban,
   BookOpen,
   ChevronDown,
@@ -8,6 +9,7 @@ import {
   EyeOff,
   Flag,
   MessageCircle,
+  MoreVertical,
   Plus,
   RotateCcw,
   Search,
@@ -85,6 +87,11 @@ function renderHighlightedText(
   );
 }
 
+function getInitialLetter(name: string): string {
+  const trimmed = name.trim();
+  return trimmed ? trimmed.charAt(0).toUpperCase() : 'M';
+}
+
 export function ExchangesView({
   exchanges,
   discoverableProfiles,
@@ -107,8 +114,15 @@ export function ExchangesView({
   const [statusBusy, setStatusBusy] = useState(false);
   const [relBusy, setRelBusy] = useState(false);
 
-  // Sidebar tabs
+  // Mobile master/detail navigation + organized thread menu
+  const [mobilePane, setMobilePane] = useState<'list' | 'thread'>(
+    selectedExchangeId ? 'thread' : 'list'
+  );
+  const [threadMenuOpen, setThreadMenuOpen] = useState(false);
+
+  // Sidebar tabs & search
   const [sidebarTab, setSidebarTab] = useState<SidebarFilterTab>('active');
+  const [sidebarSearch, setSidebarSearch] = useState('');
 
   // In-conversation search
   const [showThreadSearch, setShowThreadSearch] = useState(false);
@@ -116,13 +130,13 @@ export function ExchangesView({
   const [filterToMatches, setFilterToMatches] = useState(false);
   const [focusedMatchIdx, setFocusedMatchIdx] = useState(0);
 
-  // Per-message & conversation delete confirmations
+  // Per-message & conversation confirmations
   const [confirmDeleteMsgId, setConfirmDeleteMsgId] = useState<string | null>(null);
   const [deletingMsgId, setDeletingMsgId] = useState<string | null>(null);
   const [confirmDeleteThread, setConfirmDeleteThread] = useState(false);
   const [confirmBlockMember, setConfirmBlockMember] = useState(false);
 
-  // New Direct Private Chat modal/panel
+  // New Direct Private Chat panel
   const [showNewChat, setShowNewChat] = useState(false);
   const [recipientId, setRecipientId] = useState('');
   const [firstMessage, setFirstMessage] = useState('');
@@ -131,6 +145,13 @@ export function ExchangesView({
 
   const endRef = useRef<HTMLDivElement | null>(null);
   const threadContainerRef = useRef<HTMLDivElement | null>(null);
+  const menuContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (selectedExchangeId) {
+      setMobilePane('thread');
+    }
+  }, [selectedExchangeId]);
 
   useEffect(() => {
     if (initialRecipientId) {
@@ -140,6 +161,17 @@ export function ExchangesView({
       onClearInitialRecipient?.();
     }
   }, [initialRecipientId, onClearInitialRecipient]);
+
+  useEffect(() => {
+    if (!threadMenuOpen) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (menuContainerRef.current && !menuContainerRef.current.contains(e.target as Node)) {
+        setThreadMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    return () => window.removeEventListener('mousedown', onPointerDown);
+  }, [threadMenuOpen]);
 
   const relationshipMap = useMemo(() => {
     const map = new Map<string, UserRelationship>();
@@ -172,22 +204,40 @@ export function ExchangesView({
 
   const filteredSidebarExchanges = useMemo(() => {
     if (!user) return [];
+    const q = sidebarSearch.trim().toLowerCase();
     return visibleExchanges.filter((ex) => {
       const otherId = ex.initiatorId === user.uid ? ex.recipientId : ex.initiatorId;
+      const otherName = (
+        ex.initiatorId === user.uid ? ex.recipientName : ex.initiatorName
+      ).toLowerCase();
       const rel = relationshipMap.get(otherId)?.relation;
-      if (sidebarTab === 'blocked') return rel === 'blocked';
-      if (sidebarTab === 'not_interested') return rel === 'not_interested';
-      if (rel === 'blocked' || rel === 'not_interested') return false;
-      if (sidebarTab === 'archived') return ex.status === 'archived';
-      return ex.status === 'active';
+
+      let matchesTab = false;
+      if (sidebarTab === 'blocked') matchesTab = rel === 'blocked';
+      else if (sidebarTab === 'not_interested') matchesTab = rel === 'not_interested';
+      else if (rel === 'blocked' || rel === 'not_interested') matchesTab = false;
+      else if (sidebarTab === 'archived') matchesTab = ex.status === 'archived';
+      else matchesTab = ex.status === 'active';
+
+      if (!matchesTab) return false;
+      if (!q) return true;
+      return (
+        otherName.includes(q) ||
+        ex.storyTitle.toLowerCase().includes(q) ||
+        ex.lastMessagePreview.toLowerCase().includes(q)
+      );
     });
-  }, [visibleExchanges, relationshipMap, sidebarTab, user]);
+  }, [visibleExchanges, relationshipMap, sidebarTab, sidebarSearch, user]);
 
   const relationshipEntriesForTab = useMemo(() => {
     if (sidebarTab !== 'blocked' && sidebarTab !== 'not_interested') return [];
-    const targetRel = sidebarTab;
-    return relationships.filter((r) => r.relation === targetRel);
-  }, [relationships, sidebarTab]);
+    const q = sidebarSearch.trim().toLowerCase();
+    return relationships.filter((r) => {
+      if (r.relation !== sidebarTab) return false;
+      if (!q) return true;
+      return r.targetName.toLowerCase().includes(q);
+    });
+  }, [relationships, sidebarTab, sidebarSearch]);
 
   const activeExchange = useMemo(() => {
     if (selectedExchangeId) {
@@ -212,6 +262,7 @@ export function ExchangesView({
     setConfirmDeleteMsgId(null);
     setConfirmDeleteThread(false);
     setConfirmBlockMember(false);
+    setThreadMenuOpen(false);
     setThreadSearchQuery('');
     setFilterToMatches(false);
     setFocusedMatchIdx(0);
@@ -346,6 +397,7 @@ export function ExchangesView({
     if (!activeExchange || statusBusy) return;
     setStatusBusy(true);
     setError(null);
+    setThreadMenuOpen(false);
     try {
       const nextStatus = activeExchange.status === 'active' ? 'archived' : 'active';
       await updateExchangeStatus(activeExchange.exchangeId, nextStatus);
@@ -363,6 +415,8 @@ export function ExchangesView({
     try {
       await hideExchangeForUser({ exchange: activeExchange, userId: user.uid });
       setConfirmDeleteThread(false);
+      setThreadMenuOpen(false);
+      setMobilePane('list');
     } catch (err) {
       setError(formatFriendlyFirestoreError(err, 'Impossible de supprimer cette conversation.'));
     } finally {
@@ -378,6 +432,7 @@ export function ExchangesView({
     if (relBusy) return;
     setRelBusy(true);
     setError(null);
+    setThreadMenuOpen(false);
     try {
       if (nextRelation === null) {
         await removeUserRelationship(user.uid, targetId);
@@ -459,6 +514,7 @@ export function ExchangesView({
       setShowNewChat(false);
       setSidebarTab('active');
       onSelectExchange(newId);
+      setMobilePane('thread');
     } catch (err) {
       setCreateError(
         formatFriendlyFirestoreError(
@@ -481,18 +537,19 @@ export function ExchangesView({
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-stone-200">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-stone-200">
         <div>
-          <p className="text-xs uppercase tracking-widest text-stone-500 mb-2">
-            Passerelles · Chat privé (texte uniquement)
+          <p className="text-xs uppercase tracking-widest text-stone-500 mb-1">
+            Passerelles · Discussions privées 1 à 1
           </p>
-          <h1 className="font-display text-3xl font-medium text-stone-900">
+          <h1 className="font-display text-2xl sm:text-3xl font-medium text-stone-900">
             Vos conversations privées
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs text-stone-500 tabular-nums">
             {visibleExchanges.length} conversation{visibleExchanges.length > 1 ? 's' : ''}
           </span>
@@ -502,23 +559,23 @@ export function ExchangesView({
               setCreateError(null);
               setShowNewChat((prev) => !prev);
             }}
-            className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            className="min-h-[38px] px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
             {showNewChat ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-            <span>{showNewChat ? 'Fermer' : 'Nouveau chat privé'}</span>
+            <span>{showNewChat ? 'Fermer' : 'Nouveau message'}</span>
           </button>
         </div>
       </div>
 
-      {/* New Direct Private Chat Panel */}
+      {/* Collapsible New Direct Private Chat Panel */}
       {showNewChat && (
         <form
           onSubmit={handleCreateDirectChat}
-          className="bg-white border border-stone-300 rounded-lg p-6 space-y-4"
+          className="bg-white border border-stone-300 rounded-lg p-5 space-y-4"
         >
           <div className="flex items-center justify-between gap-4">
-            <h2 className="font-display text-xl font-medium text-stone-900">
-              Écrire en privé à un membre
+            <h2 className="font-display text-lg font-medium text-stone-900">
+              Démarrer une conversation privée
             </h2>
           </div>
 
@@ -528,8 +585,8 @@ export function ExchangesView({
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
+              <div className="flex flex-col md:flex-row gap-3">
+                <div className="md:w-64 shrink-0">
                   <label
                     htmlFor="dm-recipient"
                     className="block text-xs font-medium text-stone-700 mb-1"
@@ -552,7 +609,7 @@ export function ExchangesView({
                   </select>
                 </div>
 
-                <div className="md:col-span-2">
+                <div className="flex-1 min-w-0">
                   <label
                     htmlFor="dm-first-msg"
                     className="block text-xs font-medium text-stone-700 mb-1"
@@ -566,7 +623,7 @@ export function ExchangesView({
                     maxLength={FIELD_LIMITS.messageContent.max}
                     value={firstMessage}
                     onChange={(e) => setFirstMessage(e.target.value)}
-                    placeholder="Bonjour, j’aimerais discuter avec toi…"
+                    placeholder="Bonjour, j’aimerais échanger avec toi…"
                     className="w-full min-h-[40px] px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
                   />
                 </div>
@@ -582,10 +639,10 @@ export function ExchangesView({
                 <button
                   type="submit"
                   disabled={creatingChat}
-                  className="min-h-[40px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60 inline-flex items-center gap-2"
+                  className="min-h-[38px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60 inline-flex items-center gap-2"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>{creatingChat ? 'Ouverture…' : 'Démarrer le chat privé'}</span>
+                  <span>{creatingChat ? 'Envoi…' : 'Envoyer le message'}</span>
                 </button>
               </div>
             </>
@@ -600,7 +657,7 @@ export function ExchangesView({
             Aucune conversation privée pour le moment
           </h2>
           <p className="text-sm text-stone-600 leading-relaxed mb-6">
-            Cliquez sur « Nouveau chat privé » pour écrire à un membre de votre choix, ou ouvrez une conversation depuis le mur d’un membre ou sous un récit du salon.
+            Cliquez sur « Nouveau message » pour écrire à un membre de votre choix, ou ouvrez une conversation depuis le mur d’un membre ou sous un récit du salon.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <button
@@ -620,605 +677,739 @@ export function ExchangesView({
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Exchanges sidebar with filter tabs */}
-          <div className="lg:col-span-4 bg-white border border-stone-200 rounded-lg overflow-hidden">
-            <div
-              role="tablist"
-              aria-label="Filtrer les conversations privées"
-              className="grid grid-cols-2 gap-1 p-1.5 bg-stone-100 border-b border-stone-200"
-            >
-              {(
-                [
-                  { id: 'active', label: `Actives (${sidebarCounts.active})` },
-                  { id: 'archived', label: `Archivées (${sidebarCounts.archived})` },
-                  {
-                    id: 'not_interested',
-                    label: `Pas intéressé (${sidebarCounts.not_interested})`,
-                  },
-                  { id: 'blocked', label: `Bloqués (${sidebarCounts.blocked})` },
-                ] as const
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={sidebarTab === tab.id}
-                  onClick={() => setSidebarTab(tab.id)}
-                  className={`min-h-[32px] px-2 py-1 text-[11px] font-medium rounded transition-colors truncate ${
-                    sidebarTab === tab.id
-                      ? 'bg-white text-stone-900 shadow-sm'
-                      : 'text-stone-600 hover:text-stone-900'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
+        /* Unified Flex Split-Pane Inbox + Active Conversation */
+        <div className="bg-white border border-stone-200 rounded-lg overflow-hidden flex flex-col lg:flex-row min-h-[540px] lg:h-[680px]">
+          {/* Left Pane: Conversations Sidebar */}
+          <aside
+            className={`${
+              mobilePane === 'list' ? 'flex' : 'hidden lg:flex'
+            } flex-col w-full lg:w-[330px] xl:w-[360px] shrink-0 border-b lg:border-b-0 lg:border-r border-stone-200 min-h-0 bg-[#FBF9F5]/40`}
+          >
+            {/* Sidebar Search */}
+            <div className="p-3 border-b border-stone-200 bg-white space-y-2.5 shrink-0">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="search"
+                  value={sidebarSearch}
+                  onChange={(e) => setSidebarSearch(e.target.value)}
+                  placeholder="Filtrer par membre ou mot…"
+                  aria-label="Filtrer les conversations"
+                  className="w-full min-h-[36px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                />
+              </div>
+
+              {/* Flex Filter Pills */}
+              <div
+                role="tablist"
+                aria-label="Catégories de conversations"
+                className="flex items-center gap-1 overflow-x-auto pb-0.5"
+              >
+                {(
+                  [
+                    { id: 'active', label: `Actives (${sidebarCounts.active})` },
+                    { id: 'archived', label: `Archivées (${sidebarCounts.archived})` },
+                    { id: 'not_interested', label: `Ignorés (${sidebarCounts.not_interested})` },
+                    { id: 'blocked', label: `Bloqués (${sidebarCounts.blocked})` },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={sidebarTab === tab.id}
+                    onClick={() => setSidebarTab(tab.id)}
+                    className={`min-h-[30px] px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
+                      sidebarTab === tab.id
+                        ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                        : 'bg-[#FBF9F5] text-stone-600 border-stone-200 hover:border-stone-400 hover:text-stone-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {filteredSidebarExchanges.length === 0 && relationshipEntriesForTab.length === 0 ? (
-              <div className="p-6 text-center text-xs text-stone-500">
-                {sidebarTab === 'active'
-                  ? 'Aucune conversation active.'
-                  : sidebarTab === 'archived'
-                    ? 'Aucune conversation archivée.'
-                    : sidebarTab === 'not_interested'
-                      ? 'Aucun membre marqué « Pas intéressé ».'
-                      : 'Aucun membre bloqué.'}
-              </div>
-            ) : (
-              <div className="divide-y divide-stone-200 max-h-[600px] overflow-y-auto">
-                {filteredSidebarExchanges.map((ex) => {
-                  const otherName =
-                    ex.initiatorId === user.uid ? ex.recipientName : ex.initiatorName;
-                  const isSelected = activeExchange?.exchangeId === ex.exchangeId;
-                  const isDirect = ex.kind === 'direct' || ex.storyId === 'direct';
-                  return (
-                    <button
-                      key={ex.exchangeId}
-                      type="button"
-                      onClick={() => onSelectExchange(ex.exchangeId)}
-                      className={`w-full text-left p-4 transition-colors block ${
-                        isSelected ? 'bg-[#F4F0E8]' : 'bg-white hover:bg-stone-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="font-medium text-sm text-stone-900 truncate">
-                          {otherName}
-                        </span>
-                        <span className="text-xs text-stone-500 whitespace-nowrap shrink-0">
-                          {ex.status === 'archived'
-                            ? 'Archivée'
-                            : formatFrenchDate(ex.updatedAt?.toDate() ?? null)}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#1E3A8A] truncate mb-1">
-                        {isDirect ? 'Discussion privée directe' : `Récit : ${ex.storyTitle}`}
-                      </p>
-                      <p className="text-xs text-stone-600 truncate">
-                        {ex.lastMessagePreview || 'Conversation ouverte'}
-                      </p>
-                    </button>
-                  );
-                })}
-
-                {relationshipEntriesForTab
-                  .filter(
-                    (rel) =>
-                      !filteredSidebarExchanges.some(
-                        (ex) => ex.initiatorId === rel.targetUserId || ex.recipientId === rel.targetUserId
-                      )
-                  )
-                  .map((rel) => (
-                    <div
-                      key={rel.targetUserId}
-                      className="p-4 flex items-center justify-between gap-3 bg-[#FBF9F5]"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-stone-900 truncate">
-                          {rel.targetName}
-                        </p>
-                        <p className="text-[11px] text-stone-500">
-                          {rel.relation === 'blocked' ? 'Membre bloqué' : 'Pas intéressé'}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={relBusy}
-                        onClick={() => void handleSetRelation(rel.targetUserId, rel.targetName, null)}
-                        className="min-h-[32px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-white border border-stone-200 rounded hover:border-[#1B365D] whitespace-nowrap"
-                      >
-                        {rel.relation === 'blocked' ? 'Débloquer' : 'Rétablir'}
-                      </button>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-
-          {/* Active thread */}
-          {activeExchange ? (
-            <div className="lg:col-span-8 bg-white border border-stone-200 rounded-lg flex flex-col min-h-[540px] max-h-[740px]">
-              {/* Thread Header */}
-              <div className="px-5 py-4 border-b border-stone-200 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs text-stone-500 mb-0.5">
-                      Chat privé avec{' '}
-                      <button
-                        type="button"
-                        onClick={() => activeOtherId && onOpenMemberWall(activeOtherId)}
-                        className="font-semibold text-stone-900 hover:text-[#1B365D] hover:underline"
-                      >
-                        {activeOtherName}
-                      </button>
-                      <span className="mx-1.5" aria-hidden="true">
-                        ·
-                      </span>
-                      <span>{activeExchange.status === 'active' ? 'Active' : 'Archivée'}</span>
-                    </p>
-                    <p className="font-display text-lg font-medium text-stone-900 truncate">
-                      {isDirectExchange
-                        ? 'Conversation privée 1 à 1'
-                        : `À propos de « ${activeExchange.storyTitle} »`}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setShowThreadSearch((prev) => !prev)}
-                      aria-expanded={showThreadSearch}
-                      title="Rechercher un mot dans la conversation"
-                      className={`min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap ${
-                        showThreadSearch
-                          ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                          : 'text-stone-700 border-stone-200 hover:border-stone-400'
-                      }`}
-                    >
-                      <Search className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Rechercher</span>
-                    </button>
-
-                    {activeOtherId && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenMemberWall(activeOtherId)}
-                        className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-stone-700 border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
-                      >
-                        <UserIcon className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Profil</span>
-                      </button>
-                    )}
-
-                    {!isDirectExchange && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenStoryById(activeExchange.storyId)}
-                        className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-stone-700 border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
-                      >
-                        <BookOpen className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Récit</span>
-                      </button>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={handleToggleArchive}
-                      disabled={statusBusy}
-                      className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-stone-700 border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      {activeExchange.status === 'active' ? (
-                        <>
-                          <Archive className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Archiver</span>
-                        </>
-                      ) : (
-                        <>
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span className="hidden sm:inline">Rouvrir</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+            {/* Sidebar List */}
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-stone-200">
+              {filteredSidebarExchanges.length === 0 && relationshipEntriesForTab.length === 0 ? (
+                <div className="p-8 text-center text-xs text-stone-500">
+                  {sidebarSearch.trim()
+                    ? 'Aucune conversation ne correspond à cette recherche.'
+                    : sidebarTab === 'active'
+                      ? 'Aucune conversation active.'
+                      : sidebarTab === 'archived'
+                        ? 'Aucune conversation archivée.'
+                        : sidebarTab === 'not_interested'
+                          ? 'Aucun membre marqué « Pas intéressé ».'
+                          : 'Aucun membre bloqué.'}
                 </div>
-
-                {/* Member Safety & Thread Management Actions */}
-                {activeOtherId && activeOtherName && (
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-stone-100 text-xs">
-                    <div className="flex flex-wrap items-center gap-1.5">
+              ) : (
+                <>
+                  {filteredSidebarExchanges.map((ex) => {
+                    const otherName =
+                      ex.initiatorId === user.uid ? ex.recipientName : ex.initiatorName;
+                    const isSelected = activeExchange?.exchangeId === ex.exchangeId;
+                    const isDirect = ex.kind === 'direct' || ex.storyId === 'direct';
+                    return (
                       <button
+                        key={ex.exchangeId}
                         type="button"
-                        disabled={relBusy}
-                        onClick={() =>
-                          void handleSetRelation(
-                            activeOtherId,
-                            activeOtherName,
-                            isNotInterested ? null : 'not_interested'
-                          )
-                        }
-                        className={`min-h-[32px] px-2.5 py-1 rounded border inline-flex items-center gap-1.5 whitespace-nowrap ${
-                          isNotInterested
-                            ? 'bg-amber-50 border-amber-300 text-amber-900 font-medium'
-                            : 'bg-[#FBF9F5] border-stone-200 text-stone-700 hover:border-stone-400'
+                        onClick={() => {
+                          onSelectExchange(ex.exchangeId);
+                          setMobilePane('thread');
+                        }}
+                        className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition-colors ${
+                          isSelected
+                            ? 'bg-[#F3F6FA] border-l-2 border-l-[#1B365D]'
+                            : 'bg-white hover:bg-stone-50'
                         }`}
                       >
-                        <EyeOff className="w-3.5 h-3.5" />
-                        <span>{isNotInterested ? 'Retirer « Pas intéressé »' : 'Pas intéressé'}</span>
+                        <div className="w-9 h-9 rounded-full bg-[#EFEAE0] border border-stone-200 text-stone-700 flex items-center justify-center font-display text-sm font-medium shrink-0 mt-0.5">
+                          {getInitialLetter(otherName)}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-sm text-stone-900 truncate">
+                              {otherName}
+                            </span>
+                            <span className="text-[11px] text-stone-500 whitespace-nowrap shrink-0">
+                              {ex.status === 'archived'
+                                ? 'Archivée'
+                                : formatFrenchDate(ex.updatedAt?.toDate() ?? null)}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-[#1E3A8A] truncate">
+                            {isDirect ? 'Discussion directe' : ex.storyTitle}
+                          </p>
+                          <p className="text-xs text-stone-600 truncate">
+                            {ex.lastMessagePreview || 'Conversation ouverte'}
+                          </p>
+                        </div>
                       </button>
+                    );
+                  })}
 
-                      {isBlocked ? (
+                  {relationshipEntriesForTab
+                    .filter(
+                      (rel) =>
+                        !filteredSidebarExchanges.some(
+                          (ex) =>
+                            ex.initiatorId === rel.targetUserId ||
+                            ex.recipientId === rel.targetUserId
+                        )
+                    )
+                    .map((rel) => (
+                      <div
+                        key={rel.targetUserId}
+                        className="px-4 py-3.5 flex items-center justify-between gap-3 bg-white"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-stone-100 border border-stone-200 text-stone-600 flex items-center justify-center font-display text-xs shrink-0">
+                            {getInitialLetter(rel.targetName)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-stone-900 truncate">
+                              {rel.targetName}
+                            </p>
+                            <p className="text-[11px] text-stone-500">
+                              {rel.relation === 'blocked' ? 'Membre bloqué' : 'Pas intéressé'}
+                            </p>
+                          </div>
+                        </div>
                         <button
                           type="button"
                           disabled={relBusy}
-                          onClick={() => void handleSetRelation(activeOtherId, activeOtherName, null)}
-                          className="min-h-[32px] px-2.5 py-1 rounded border border-red-300 bg-red-50 text-red-900 font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
+                          onClick={() =>
+                            void handleSetRelation(rel.targetUserId, rel.targetName, null)
+                          }
+                          className="min-h-[30px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-[#FBF9F5] border border-stone-200 rounded hover:border-[#1B365D] whitespace-nowrap shrink-0"
                         >
-                          <Ban className="w-3.5 h-3.5" />
-                          <span>Débloquer</span>
+                          {rel.relation === 'blocked' ? 'Débloquer' : 'Rétablir'}
                         </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmBlockMember((prev) => !prev)}
-                          className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                          <span>Bloquer</span>
-                        </button>
-                      )}
+                      </div>
+                    ))}
+                </>
+              )}
+            </div>
+          </aside>
 
-                      {onOpenReport && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const latestFromOther = [...visibleMessages]
-                              .reverse()
-                              .find((m) => m.senderId === activeOtherId);
-                            onOpenReport({
-                              targetUserId: activeOtherId,
-                              targetUserName: activeOtherName,
-                              targetType: 'private_message',
-                              targetId: latestFromOther?.messageId || activeExchange.exchangeId,
-                              targetContextId: activeExchange.exchangeId,
-                              targetExcerpt:
-                                latestFromOther?.content || activeExchange.lastMessagePreview || '',
-                              targetSummaryLabel: `Signaler ${activeOtherName}`,
-                            });
-                          }}
-                          className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                          <Flag className="w-3.5 h-3.5" />
-                          <span>Signaler</span>
-                        </button>
-                      )}
+          {/* Right Pane: Active Thread */}
+          <section
+            className={`${
+              mobilePane === 'thread' ? 'flex' : 'hidden lg:flex'
+            } flex-1 min-w-0 flex-col min-h-0 bg-white`}
+          >
+            {activeExchange ? (
+              <>
+                {/* Clean Flex Thread Header */}
+                <div className="px-4 sm:px-5 py-3.5 border-b border-stone-200 shrink-0 space-y-2.5 bg-white">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setMobilePane('list')}
+                        aria-label="Revenir à la liste des conversations"
+                        className="lg:hidden min-h-[36px] min-w-[36px] rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50 inline-flex items-center justify-center shrink-0"
+                      >
+                        <ArrowLeft className="w-4 h-4" />
+                      </button>
+
+                      <div className="w-9 h-9 rounded-full bg-[#EFEAE0] border border-stone-200 text-stone-800 flex items-center justify-center font-display text-sm font-medium shrink-0">
+                        {getInitialLetter(activeOtherName || 'M')}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => activeOtherId && onOpenMemberWall(activeOtherId)}
+                            className="font-medium text-sm sm:text-base text-stone-900 hover:text-[#1B365D] hover:underline truncate"
+                          >
+                            {activeOtherName}
+                          </button>
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 shrink-0">
+                            {activeExchange.status === 'active' ? 'Active' : 'Archivée'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-stone-500 truncate">
+                          {isDirectExchange ? (
+                            'Conversation privée directe'
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => onOpenStoryById(activeExchange.storyId)}
+                              className="hover:text-[#1B365D] hover:underline truncate text-left"
+                            >
+                              À propos de « {activeExchange.storyTitle} »
+                            </button>
+                          )}
+                        </p>
+                      </div>
                     </div>
 
-                    {confirmDeleteThread ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-red-800">Retirer de votre boîte ?</span>
+                    {/* Compact Actions: Search + Organized Options Popover */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setShowThreadSearch((prev) => !prev)}
+                        aria-expanded={showThreadSearch}
+                        aria-label="Rechercher un mot dans la conversation"
+                        title="Rechercher dans la conversation"
+                        className={`min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap ${
+                          showThreadSearch
+                            ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                            : 'text-stone-700 border-stone-200 hover:border-stone-400'
+                        }`}
+                      >
+                        <Search className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Rechercher</span>
+                      </button>
+
+                      <div className="relative" ref={menuContainerRef}>
+                        <button
+                          type="button"
+                          onClick={() => setThreadMenuOpen((prev) => !prev)}
+                          aria-expanded={threadMenuOpen}
+                          aria-haspopup="menu"
+                          className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border border-stone-200 text-stone-700 hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5" />
+                          <span className="hidden sm:inline">Options</span>
+                        </button>
+
+                        {threadMenuOpen && (
+                          <div
+                            role="menu"
+                            className="absolute right-0 mt-1.5 w-64 bg-white border border-stone-200 rounded-lg shadow-xl py-1.5 z-30 text-xs"
+                          >
+                            {activeOtherId && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setThreadMenuOpen(false);
+                                  onOpenMemberWall(activeOtherId);
+                                }}
+                                className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5"
+                              >
+                                <UserIcon className="w-3.5 h-3.5 text-stone-500" />
+                                <span>Voir le profil de {activeOtherName}</span>
+                              </button>
+                            )}
+
+                            {!isDirectExchange && (
+                              <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setThreadMenuOpen(false);
+                                  onOpenStoryById(activeExchange.storyId);
+                                }}
+                                className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5"
+                              >
+                                <BookOpen className="w-3.5 h-3.5 text-stone-500" />
+                                <span>Lire le récit associé</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={statusBusy}
+                              onClick={() => void handleToggleArchive()}
+                              className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5 disabled:opacity-50"
+                            >
+                              {activeExchange.status === 'active' ? (
+                                <>
+                                  <Archive className="w-3.5 h-3.5 text-stone-500" />
+                                  <span>Archiver la conversation</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCcw className="w-3.5 h-3.5 text-stone-500" />
+                                  <span>Rouvrir la conversation</span>
+                                </>
+                              )}
+                            </button>
+
+                            {activeOtherId && activeOtherName && (
+                              <>
+                                <div className="my-1 border-t border-stone-100" />
+
+                                <button
+                                  type="button"
+                                  role="menuitem"
+                                  disabled={relBusy}
+                                  onClick={() =>
+                                    void handleSetRelation(
+                                      activeOtherId,
+                                      activeOtherName,
+                                      isNotInterested ? null : 'not_interested'
+                                    )
+                                  }
+                                  className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5 disabled:opacity-50"
+                                >
+                                  <EyeOff className="w-3.5 h-3.5 text-amber-700" />
+                                  <span>
+                                    {isNotInterested
+                                      ? 'Retirer « Pas intéressé »'
+                                      : 'Marquer en « Pas intéressé »'}
+                                  </span>
+                                </button>
+
+                                {isBlocked ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={relBusy}
+                                    onClick={() =>
+                                      void handleSetRelation(activeOtherId, activeOtherName, null)
+                                    }
+                                    className="w-full px-3.5 py-2 text-left text-red-800 hover:bg-red-50 flex items-center gap-2.5 disabled:opacity-50"
+                                  >
+                                    <Ban className="w-3.5 h-3.5" />
+                                    <span>Débloquer {activeOtherName}</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      setThreadMenuOpen(false);
+                                      setConfirmBlockMember(true);
+                                    }}
+                                    className="w-full px-3.5 py-2 text-left text-red-800 hover:bg-red-50 flex items-center gap-2.5"
+                                  >
+                                    <Ban className="w-3.5 h-3.5" />
+                                    <span>Bloquer {activeOtherName}</span>
+                                  </button>
+                                )}
+
+                                {onOpenReport && (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    onClick={() => {
+                                      setThreadMenuOpen(false);
+                                      const latestFromOther = [...visibleMessages]
+                                        .reverse()
+                                        .find((m) => m.senderId === activeOtherId);
+                                      onOpenReport({
+                                        targetUserId: activeOtherId,
+                                        targetUserName: activeOtherName,
+                                        targetType: 'private_message',
+                                        targetId:
+                                          latestFromOther?.messageId || activeExchange.exchangeId,
+                                        targetContextId: activeExchange.exchangeId,
+                                        targetExcerpt:
+                                          latestFromOther?.content ||
+                                          activeExchange.lastMessagePreview ||
+                                          '',
+                                        targetSummaryLabel: `Signaler ${activeOtherName}`,
+                                      });
+                                    }}
+                                    className="w-full px-3.5 py-2 text-left text-red-800 hover:bg-red-50 flex items-center gap-2.5"
+                                  >
+                                    <Flag className="w-3.5 h-3.5" />
+                                    <span>Signaler ce membre</span>
+                                  </button>
+                                )}
+                              </>
+                            )}
+
+                            <div className="my-1 border-t border-stone-100" />
+
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setThreadMenuOpen(false);
+                                setConfirmDeleteThread(true);
+                              }}
+                              className="w-full px-3.5 py-2 text-left text-red-700 hover:bg-red-50 flex items-center gap-2.5"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Supprimer la conversation</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Confirmation Banner: Delete Thread */}
+                  {confirmDeleteThread && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md flex flex-wrap items-center justify-between gap-2 text-xs text-red-950">
+                      <span>Retirer cette conversation de votre boîte de réception ?</span>
+                      <div className="flex items-center gap-2 shrink-0">
                         <button
                           type="button"
                           disabled={statusBusy}
                           onClick={() => void handleHideConversation()}
-                          className="px-2.5 py-1 rounded bg-red-700 text-white font-medium hover:bg-red-800"
+                          className="px-3 py-1 rounded bg-red-700 text-white font-medium hover:bg-red-800"
                         >
                           Confirmer
                         </button>
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteThread(false)}
-                          className="px-2 py-1 text-stone-600 hover:text-stone-900"
+                          className="px-2 py-1 text-stone-700 hover:text-stone-900"
                         >
                           Annuler
                         </button>
                       </div>
-                    ) : (
+                    </div>
+                  )}
+
+                  {/* Confirmation Banner: Block Member */}
+                  {confirmBlockMember && activeOtherId && activeOtherName && !isBlocked && (
+                    <div className="p-3 bg-red-50 border border-red-200 rounded-md flex flex-wrap items-center justify-between gap-2 text-xs text-red-950">
+                      <span>
+                        Bloquer <strong>{activeOtherName}</strong> empêchera tout futur message privé dans les deux sens et masquera ses contenus.
+                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          disabled={relBusy}
+                          onClick={() =>
+                            void handleSetRelation(activeOtherId, activeOtherName, 'blocked')
+                          }
+                          className="px-3 py-1 rounded bg-red-800 text-white font-medium hover:bg-red-900"
+                        >
+                          Confirmer le blocage
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmBlockMember(false)}
+                          className="px-2 py-1 text-stone-700 hover:text-stone-900"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* In-Conversation Word Search Bar */}
+                  {showThreadSearch && (
+                    <div className="p-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md flex flex-wrap items-center gap-2">
+                      <div className="relative flex-1 min-w-[160px]">
+                        <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="search"
+                          autoFocus
+                          value={threadSearchQuery}
+                          onChange={(e) => setThreadSearchQuery(e.target.value)}
+                          placeholder="Rechercher un mot dans la conversation…"
+                          aria-label="Rechercher un mot dans la conversation"
+                          className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-white border border-stone-200 rounded text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                        />
+                      </div>
+
+                      {normalizedSearch && (
+                        <div className="flex items-center gap-1.5 text-xs text-stone-600 tabular-nums">
+                          <span>
+                            {matchedMessageIds.length === 0
+                              ? '0 résultat'
+                              : `${Math.min(focusedMatchIdx + 1, matchedMessageIds.length)} / ${
+                                  matchedMessageIds.length
+                                }`}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={matchedMessageIds.length === 0}
+                            onClick={() => stepMatch(-1)}
+                            aria-label="Occurrence précédente"
+                            className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 bg-white hover:border-stone-400 disabled:opacity-40"
+                          >
+                            <ChevronUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={matchedMessageIds.length === 0}
+                            onClick={() => stepMatch(1)}
+                            aria-label="Occurrence suivante"
+                            className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 bg-white hover:border-stone-400 disabled:opacity-40"
+                          >
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFilterToMatches((prev) => !prev)}
+                            className={`min-h-[30px] px-2.5 py-1 rounded border text-[11px] font-medium whitespace-nowrap ${
+                              filterToMatches
+                                ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                                : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                            }`}
+                          >
+                            {filterToMatches ? 'Tout voir' : 'Filtrer'}
+                          </button>
+                        </div>
+                      )}
+
                       <button
                         type="button"
-                        onClick={() => setConfirmDeleteThread(true)}
-                        className="min-h-[32px] px-2.5 py-1 rounded text-red-700 hover:bg-red-50 inline-flex items-center gap-1 whitespace-nowrap"
+                        onClick={() => {
+                          setThreadSearchQuery('');
+                          setFilterToMatches(false);
+                          setShowThreadSearch(false);
+                        }}
+                        aria-label="Fermer la recherche"
+                        className="p-1 text-stone-500 hover:text-stone-900"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Supprimer la conversation</span>
+                        <X className="w-4 h-4" />
                       </button>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {confirmBlockMember && activeOtherId && activeOtherName && !isBlocked && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-md flex flex-wrap items-center justify-between gap-2 text-xs text-red-950">
-                    <span>
-                      Bloquer <strong>{activeOtherName}</strong> empêchera tout futur message privé dans les deux sens et masquera ses contenus.
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0">
+                  {/* Status Notice when Blocked or Not Interested */}
+                  {(isBlocked || isNotInterested) && activeOtherId && activeOtherName && (
+                    <div
+                      className={`px-3.5 py-2 rounded-md border flex flex-wrap items-center justify-between gap-2 text-xs ${
+                        isBlocked
+                          ? 'bg-red-50 border-red-200 text-red-950'
+                          : 'bg-amber-50 border-amber-200 text-amber-950'
+                      }`}
+                    >
+                      <span>
+                        {isBlocked
+                          ? `Vous avez bloqué ${activeOtherName}. Les messages privés sont désactivés.`
+                          : `${activeOtherName} est marqué(e) en « Pas intéressé ».`}
+                      </span>
                       <button
                         type="button"
                         disabled={relBusy}
-                        onClick={() =>
-                          void handleSetRelation(activeOtherId, activeOtherName, 'blocked')
-                        }
-                        className="px-3 py-1 rounded bg-red-800 text-white font-medium hover:bg-red-900"
+                        onClick={() => void handleSetRelation(activeOtherId, activeOtherName, null)}
+                        className="font-medium underline whitespace-nowrap"
                       >
-                        Confirmer le blocage
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmBlockMember(false)}
-                        className="px-2 py-1 text-stone-700 hover:text-stone-900"
-                      >
-                        Annuler
+                        {isBlocked ? 'Débloquer' : 'Rétablir'}
                       </button>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* In-Conversation Word Search Bar */}
-                {showThreadSearch && (
-                  <div className="p-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md flex flex-wrap items-center gap-2">
-                    <div className="relative flex-1 min-w-[180px]">
-                      <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="search"
-                        autoFocus
-                        value={threadSearchQuery}
-                        onChange={(e) => setThreadSearchQuery(e.target.value)}
-                        placeholder="Rechercher un mot dans la conversation…"
-                        aria-label="Rechercher un mot dans la conversation"
-                        className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-white border border-stone-200 rounded text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
-                      />
-                    </div>
+                {/* Scrollable Flex Message List */}
+                <div
+                  ref={threadContainerRef}
+                  className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4 bg-[#FBF9F5]/60"
+                >
+                  {!messagesLoaded ? (
+                    <p className="text-sm text-stone-500 italic text-center py-10">
+                      Chargement de la conversation…
+                    </p>
+                  ) : displayedMessages.length === 0 ? (
+                    <p className="text-sm text-stone-500 italic text-center py-10">
+                      {normalizedSearch
+                        ? `Aucun message ne contient « ${threadSearchQuery} ».`
+                        : 'Aucun message affiché dans cette conversation.'}
+                    </p>
+                  ) : (
+                    displayedMessages.map((msg) => {
+                      const isMine = msg.senderId === user.uid;
+                      const isFocused = focusedMessageId === msg.messageId;
+                      const isConfirmingDel = confirmDeleteMsgId === msg.messageId;
+                      const isBusyDel = deletingMsgId === msg.messageId;
 
-                    {normalizedSearch && (
-                      <div className="flex items-center gap-1.5 text-xs text-stone-600 tabular-nums">
-                        <span>
-                          {matchedMessageIds.length === 0
-                            ? '0 résultat'
-                            : `${Math.min(focusedMatchIdx + 1, matchedMessageIds.length)} / ${
-                                matchedMessageIds.length
-                              }`}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={matchedMessageIds.length === 0}
-                          onClick={() => stepMatch(-1)}
-                          aria-label="Occurrence précédente"
-                          className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 bg-white hover:border-stone-400 disabled:opacity-40"
-                        >
-                          <ChevronUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          disabled={matchedMessageIds.length === 0}
-                          onClick={() => stepMatch(1)}
-                          aria-label="Occurrence suivante"
-                          className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 bg-white hover:border-stone-400 disabled:opacity-40"
-                        >
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setFilterToMatches((prev) => !prev)}
-                          className={`min-h-[30px] px-2.5 py-1 rounded border text-[11px] font-medium whitespace-nowrap ${
-                            filterToMatches
-                              ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                              : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                          }`}
-                        >
-                          {filterToMatches ? 'Tous les messages' : 'Filtrer les résultats'}
-                        </button>
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setThreadSearchQuery('');
-                        setFilterToMatches(false);
-                        setShowThreadSearch(false);
-                      }}
-                      aria-label="Fermer la recherche"
-                      className="p-1 text-stone-500 hover:text-stone-900"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Status Notice when Blocked or Not Interested */}
-                {(isBlocked || isNotInterested) && activeOtherId && activeOtherName && (
-                  <div
-                    className={`px-3.5 py-2.5 rounded-md border flex flex-wrap items-center justify-between gap-2 text-xs ${
-                      isBlocked
-                        ? 'bg-red-50 border-red-200 text-red-950'
-                        : 'bg-amber-50 border-amber-200 text-amber-950'
-                    }`}
-                  >
-                    <span>
-                      {isBlocked
-                        ? `Vous avez bloqué ${activeOtherName}. Les messages privés sont désactivés.`
-                        : `${activeOtherName} est marqué(e) en « Pas intéressé ». Ses récits sont masqués de votre fil.`}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={relBusy}
-                      onClick={() => void handleSetRelation(activeOtherId, activeOtherName, null)}
-                      className="font-medium underline whitespace-nowrap"
-                    >
-                      {isBlocked ? 'Débloquer' : 'Rétablir'}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Message List */}
-              <div
-                ref={threadContainerRef}
-                className="flex-1 overflow-y-auto p-6 space-y-5 bg-[#FBF9F5]/60"
-              >
-                {!messagesLoaded ? (
-                  <p className="text-sm text-stone-500 italic text-center py-10">
-                    Chargement de la conversation…
-                  </p>
-                ) : displayedMessages.length === 0 ? (
-                  <p className="text-sm text-stone-500 italic text-center py-10">
-                    {normalizedSearch
-                      ? `Aucun message ne contient « ${threadSearchQuery} ».`
-                      : 'Aucun message affiché dans cette conversation.'}
-                  </p>
-                ) : (
-                  displayedMessages.map((msg) => {
-                    const isMine = msg.senderId === user.uid;
-                    const isFocused = focusedMessageId === msg.messageId;
-                    const isConfirmingDel = confirmDeleteMsgId === msg.messageId;
-                    const isBusyDel = deletingMsgId === msg.messageId;
-
-                    return (
-                      <div
-                        key={msg.messageId}
-                        data-msg-id={msg.messageId}
-                        className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
-                      >
-                        <div className="flex items-center gap-2 text-xs text-stone-500 mb-1">
-                          <span className="font-medium text-stone-700">{msg.senderName}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{formatFrenchDate(msg.createdAt?.toDate() ?? null)}</span>
-                        </div>
-
+                      return (
                         <div
-                          className={`max-w-[84%] px-4 py-3 rounded-lg text-sm leading-relaxed whitespace-pre-line border transition-shadow ${
-                            isMine
-                              ? 'bg-[#1E3A8A] text-white border-[#1E3A8A]'
-                              : 'bg-white text-stone-800 border-stone-200'
-                          } ${isFocused ? 'ring-2 ring-amber-400 shadow-sm' : ''}`}
+                          key={msg.messageId}
+                          data-msg-id={msg.messageId}
+                          className={`group flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
                         >
-                          {renderHighlightedText(msg.content, threadSearchQuery, isFocused)}
-                        </div>
+                          <div className="flex items-center gap-2 text-[11px] text-stone-500 mb-1 px-1">
+                            <span className="font-medium text-stone-700">{msg.senderName}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{formatFrenchDate(msg.createdAt?.toDate() ?? null)}</span>
+                          </div>
 
-                        {/* Compact Per-Message Actions */}
-                        <div className="mt-1 flex items-center gap-3 text-[11px] text-stone-500">
-                          {isMine ? (
-                            isConfirmingDel ? (
-                              <span className="inline-flex items-center gap-2">
-                                <span className="text-red-800">Supprimer pour tous ?</span>
-                                <button
-                                  type="button"
-                                  disabled={isBusyDel}
-                                  onClick={() => void handleDeleteOwnMsg(msg)}
-                                  className="font-semibold text-red-700 hover:underline"
-                                >
-                                  {isBusyDel ? 'Suppression…' : 'Confirmer'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setConfirmDeleteMsgId(null)}
-                                  className="text-stone-600 hover:text-stone-900"
-                                >
-                                  Annuler
-                                </button>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setConfirmDeleteMsgId(msg.messageId)}
-                                className="hover:text-red-700 inline-flex items-center gap-1"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                                <span>Supprimer</span>
-                              </button>
-                            )
-                          ) : (
-                            <>
+                          <div
+                            className={`flex items-end gap-1.5 max-w-[90%] sm:max-w-[80%] ${
+                              isMine ? 'flex-row-reverse' : 'flex-row'
+                            }`}
+                          >
+                            <div
+                              className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-line border transition-shadow ${
+                                isMine
+                                  ? 'bg-[#1E3A8A] text-white border-[#1E3A8A] rounded-br-sm'
+                                  : 'bg-white text-stone-800 border-stone-200 rounded-bl-sm'
+                              } ${isFocused ? 'ring-2 ring-amber-400 shadow-sm' : ''}`}
+                            >
+                              {renderHighlightedText(msg.content, threadSearchQuery, isFocused)}
+                            </div>
+
+                            {/* Compact Action Controls alongside bubble */}
+                            <div className="flex items-center gap-1 shrink-0 pb-1 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                              {isMine ? (
+                                !isConfirmingDel && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteMsgId(msg.messageId)}
+                                    aria-label="Supprimer ce message"
+                                    title="Supprimer ce message"
+                                    className="p-1.5 rounded-full text-stone-400 hover:text-red-700 hover:bg-red-50"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={isBusyDel}
+                                    onClick={() => void handleHideMsgForMe(msg)}
+                                    aria-label="Supprimer pour moi"
+                                    title="Supprimer pour moi"
+                                    className="p-1.5 rounded-full text-stone-400 hover:text-stone-800 hover:bg-stone-100"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  {onOpenReport && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        onOpenReport({
+                                          targetUserId: msg.senderId,
+                                          targetUserName: msg.senderName,
+                                          targetType: 'private_message',
+                                          targetId: msg.messageId,
+                                          targetContextId: activeExchange.exchangeId,
+                                          targetExcerpt: msg.content,
+                                          targetSummaryLabel: `Signaler un message de ${msg.senderName}`,
+                                        })
+                                      }
+                                      aria-label="Signaler ce message"
+                                      title="Signaler ce message"
+                                      className="p-1.5 rounded-full text-stone-400 hover:text-red-700 hover:bg-red-50"
+                                    >
+                                      <Flag className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+
+                          {isMine && isConfirmingDel && (
+                            <div className="mt-1 inline-flex items-center gap-2 text-[11px] bg-white border border-red-200 rounded px-2.5 py-1">
+                              <span className="text-red-800">Supprimer pour tous ?</span>
                               <button
                                 type="button"
                                 disabled={isBusyDel}
-                                onClick={() => void handleHideMsgForMe(msg)}
-                                className="hover:text-stone-800 inline-flex items-center gap-1"
+                                onClick={() => void handleDeleteOwnMsg(msg)}
+                                className="font-semibold text-red-700 hover:underline"
                               >
-                                <Trash2 className="w-3 h-3" />
-                                <span>Supprimer pour moi</span>
+                                {isBusyDel ? 'Suppression…' : 'Confirmer'}
                               </button>
-                              {onOpenReport && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    onOpenReport({
-                                      targetUserId: msg.senderId,
-                                      targetUserName: msg.senderName,
-                                      targetType: 'private_message',
-                                      targetId: msg.messageId,
-                                      targetContextId: activeExchange.exchangeId,
-                                      targetExcerpt: msg.content,
-                                      targetSummaryLabel: `Signaler un message de ${msg.senderName}`,
-                                    })
-                                  }
-                                  className="hover:text-red-700 inline-flex items-center gap-1"
-                                >
-                                  <Flag className="w-3 h-3" />
-                                  <span>Signaler</span>
-                                </button>
-                              )}
-                            </>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteMsgId(null)}
+                                className="text-stone-600 hover:text-stone-900"
+                              >
+                                Annuler
+                              </button>
+                            </div>
                           )}
                         </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={endRef} />
-              </div>
-
-              {/* Composer / Blocked / Archived Footer */}
-              {isBlocked ? (
-                <div className="p-4 border-t border-stone-200 bg-red-50/70 text-center text-xs text-red-900">
-                  Vous avez bloqué ce membre. Cliquez sur « Débloquer » ci-dessus pour reprendre la conversation.
-                </div>
-              ) : activeExchange.status === 'active' ? (
-                <form
-                  onSubmit={handleSend}
-                  className="p-4 border-t border-stone-200 bg-white space-y-2"
-                >
-                  <div className="flex items-end gap-3">
-                    <textarea
-                      rows={2}
-                      maxLength={FIELD_LIMITS.messageContent.max}
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          void handleSend(e);
-                        }
-                      }}
-                      placeholder="Écrire votre message privé… (Entrée pour envoyer)"
-                      className="flex-1 px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1E3A8A] resize-none"
-                    />
-                    <button
-                      type="submit"
-                      disabled={sending || !draft.trim()}
-                      className="min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-50 inline-flex items-center gap-2 whitespace-nowrap shrink-0"
-                    >
-                      <Send className="w-4 h-4" />
-                      <span>Envoyer</span>
-                    </button>
-                  </div>
-                  {error && (
-                    <p role="alert" className="text-xs text-red-700">
-                      {error}
-                    </p>
+                      );
+                    })
                   )}
-                </form>
-              ) : (
-                <div className="p-4 border-t border-stone-200 bg-stone-50 text-center text-xs text-stone-600">
-                  Cette conversation est archivée. Cliquez sur « Rouvrir » pour reprendre l’échange.
+                  <div ref={endRef} />
                 </div>
-              )}
-            </div>
-          ) : (
-            <div className="lg:col-span-8 bg-white border border-stone-200 rounded-lg p-10 text-center text-sm text-stone-500">
-              Sélectionnez une conversation dans la liste à gauche.
-            </div>
-          )}
+
+                {/* Pinned Flex Footer Composer */}
+                {isBlocked ? (
+                  <div className="p-4 border-t border-stone-200 bg-red-50/70 text-center text-xs text-red-900 shrink-0">
+                    Vous avez bloqué ce membre. Utilisez « Options → Débloquer » pour reprendre la conversation.
+                  </div>
+                ) : activeExchange.status === 'active' ? (
+                  <form
+                    onSubmit={handleSend}
+                    className="p-3.5 sm:p-4 border-t border-stone-200 bg-white space-y-2 shrink-0"
+                  >
+                    <div className="flex items-end gap-2.5">
+                      <textarea
+                        rows={2}
+                        maxLength={FIELD_LIMITS.messageContent.max}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void handleSend(e);
+                          }
+                        }}
+                        placeholder="Écrire votre message privé… (Entrée pour envoyer)"
+                        className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1E3A8A] resize-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={sending || !draft.trim()}
+                        className="min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-50 inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                      >
+                        <Send className="w-4 h-4" />
+                        <span className="hidden sm:inline">Envoyer</span>
+                      </button>
+                    </div>
+                    {error && (
+                      <p role="alert" className="text-xs text-red-700">
+                        {error}
+                      </p>
+                    )}
+                  </form>
+                ) : (
+                  <div className="p-4 border-t border-stone-200 bg-stone-50 text-center text-xs text-stone-600 shrink-0">
+                    Cette conversation est archivée. Rouvrez-la via « Options » pour reprendre l’échange.
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center p-10 text-center text-sm text-stone-500">
+                <MessageCircle className="w-7 h-7 text-stone-300 mb-3" />
+                <p>Sélectionnez une conversation dans la liste à gauche.</p>
+              </div>
+            )}
+          </section>
         </div>
       )}
     </div>

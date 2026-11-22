@@ -277,6 +277,27 @@ export type ModerationReviewStep =
 
 export type ModerationGravityLevel = 'aucune' | 'moderee' | 'grave' | 'critique';
 
+export type ModerationAiVerdict =
+  | 'outrage_confirme'
+  | 'incertain_a_verifier'
+  | 'aucun_outrage';
+
+export type ModerationAiRecommendedAction = 'avertir' | 'examen_manuel' | 'classer';
+
+export interface ModerationAiAnalysis {
+  analyzedAtIso: string;
+  model: string;
+  verdict: ModerationAiVerdict;
+  confidencePercent: number;
+  recommendedAction: ModerationAiRecommendedAction;
+  suggestedGravity: ModerationGravityLevel;
+  suggestedCriteria: string[];
+  summary: string;
+  suggestedDecisionReason: string;
+  needsAdminIntervention: boolean;
+  interventionReason: string;
+}
+
 export interface ModerationCase {
   caseId: string;
   reporterId: string;
@@ -300,6 +321,7 @@ export interface ModerationCase {
   reviewerId?: string;
   reviewerName?: string;
   reviewedAt?: Timestamp | null;
+  aiAnalysis?: ModerationAiAnalysis;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
