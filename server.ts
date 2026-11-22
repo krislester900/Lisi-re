@@ -5,7 +5,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
-import { analyzeModerationCaseWithGemini, verifyFirebaseIdToken } from './api-helpers.ts';
+import {
+  analyzeModerationCaseWithGemini,
+  buildRobotsTxt,
+  buildSitemapXml,
+  normalizeGoogleSiteVerificationToken,
+  normalizeGoogleVerificationFile,
+  verifyFirebaseIdToken,
+} from './api-helpers.ts';
 
 const resolvedFilename =
   typeof __filename !== 'undefined'
@@ -579,6 +586,39 @@ export function createApiApp(): express.Express {
   const app = express();
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '256kb' }));
+
+  const resolveRequestOrigin = (req: Request): string => {
+    const configured = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+    if (configured && configured !== 'MY_APP_URL') return configured;
+    const host = req.get('host');
+    if (host) {
+      const proto = req.headers['x-forwarded-proto']?.toString().split(',')[0]?.trim() || req.protocol || 'https';
+      return `${proto}://${host}`;
+    }
+    return getAppUrl();
+  };
+
+  app.get('/robots.txt', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(buildRobotsTxt(resolveRequestOrigin(req)));
+  });
+
+  app.get('/sitemap.xml', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(buildSitemapXml(resolveRequestOrigin(req)));
+  });
+
+  const verificationFile = normalizeGoogleVerificationFile(
+    process.env.GOOGLE_SITE_VERIFICATION_FILE
+  );
+  if (verificationFile) {
+    app.get(`/${verificationFile}`, (_req: Request, res: Response) => {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(`google-site-verification: ${verificationFile}\n`);
+    });
+  }
 
   app.get('/api/music/providers', async (req: Request, res: Response) => {
     const creds = getSpotifyCredentials();
@@ -1176,9 +1216,25 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distDir = path.resolve(resolvedDirname, 'dist');
-    app.use(express.static(distDir));
+    app.use(express.static(distDir, { index: false }));
     app.get('*', (_req, res) => {
-      res.sendFile(path.join(distDir, 'index.html'));
+      const indexPath = path.join(distDir, 'index.html');
+      const verificationToken = normalizeGoogleSiteVerificationToken(
+        process.env.GOOGLE_SITE_VERIFICATION
+      );
+      if (verificationToken && fs.existsSync(indexPath)) {
+        const html = fs.readFileSync(indexPath, 'utf8');
+        const injected = html.includes('name="google-site-verification"')
+          ? html
+          : html.replace(
+              '</head>',
+              `    <meta name="google-site-verification" content="${verificationToken}" />\n  </head>`
+            );
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.send(injected);
+        return;
+      }
+      res.sendFile(indexPath);
     });
   }
 

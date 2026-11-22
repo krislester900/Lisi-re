@@ -300,3 +300,75 @@ export async function analyzeModerationCaseWithGemini(params: {
         : 'Dossier clair pré-qualifié par la modération artificielle.'),
   };
 }
+
+export const PUBLIC_INDEXABLE_ROUTES: ReadonlyArray<{
+  path: string;
+  changefreq: 'daily' | 'weekly' | 'monthly';
+  priority: string;
+}> = [
+  { path: '/', changefreq: 'daily', priority: '1.0' },
+  { path: '/histoires', changefreq: 'daily', priority: '0.9' },
+  { path: '/themes', changefreq: 'weekly', priority: '0.8' },
+  { path: '/profils', changefreq: 'daily', priority: '0.8' },
+  { path: '/salons/creation', changefreq: 'daily', priority: '0.8' },
+  { path: '/salons/premiers-elans', changefreq: 'daily', priority: '0.8' },
+  { path: '/salons/rencontres', changefreq: 'daily', priority: '0.8' },
+  { path: '/salons/solitudes', changefreq: 'daily', priority: '0.8' },
+  { path: '/salons/quotidien', changefreq: 'daily', priority: '0.8' },
+  { path: '/confidentialite', changefreq: 'monthly', priority: '0.4' },
+];
+
+export function normalizeGoogleSiteVerificationToken(raw?: string): string {
+  const value = (raw || '').trim();
+  if (!value) return '';
+  const contentMatch = value.match(/content=["']([^"']+)["']/i);
+  const candidate = (contentMatch ? contentMatch[1] : value).trim();
+  // Accept standard Google verification token characters or google<hex>.html filename
+  if (/^[a-zA-Z0-9_-]{8,128}$/.test(candidate)) {
+    return candidate;
+  }
+  return '';
+}
+
+export function normalizeGoogleVerificationFile(raw?: string): string {
+  const value = (raw || '').trim().replace(/^\/+/, '');
+  if (/^google[a-zA-Z0-9_-]{6,64}\.html$/.test(value)) {
+    return value;
+  }
+  return '';
+}
+
+export function buildRobotsTxt(origin: string): string {
+  const cleanOrigin = origin.replace(/\/+$/, '');
+  return [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /api/',
+    'Disallow: /auth/',
+    'Disallow: /moderation',
+    'Disallow: /passerelles',
+    'Disallow: /carnet',
+    '',
+    `Sitemap: ${cleanOrigin}/sitemap.xml`,
+    '',
+  ].join('\n');
+}
+
+export function buildSitemapXml(origin: string, lastModIso = new Date().toISOString().slice(0, 10)): string {
+  const cleanOrigin = origin.replace(/\/+$/, '');
+  const urls = PUBLIC_INDEXABLE_ROUTES.map(
+    (route) => `  <url>
+    <loc>${cleanOrigin}${route.path}</loc>
+    <lastmod>${lastModIso}</lastmod>
+    <changefreq>${route.changefreq}</changefreq>
+    <priority>${route.priority}</priority>
+  </url>`
+  ).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls}
+</urlset>
+`;
+}
+

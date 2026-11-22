@@ -606,29 +606,64 @@ function SalonApp() {
   }, []);
 
   useEffect(() => {
+    let nextTitle = 'Lisière — Récits personnels et échanges humains';
     if (activeTab === 'recits' && activeCustomSalonId) {
-      document.title = activeCustomSalon
+      nextTitle = activeCustomSalon
         ? `${activeCustomSalon.name} — Lisière`
         : 'Salon communautaire — Lisière';
     } else if (activeTab === 'recits' && activeSalonId) {
       const salon = THEME_MAP[activeSalonId];
-      document.title = `${salon.salonName} — Lisière`;
+      nextTitle = `${salon.salonName} — Lisière`;
     } else if (activeTab === 'pelemele') {
-      document.title = 'Histoires pêle-mêle — Lisière';
+      nextTitle = 'Histoires pêle-mêle — Lisière';
     } else if (activeTab === 'membres') {
-      document.title = selectedMemberId ? 'Profil du membre — Lisière' : 'Profils — Lisière';
+      nextTitle = selectedMemberId ? 'Profil du membre — Lisière' : 'Profils — Lisière';
     } else if (activeTab === 'themes') {
-      document.title = 'Thèmes et fils d’écriture — Lisière';
+      nextTitle = 'Thèmes et fils d’écriture — Lisière';
     } else if (activeTab === 'passerelles') {
-      document.title = 'Passerelles privées — Lisière';
+      nextTitle = 'Passerelles privées — Lisière';
     } else if (activeTab === 'carnet') {
-      document.title = 'Mon carnet — Lisière';
+      nextTitle = 'Mon carnet — Lisière';
     } else if (activeTab === 'moderation') {
-      document.title = 'Modération & études de cas — Lisière';
+      nextTitle = 'Modération & études de cas — Lisière';
     } else if (activeTab === 'confidentialite') {
-      document.title = 'Politique de confidentialité — Lisière';
+      nextTitle = 'Politique de confidentialité — Lisière';
+    }
+
+    document.title = nextTitle;
+
+    const canonicalUrl = `${window.location.origin}${window.location.pathname}`;
+    const canonicalEl = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (canonicalEl) {
+      canonicalEl.href = canonicalUrl;
     } else {
-      document.title = 'Lisière — Récits personnels et échanges humains';
+      const link = document.createElement('link');
+      link.rel = 'canonical';
+      link.href = canonicalUrl;
+      document.head.appendChild(link);
+    }
+
+    const ogUrlEl = document.querySelector<HTMLMetaElement>('meta[property="og:url"]');
+    if (ogUrlEl) {
+      ogUrlEl.content = canonicalUrl;
+    } else {
+      const meta = document.createElement('meta');
+      meta.setAttribute('property', 'og:url');
+      meta.content = canonicalUrl;
+      document.head.appendChild(meta);
+    }
+
+    const ogTitleEl = document.querySelector<HTMLMetaElement>('meta[property="og:title"]');
+    if (ogTitleEl) ogTitleEl.content = nextTitle;
+
+    const twitterTitleEl = document.querySelector<HTMLMetaElement>('meta[name="twitter:title"]');
+    if (twitterTitleEl) twitterTitleEl.content = nextTitle;
+
+    const isPrivateRoute =
+      activeTab === 'passerelles' || activeTab === 'carnet' || activeTab === 'moderation';
+    const robotsEl = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (robotsEl) {
+      robotsEl.content = isPrivateRoute ? 'noindex, nofollow' : 'index, follow';
     }
   }, [activeTab, activeSalonId, activeCustomSalonId, activeCustomSalon, selectedMemberId]);
 

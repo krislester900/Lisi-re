@@ -1,4 +1,11 @@
-import { analyzeModerationCaseWithGemini, verifyFirebaseIdToken } from './api-helpers.ts';
+import {
+  analyzeModerationCaseWithGemini,
+  buildRobotsTxt,
+  buildSitemapXml,
+  normalizeGoogleSiteVerificationToken,
+  normalizeGoogleVerificationFile,
+  verifyFirebaseIdToken,
+} from './api-helpers.ts';
 
 interface AssetsFetcher {
   fetch(request: Request): Promise<Response>;
@@ -12,6 +19,8 @@ interface WorkerEnv {
   SPOTIFY_CLIENT_SECRET?: string;
   SESSION_SECRET?: string;
   YOUTUBE_API_KEY?: string;
+  GOOGLE_SITE_VERIFICATION?: string;
+  GOOGLE_SITE_VERIFICATION_FILE?: string;
 }
 
 interface SpotifyUserSummary {
@@ -498,6 +507,42 @@ export default {
     const url = new URL(request.url);
     const { pathname } = url;
 
+    if (pathname === '/robots.txt' && request.method === 'GET') {
+      const origin = getRequestOrigin(request, env);
+      return new Response(buildRobotsTxt(origin), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
+
+    if (pathname === '/sitemap.xml' && request.method === 'GET') {
+      const origin = getRequestOrigin(request, env);
+      return new Response(buildSitemapXml(origin), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/xml; charset=utf-8',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      });
+    }
+
+    const expectedVerificationFile = normalizeGoogleVerificationFile(
+      env.GOOGLE_SITE_VERIFICATION_FILE
+    );
+    if (
+      expectedVerificationFile &&
+      pathname === `/${expectedVerificationFile}` &&
+      request.method === 'GET'
+    ) {
+      return new Response(`google-site-verification: ${expectedVerificationFile}\n`, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
+    }
+
     if (pathname === '/api/moderation/analyze' && request.method === 'POST') {
       const authHeader = request.headers.get('authorization') || '';
       const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
@@ -929,7 +974,33 @@ export default {
     }
 
     if (env.ASSETS) {
-      return env.ASSETS.fetch(request);
+      const assetResponse = await env.ASSETS.fetch(request);
+      const verificationToken = normalizeGoogleSiteVerificationToken(env.GOOGLE_SITE_VERIFICATION);
+      if (
+        verificationToken &&
+        pathname === '/' &&
+        assetResponse.ok &&
+        (assetResponse.headers.get('content-type') || '').includes('text/html')
+      ) {
+        const html = await assetResponse.text();
+        if (!html.includes('name="google-site-verification"')) {
+          const injected = html.replace(
+            '</head>',
+            `    <meta name="google-site-verification" content="${verificationToken}" />\n  </head>`
+          );
+          const headers = new Headers(assetResponse.headers);
+          headers.delete('content-length');
+          return new Response(injected, {
+            status: assetResponse.status,
+            headers,
+          });
+        }
+        return new Response(html, {
+          status: assetResponse.status,
+          headers: assetResponse.headers,
+        });
+      }
+      return assetResponse;
     }
     return new Response('Ressource introuvable.', { status: 404 });
   },
