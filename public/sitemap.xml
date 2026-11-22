@@ -55,6 +55,12 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://lisi-re.krislester900.workers.dev/salons/faq</loc>
+    <lastmod>2026-11-22</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://lisi-re.krislester900.workers.dev/confidentialite</loc>
     <lastmod>2026-11-22</lastmod>
     <changefreq>monthly</changefreq>

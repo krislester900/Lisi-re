@@ -1000,7 +1000,7 @@ export function StoryReaderModal({
       className={`fixed inset-0 z-50 flex justify-center ${
         zenMode
           ? `items-stretch p-0 overflow-hidden ${zenSurfaceClass}`
-          : 'items-center bg-stone-900/45 p-4 sm:p-6 overflow-y-auto'
+          : 'items-center bg-stone-900/45 p-0 sm:p-6 overflow-y-auto'
       }`}
       role="dialog"
       aria-modal="true"
@@ -1010,7 +1010,7 @@ export function StoryReaderModal({
         className={`overflow-hidden flex flex-col transition-all duration-200 motion-reduce:transition-none ${
           zenMode
             ? `relative w-full h-full max-w-none border-0 rounded-none ${zenSurfaceClass}`
-            : 'relative bg-[#FBF9F5] w-full max-w-4xl max-h-[92vh] border border-stone-300 rounded-lg my-auto'
+            : 'relative bg-[#FBF9F5] w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[92vh] border-0 sm:border sm:border-stone-300 sm:rounded-lg my-auto'
         }`}
       >
         {audioController.renderHiddenStreams()}
@@ -1305,62 +1305,139 @@ export function StoryReaderModal({
           </>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-stone-200 bg-white">
-              <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-widest text-stone-500 min-w-0">
-                {hasOriginSalon ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      if (story.customSalonId && onEnterCustomSalon) {
-                        onEnterCustomSalon(story.customSalonId);
-                      } else if (onEnterSalon) {
-                        onEnterSalon(story.theme);
+            <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-stone-200 bg-white space-y-2 shrink-0">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  {hasOriginSalon ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        if (story.customSalonId && onEnterCustomSalon) {
+                          onEnterCustomSalon(story.customSalonId);
+                        } else if (onEnterSalon) {
+                          onEnterSalon(story.theme);
+                        }
+                      }}
+                      title={`Salon d’origine : ${originSalonLabel} — Cliquer pour ouvrir ce salon`}
+                      aria-label={`Ouvrir le salon d’origine : ${originSalonLabel}`}
+                      style={{
+                        backgroundColor: originPalette?.softBg ?? '#F4F0E8',
+                        borderColor: originPalette?.borderTint ?? '#D6D3D1',
+                        color: originPalette?.textAccent ?? '#1B365D',
+                      }}
+                      className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-medium hover:brightness-95 transition max-w-full cursor-pointer"
+                    >
+                      <span className="truncate">{originSalonLabel}</span>
+                      <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 top-full mt-1.5 z-30 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
+                      >
+                        Salon d’origine · Cliquer pour y entrer
+                      </span>
+                    </button>
+                  ) : onOpenPeleMele ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenPeleMele();
+                      }}
+                      title="Histoire libre publiée hors salon — Voir tout Pêle-mêle"
+                      className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium hover:border-stone-400 transition max-w-full cursor-pointer"
+                    >
+                      <span className="truncate">{originSalonLabel}</span>
+                      <ArrowUpRight className="w-3 h-3 shrink-0 opacity-75" />
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 top-full mt-1.5 z-30 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
+                      >
+                        Hors salon · Voir Histoires pêle-mêle
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium truncate max-w-full">
+                      {originSalonLabel}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  {audioController.isExternalEmbedActive && (
+                    <button
+                      type="button"
+                      onClick={audioController.toggleEmbedBackground}
+                      aria-label={
+                        audioController.embedBackground
+                          ? 'Afficher le lecteur vidéo'
+                          : 'Mettre la vidéo en arrière-plan'
                       }
-                    }}
-                    title={`Salon d’origine : ${originSalonLabel} — Cliquer pour ouvrir ce salon`}
-                    aria-label={`Ouvrir le salon d’origine : ${originSalonLabel}`}
-                    style={{
-                      backgroundColor: originPalette?.softBg ?? '#F4F0E8',
-                      borderColor: originPalette?.borderTint ?? '#D6D3D1',
-                      color: originPalette?.textAccent ?? '#1B365D',
-                    }}
-                    className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-medium normal-case tracking-normal hover:brightness-95 transition max-w-full cursor-pointer"
-                  >
-                    <span className="truncate">{originSalonLabel}</span>
-                    <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                    <span
-                      role="tooltip"
-                      className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 top-full mt-1.5 z-30 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
+                      title={
+                        audioController.embedBackground
+                          ? 'Afficher la vidéo'
+                          : 'Mettre en arrière-plan'
+                      }
+                      className="min-h-[38px] px-2.5 py-1.5 rounded-md border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-400 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                     >
-                      Salon d’origine · Cliquer pour y entrer
-                    </span>
-                  </button>
-                ) : onOpenPeleMele ? (
+                      {audioController.embedBackground ? (
+                        <>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline">Vidéo</span>
+                        </>
+                      ) : (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5" />
+                          <span className="hidden md:inline">Arrière-plan</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenPeleMele();
-                    }}
-                    title="Histoire libre publiée hors salon — Voir tout Pêle-mêle"
-                    className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium normal-case tracking-normal hover:border-stone-400 transition max-w-full cursor-pointer"
+                    onClick={() => setShowMusicPanel((prev) => !prev)}
+                    aria-label="Musique de lecture"
+                    aria-expanded={showMusicPanel}
+                    className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                      showMusicPanel || audioController.isPlaying
+                        ? 'border-[#1B365D] bg-[#1B365D] text-white'
+                        : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:text-stone-900 hover:border-stone-400'
+                    }`}
                   >
-                    <span className="truncate">{originSalonLabel}</span>
-                    <ArrowUpRight className="w-3 h-3 shrink-0 opacity-75" />
-                    <span
-                      role="tooltip"
-                      className="pointer-events-none opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150 hidden sm:block absolute left-0 top-full mt-1.5 z-30 whitespace-nowrap rounded bg-stone-900 px-2.5 py-1 text-[11px] font-normal text-[#FBF9F5] shadow-md"
-                    >
-                      Hors salon · Voir Histoires pêle-mêle
+                    {audioController.isPlaying ? (
+                      <Disc3 className="w-3.5 h-3.5 lisiere-disc-spin" />
+                    ) : (
+                      <Music2 className="w-3.5 h-3.5" />
+                    )}
+                    <span className="max-w-[130px] truncate hidden sm:inline">
+                      {audioController.isPlaying && audioController.activeTrack
+                        ? audioController.activeTrack.title
+                        : 'Musique'}
                     </span>
                   </button>
-                ) : (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium normal-case tracking-normal truncate">
-                    {originSalonLabel}
-                  </span>
-                )}
-                <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={() => setZenMode(true)}
+                    aria-label="Activer le Mode lecture zen"
+                    aria-pressed={false}
+                    className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border border-[#1B365D]/35 bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#1B365D] hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" />
+                    <span className="sm:hidden">Zen</span>
+                    <span className="hidden sm:inline">Mode lecture zen</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    aria-label="Fermer la lecture"
+                    className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
                 <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
                 {isRoman && story.novelGenre && (
                   <>
@@ -1388,77 +1465,6 @@ export function StoryReaderModal({
                   )
                 )}
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {audioController.isExternalEmbedActive && (
-                  <button
-                    type="button"
-                    onClick={audioController.toggleEmbedBackground}
-                    aria-label={
-                      audioController.embedBackground
-                        ? 'Afficher le lecteur vidéo'
-                        : 'Mettre la vidéo en arrière-plan'
-                    }
-                    title={
-                      audioController.embedBackground
-                        ? 'Afficher la vidéo'
-                        : 'Mettre en arrière-plan'
-                    }
-                    className="min-h-[40px] px-2.5 py-1.5 rounded-md border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-400 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-                  >
-                    {audioController.embedBackground ? (
-                      <>
-                        <Eye className="w-3.5 h-3.5" />
-                        <span className="hidden md:inline">Vidéo</span>
-                      </>
-                    ) : (
-                      <>
-                        <EyeOff className="w-3.5 h-3.5" />
-                        <span className="hidden md:inline">Arrière-plan</span>
-                      </>
-                    )}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowMusicPanel((prev) => !prev)}
-                  aria-label="Musique de lecture"
-                  aria-expanded={showMusicPanel}
-                  className={`min-h-[40px] px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
-                    showMusicPanel || audioController.isPlaying
-                      ? 'border-[#1B365D] bg-[#1B365D] text-white'
-                      : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:text-stone-900 hover:border-stone-400'
-                  }`}
-                >
-                  {audioController.isPlaying ? (
-                    <Disc3 className="w-3.5 h-3.5 lisiere-disc-spin" />
-                  ) : (
-                    <Music2 className="w-3.5 h-3.5" />
-                  )}
-                  <span className="max-w-[130px] truncate hidden sm:inline">
-                    {audioController.isPlaying && audioController.activeTrack
-                      ? audioController.activeTrack.title
-                      : 'Musique'}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setZenMode(true)}
-                  aria-label="Activer le Mode lecture zen"
-                  aria-pressed={false}
-                  className="min-h-[40px] px-3 py-1.5 rounded-md border border-[#1B365D]/35 bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#1B365D] hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Mode lecture zen</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  aria-label="Fermer la lecture"
-                  className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
             </div>
 
             {showMusicPanel && (
@@ -1479,8 +1485,8 @@ export function StoryReaderModal({
           onScroll={handleArticleScroll}
           className={
             zenMode
-              ? 'flex-1 min-h-0 overflow-y-auto px-6 sm:px-12 pt-12 pb-28 sm:pt-16 sm:pb-32'
-              : 'flex-1 min-h-0 overflow-y-auto px-6 sm:px-12 py-8 sm:py-10'
+              ? 'flex-1 min-h-0 overflow-y-auto px-5 sm:px-12 pt-10 pb-28 sm:pt-16 sm:pb-32'
+              : 'flex-1 min-h-0 overflow-y-auto px-4 sm:px-12 py-6 sm:py-10'
           }
         >
           <article className={zenMode ? 'max-w-[62ch] mx-auto' : 'max-w-prose mx-auto'}>

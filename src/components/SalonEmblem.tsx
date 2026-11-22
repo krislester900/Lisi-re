@@ -171,5 +171,29 @@ export function SalonEmblem({
           />
         </svg>
       );
+
+    case 'guide':
+      return (
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          aria-hidden="true"
+          className={className}
+        >
+          <path
+            d="M5.5 8.5C9 8.5 13 9.6 16 12C19 9.6 23 8.5 26.5 8.5V22.5C23 22.5 19 23.6 16 25.5C13 23.6 9 22.5 5.5 22.5V8.5Z"
+            stroke={color}
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M16 12V25.5"
+            stroke={color}
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+          <circle cx="16" cy="5.5" r="1.4" fill={color} />
+        </svg>
+      );
   }
 }

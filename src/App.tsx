@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
 import { CustomSalonModal } from './components/CustomSalonModal';
+import { AppSidebar } from './components/AppSidebar';
 import { CustomSalonRoomView } from './components/CustomSalonRoomView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExchangesView } from './components/ExchangesView';
@@ -204,6 +205,24 @@ function SalonApp() {
     'directory'
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem('lisiere_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const handleToggleSidebarCollapsed = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem('lisiere_sidebar_collapsed', String(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
   const [isViewFading, setIsViewFading] = useState(false);
   const navTimerRef = useRef<number | null>(null);
   const [publicStories, setPublicStories] = useState<Story[]>([]);
@@ -475,9 +494,11 @@ function SalonApp() {
     });
   }, [visiblePublicStories, customSalons]);
 
+  const deferredFeedFilter = useDeferredValue(feedFilter);
+
   const filteredPublicStories = useMemo(
-    () => filterAndSortStories(openFeedStories, feedFilter),
-    [openFeedStories, feedFilter]
+    () => filterAndSortStories(openFeedStories, deferredFeedFilter),
+    [openFeedStories, deferredFeedFilter]
   );
 
   const storyCountsBySalon = useMemo(() => {
@@ -487,6 +508,7 @@ function SalonApp() {
       rencontres: 0,
       solitudes: 0,
       quotidien: 0,
+      faq: 0,
     };
     for (const story of openFeedStories) {
       if (!story.customSalonId && story.storyScope !== 'pelemele' && counts[story.theme] !== undefined) {
@@ -730,112 +752,40 @@ function SalonApp() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF9F5] text-stone-900">
-      {/* Top Bar Contract: 1-row, 3-zone */}
-      <header className="border-b border-stone-200 bg-[#FBF9F5]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 sm:py-4 flex items-center justify-between gap-3 sm:gap-8">
-          {/* Zone 1: Brand wordmark */}
-          <button
-            type="button"
-            onClick={() => enterSalon(null)}
-            aria-label="Lisière — Retour aux salons"
-            className="text-stone-900 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
-          >
-            <LisiereLogo className="h-8 w-auto" />
-          </button>
+      {/* Clean Single-Row Sticky Header (sidebar handles all destination & salon navigation) */}
+      <header className="sticky top-0 z-40 h-[65px] border-b border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-xs">
+        <div className="h-full px-4 sm:px-6 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((prev) => !prev)}
+              aria-expanded={mobileMenuOpen}
+              aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+              className="lg:hidden min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md border border-stone-300 bg-white text-stone-800 hover:border-stone-500 transition-colors shrink-0"
+            >
+              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
 
-          {/* Zone 2: Concise single-line text nav links */}
-          <nav
-            aria-label="Navigation principale"
-            className="hidden md:flex items-center gap-5 lg:gap-7 text-sm font-medium"
-          >
+            <button
+              type="button"
+              onClick={handleToggleSidebarCollapsed}
+              aria-label={sidebarCollapsed ? 'Déployer le menu latéral' : 'Réduire le menu latéral'}
+              title={sidebarCollapsed ? 'Déployer le menu latéral' : 'Réduire le menu latéral'}
+              className="hidden lg:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-md border border-stone-200 bg-white text-stone-700 hover:border-stone-400 hover:text-stone-900 transition-colors shrink-0"
+            >
+              <Menu className="w-4 h-4" />
+            </button>
+
             <button
               type="button"
               onClick={() => enterSalon(null)}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                highlightedTab === 'recits'
-                  ? 'text-stone-900 border-[#1E3A8A]'
-                  : 'text-stone-600 border-transparent hover:text-stone-900'
-              }`}
+              aria-label="Lisière — Retour aux salons"
+              className="text-stone-900 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
             >
-              Salons
+              <LisiereLogo className="h-8 w-auto" />
             </button>
-            <button
-              type="button"
-              onClick={() => navigateTo('pelemele')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                highlightedTab === 'pelemele'
-                  ? 'text-stone-900 border-[#1E3A8A]'
-                  : 'text-stone-600 border-transparent hover:text-stone-900'
-              }`}
-            >
-              Pêle-mêle
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setProfilesSubTab('directory');
-                navigateTo('membres', null, null);
-              }}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                highlightedTab === 'membres'
-                  ? 'text-stone-900 border-[#1E3A8A]'
-                  : 'text-stone-600 border-transparent hover:text-stone-900'
-              }`}
-            >
-              Profils
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo('themes')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                highlightedTab === 'themes'
-                  ? 'text-stone-900 border-[#1E3A8A]'
-                  : 'text-stone-600 border-transparent hover:text-stone-900'
-              }`}
-            >
-              Thèmes
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo('passerelles')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                highlightedTab === 'passerelles'
-                  ? 'text-stone-900 border-[#1E3A8A]'
-                  : 'text-stone-600 border-transparent hover:text-stone-900'
-              }`}
-            >
-              Passerelles{exchanges.length > 0 ? ` (${exchanges.length})` : ''}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo('carnet')}
-              className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 ${
-                highlightedTab === 'carnet'
-                  ? 'text-stone-900 border-[#1E3A8A]'
-                  : 'text-stone-600 border-transparent hover:text-stone-900'
-              }`}
-            >
-              Mon carnet{unacknowledgedWarnings.length > 0 ? ` (${unacknowledgedWarnings.length})` : ''}
-            </button>
-            {isModerationAdmin && (
-              <button
-                type="button"
-                onClick={() => navigateTo('moderation')}
-                className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 inline-flex items-center gap-1.5 ${
-                  highlightedTab === 'moderation'
-                    ? 'text-stone-900 border-red-800'
-                    : 'text-stone-600 border-transparent hover:text-stone-900'
-                }`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-red-700" />
-                <span>
-                  Modération{pendingModerationCount > 0 ? ` (${pendingModerationCount})` : ''}
-                </span>
-              </button>
-            )}
-          </nav>
+          </div>
 
-          {/* Zone 3: Primary action + mobile menu button */}
           <div className="flex items-center gap-2 shrink-0">
             {user ? (
               <button
@@ -844,9 +794,10 @@ function SalonApp() {
                   setMobileMenuOpen(false);
                   void openComposer();
                 }}
-                className="min-h-[40px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
               >
-                Écrire un récit
+                <Feather className="w-3.5 h-3.5" />
+                <span>Écrire un récit</span>
               </button>
             ) : (
               <button
@@ -855,99 +806,44 @@ function SalonApp() {
                   setMobileMenuOpen(false);
                   void signInWithGoogle();
                 }}
-                className="min-h-[40px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
               >
                 Se connecter
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen((prev) => !prev)}
-              aria-expanded={mobileMenuOpen}
-              aria-controls="mobile-navigation-drawer"
-              aria-label={mobileMenuOpen ? 'Fermer le menu de navigation' : 'Ouvrir le menu de navigation'}
-              className={`md:hidden min-h-[40px] min-w-[40px] px-2.5 inline-flex items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                mobileMenuOpen
-                  ? 'border-[#1E3A8A] bg-[#1E3A8A] text-white'
-                  : 'border-stone-300 bg-white text-stone-800 hover:border-stone-500'
-              }`}
-            >
-              {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
-              <span className="hidden min-[390px]:inline">Menu</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Collapsible Mobile Navigation Drawer with smooth opening transition */}
-        <div
-          id="mobile-navigation-drawer"
-          aria-hidden={!mobileMenuOpen}
-          className={`md:hidden grid transition-[grid-template-rows,opacity] duration-250 ease-out motion-reduce:transition-none ${
-            mobileMenuOpen
-              ? 'grid-rows-[1fr] opacity-100 border-t border-stone-200'
-              : 'grid-rows-[0fr] opacity-0 pointer-events-none'
-          }`}
-        >
-          <div className="overflow-hidden min-h-0">
-            <nav
-              aria-label="Navigation mobile"
-              className={`px-4 py-3 bg-[#FBF9F5] grid grid-cols-2 gap-1.5 text-sm font-medium transition-transform duration-250 ease-out motion-reduce:transition-none ${
-                mobileMenuOpen ? 'translate-y-0' : '-translate-y-2'
-              }`}
-            >
-              {(
-                [
-                  { id: 'recits', label: 'Salons' },
-                  { id: 'pelemele', label: 'Pêle-mêle' },
-                  { id: 'membres', label: 'Profils' },
-                  { id: 'themes', label: 'Thèmes' },
-                  {
-                    id: 'passerelles',
-                    label: `Passerelles${exchanges.length > 0 ? ` (${exchanges.length})` : ''}`,
-                  },
-                  {
-                    id: 'carnet',
-                    label: `Mon carnet${unacknowledgedWarnings.length > 0 ? ` (${unacknowledgedWarnings.length})` : ''}`,
-                  },
-                  ...(isModerationAdmin
-                    ? [
-                        {
-                          id: 'moderation' as const,
-                          label: `Modération${pendingModerationCount > 0 ? ` (${pendingModerationCount})` : ''}`,
-                        },
-                      ]
-                    : []),
-                ] as ReadonlyArray<{ id: NavTab; label: string }>
-              ).map((item) => {
-                const isActive = highlightedTab === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    tabIndex={mobileMenuOpen ? 0 : -1}
-                    onClick={() => {
-                      if (item.id === 'membres') setProfilesSubTab('directory');
-                      navigateTo(item.id, null, null, null);
-                    }}
-                    className={`min-h-[42px] px-3 py-2 rounded-md border text-left flex items-center justify-between transition-colors whitespace-nowrap ${
-                      isActive
-                        ? 'bg-white border-[#1E3A8A]/35 text-[#1E3A8A] font-semibold'
-                        : 'bg-white/60 border-stone-200 text-stone-700 hover:bg-white hover:text-stone-900'
-                    }`}
-                  >
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
           </div>
         </div>
       </header>
 
+      <div className="flex-1 flex min-w-0">
+        <AppSidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={handleToggleSidebarCollapsed}
+          mobileOpen={mobileMenuOpen}
+          onCloseMobile={() => setMobileMenuOpen(false)}
+          activeTab={highlightedTab}
+          activeSalonId={activeSalonId}
+          activeCustomSalonId={activeCustomSalonId}
+          exchangesCount={exchanges.length}
+          warningsCount={unacknowledgedWarnings.length}
+          isModerationAdmin={isModerationAdmin}
+          pendingModerationCount={pendingModerationCount}
+          storyCountsBySalon={storyCountsBySalon}
+          customSalons={customSalons}
+          onNavigateTab={(tab) => {
+            if (tab === 'membres') setProfilesSubTab('directory');
+            navigateTo(tab, null, null, null);
+          }}
+          onEnterSalon={(id) => enterSalon(id)}
+          onEnterCustomSalon={(id) => enterCustomSalon(id)}
+          onCreateCustomSalon={() => void openCustomSalonModal(null)}
+        />
+
+        <div className="flex-1 min-w-0 flex flex-col">
+
       {/* Inline Feedback Banners */}
       {authError && (
-        <div className="max-w-6xl mx-auto w-full px-6 pt-4">
+        <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
           <div
             role="alert"
             className="flex items-center justify-between gap-4 bg-red-50 border border-red-200 text-red-900 px-4 py-3 rounded-md text-sm"
@@ -966,7 +862,7 @@ function SalonApp() {
       )}
 
       {toastNotice && (
-        <div className="max-w-6xl mx-auto w-full px-6 pt-4">
+        <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
           <div className="flex items-center justify-between gap-4 bg-white border border-stone-300 text-stone-900 px-4 py-3 rounded-md text-sm">
             <span>{toastNotice}</span>
             <button
@@ -985,7 +881,7 @@ function SalonApp() {
         const latestWarning = unacknowledgedWarnings[0];
         const sev = WARNING_SEVERITY_LABELS[latestWarning.severity];
         return (
-          <div className="max-w-6xl mx-auto w-full px-6 pt-4">
+          <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
             <div
               role="alert"
               className="bg-red-50 border border-red-300 rounded-md p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
@@ -1135,22 +1031,22 @@ function SalonApp() {
         )}
 
         {activeTab === 'recits' && activeSalonId === null && activeCustomSalonId === null && (
-          <div className="max-w-6xl mx-auto px-6 py-10 sm:py-14 space-y-16">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-14 space-y-12 sm:space-y-16">
             {/* Hero 2-column Editorial Split */}
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
-              <div className="lg:col-span-7 flex flex-col justify-between space-y-8">
-                <div className="space-y-5">
+            <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
+              <div className="lg:col-span-7 flex flex-col justify-between space-y-7 sm:space-y-8">
+                <div className="space-y-4 sm:space-y-5">
                   <p className="text-xs uppercase tracking-widest text-stone-500">
                     Maison d’édition participative · Salons & histoires pêle-mêle
                   </p>
                   <h1
-                    className="font-display text-4xl sm:text-5xl font-medium text-stone-900 leading-[1.12]"
+                    className="font-display text-3xl sm:text-5xl font-medium text-stone-900 leading-[1.12]"
                     style={{ textWrap: 'balance' }}
                   >
                     Créer des histoires qui relient ceux qui peinent parfois à se parler.
                   </h1>
                   <p className="text-base sm:text-lg text-stone-600 leading-relaxed max-w-2xl">
-                    Explorez les cinq salons de Lisière, parcourez toutes les histoires pêle-mêle ou créez votre propre salon public ou privé avec vos règles d’admission.
+                    Explorez les six salons de Lisière (dont le Salon FAQ), parcourez toutes les histoires pêle-mêle ou créez votre propre salon public ou privé avec vos règles d’admission.
                   </p>
                 </div>
 
@@ -1247,10 +1143,10 @@ function SalonApp() {
                     className="font-display text-3xl font-medium text-stone-900"
                     style={{ textWrap: 'balance' }}
                   >
-                    Les cinq salons de Lisière
+                    Les six salons de Lisière
                   </h2>
                   <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
-                    Chaque salon porte une couleur, une ambiance et une question posée sur la table — même avant l’arrivée de sa première histoire.
+                    Chaque salon porte une couleur, une ambiance et une question posée sur la table — dont un Salon FAQ dédié aux questions et à l’entraide.
                   </p>
                 </div>
 
@@ -1268,7 +1164,14 @@ function SalonApp() {
                 {STORY_THEMES.map((salon, index) => {
                   const count = storyCountsBySalon[salon.id] ?? 0;
                   const imgFailed = Boolean(salonImgFailedMap[salon.id]);
-                  const colSpanClass = index < 2 ? 'md:col-span-3' : 'md:col-span-2';
+                  const colSpanClass =
+                    salon.id === 'faq'
+                      ? 'md:col-span-6'
+                      : index < 2
+                        ? 'md:col-span-3'
+                        : 'md:col-span-2';
+
+                  const isFaqCard = salon.id === 'faq';
 
                   return (
                     <article
@@ -1277,61 +1180,73 @@ function SalonApp() {
                         borderColor: salon.palette.borderTint,
                         borderTopColor: salon.palette.swatch,
                       }}
-                      className={`${colSpanClass} bg-white border border-t-2 rounded-lg overflow-hidden flex flex-col justify-between transition-colors`}
+                      className={`${colSpanClass} bg-white border border-t-2 rounded-lg overflow-hidden transition-colors ${
+                        isFaqCard ? 'md:grid md:grid-cols-12' : 'flex flex-col justify-between'
+                      }`}
                     >
-                      <div>
-                        <button
-                          type="button"
-                          onClick={() => enterSalon(salon.id)}
-                          aria-label={`Entrer dans ${salon.salonName}`}
-                          className="block w-full text-left group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B365D]"
+                      <button
+                        type="button"
+                        onClick={() => enterSalon(salon.id)}
+                        aria-label={`Entrer dans ${salon.salonName}`}
+                        className={`block text-left group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B365D] ${
+                          isFaqCard ? 'w-full md:col-span-4 md:h-full' : 'w-full'
+                        }`}
+                      >
+                        <div
+                          style={{
+                            backgroundColor:
+                              salon.imageFit === 'contain' ? '#FFFFFF' : salon.palette.softBg,
+                          }}
+                          className={`w-full overflow-hidden relative ${
+                            isFaqCard
+                              ? 'aspect-[4/3] md:aspect-auto md:h-full md:min-h-[260px] border-b md:border-b-0 md:border-r border-stone-200/80'
+                              : 'aspect-[4/3] border-b border-stone-200/80'
+                          }`}
                         >
-                          <div
-                            style={{
-                              backgroundColor:
-                                salon.imageFit === 'contain' ? '#FFFFFF' : salon.palette.softBg,
-                            }}
-                            className="aspect-[4/3] w-full overflow-hidden border-b border-stone-200/80 relative"
-                          >
-                            {!imgFailed ? (
-                              <img
-                                src={salon.imageUrl}
-                                alt={salon.imageAlt}
-                                referrerPolicy="no-referrer"
-                                onError={() =>
-                                  setSalonImgFailedMap((prev) => ({
-                                    ...prev,
-                                    [salon.id]: true,
-                                  }))
-                                }
-                                style={{
-                                  objectPosition: salon.imagePosition ?? 'center',
-                                }}
-                                className={`w-full h-full transition-transform duration-300 group-hover:scale-[1.02] ${
-                                  salon.imageFit === 'contain' ? 'object-contain p-4' : 'object-cover'
-                                }`}
+                          {!imgFailed ? (
+                            <img
+                              src={salon.imageUrl}
+                              alt={salon.imageAlt}
+                              referrerPolicy="no-referrer"
+                              onError={() =>
+                                setSalonImgFailedMap((prev) => ({
+                                  ...prev,
+                                  [salon.id]: true,
+                                }))
+                              }
+                              style={{
+                                objectPosition: salon.imagePosition ?? 'center',
+                              }}
+                              className={`w-full h-full transition-transform duration-300 group-hover:scale-[1.02] ${
+                                salon.imageFit === 'contain' ? 'object-contain p-4' : 'object-cover'
+                              }`}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
+                              <SalonEmblem
+                                type={salon.emblem}
+                                color={salon.palette.textAccent}
+                                className="w-9 h-9 mb-2"
                               />
-                            ) : (
-                              <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center">
-                                <SalonEmblem
-                                  type={salon.emblem}
-                                  color={salon.palette.textAccent}
-                                  className="w-9 h-9 mb-2"
-                                />
-                                <p className="font-display text-base text-stone-800">
-                                  {salon.salonName}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </button>
+                              <p className="font-display text-base text-stone-800">
+                                {salon.salonName}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </button>
 
-                        <div className="p-6 space-y-3">
+                      <div
+                        className={`flex flex-col justify-between ${
+                          isFaqCard ? 'md:col-span-8' : 'flex-1'
+                        }`}
+                      >
+                        <div className="p-5 space-y-2.5">
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-xs text-stone-500 tabular-nums">
                               Salon {salon.romanIndex} ·{' '}
                               {count === 0
-                                ? 'Prêt pour un premier récit'
+                                ? 'Prêt à ouvrir'
                                 : `${count} récit${count > 1 ? 's' : ''}`}
                             </p>
                             <SalonEmblem
@@ -1342,7 +1257,7 @@ function SalonApp() {
                           </div>
 
                           <div>
-                            <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                            <h3 className="font-display text-xl sm:text-2xl font-medium text-stone-900 leading-snug">
                               <button
                                 type="button"
                                 onClick={() => enterSalon(salon.id)}
@@ -1353,45 +1268,45 @@ function SalonApp() {
                             </h3>
                             <p
                               style={{ color: salon.palette.textAccent }}
-                              className="text-xs font-medium mt-1"
+                              className="text-xs font-medium mt-0.5"
                             >
                               {salon.atmosphere}
                             </p>
                           </div>
 
-                          <p className="text-sm text-stone-600 leading-relaxed">
+                          <p className="text-sm text-stone-600 leading-relaxed line-clamp-2">
                             {salon.description}
                           </p>
                         </div>
-                      </div>
 
-                      <div
-                        style={{ backgroundColor: salon.palette.softBg }}
-                        className="px-6 py-3.5 border-t border-stone-200/70 flex items-center justify-between gap-3"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => enterSalon(salon.id)}
-                          style={{ color: salon.palette.textAccent }}
-                          className="min-h-[38px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-transform duration-150 ease-out active:scale-[0.96]"
+                        <div
+                          style={{ backgroundColor: salon.palette.softBg }}
+                          className="px-6 py-3.5 border-t border-stone-200/70 flex items-center justify-between gap-3"
                         >
-                          <span>Entrer dans le salon</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => enterSalon(salon.id)}
+                            style={{ color: salon.palette.textAccent }}
+                            className="min-h-[38px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-transform duration-150 ease-out active:scale-[0.96]"
+                          >
+                            <span>Entrer dans le salon</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            void openComposer({
-                              theme: salon.id,
-                              prompt: salon.promptQuestion,
-                              starter: `${salon.starterSentence} `,
-                            })
-                          }
-                          className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 transition-colors whitespace-nowrap shrink-0"
-                        >
-                          Y écrire
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void openComposer({
+                                theme: salon.id,
+                                prompt: salon.promptQuestion,
+                                starter: `${salon.starterSentence} `,
+                              })
+                            }
+                            className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 transition-colors whitespace-nowrap shrink-0"
+                          >
+                            Y écrire
+                          </button>
+                        </div>
                       </div>
                     </article>
                   );
@@ -1599,56 +1514,23 @@ function SalonApp() {
                 </button>
               </div>
             ) : (
-              <div className="pt-8 border-t border-stone-200 space-y-8">
-                {/* Salon Theme Pills + Multi-Criteria Sort & Filter Toolbar */}
-                <div className="space-y-4">
-                  <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par salon">
-                    <button
-                      type="button"
-                      onClick={() => setFeedFilter((prev) => ({ ...prev, theme: 'all' }))}
-                      className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                        feedFilter.theme === 'all'
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                      }`}
-                    >
-                      Tous les récits
-                    </button>
-                    {STORY_THEMES.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setFeedFilter((prev) => ({ ...prev, theme: t.id }))}
-                        style={
-                          feedFilter.theme === t.id
-                            ? {
-                                backgroundColor: t.palette.accent,
-                                borderColor: t.palette.accent,
-                                color: '#FFFFFF',
-                              }
-                            : undefined
-                        }
-                        className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
-                          feedFilter.theme === t.id
-                            ? ''
-                            : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
-                        }`}
-                      >
-                        {t.shortSalonName}
-                      </button>
-                    ))}
-                  </div>
-
-                  <StoryFilterBar
-                    value={feedFilter}
-                    onChange={setFeedFilter}
-                    defaultSort="recent"
-                    searchPlaceholder="Rechercher un titre, un auteur…"
-                    ariaLabel="Trier et filtrer les récits publiés"
-                    totalCount={openFeedStories.length}
-                    filteredCount={filteredPublicStories.length}
-                  />
+              <div className="pt-8 border-t border-stone-200 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900">
+                    Récits récents de la communauté
+                  </h2>
                 </div>
+
+                <StoryFilterBar
+                  value={feedFilter}
+                  onChange={setFeedFilter}
+                  defaultSort="recent"
+                  showThemeFilter={true}
+                  searchPlaceholder="Rechercher un titre, un auteur…"
+                  ariaLabel="Trier et filtrer les récits publiés"
+                  totalCount={openFeedStories.length}
+                  filteredCount={filteredPublicStories.length}
+                />
 
                 {filteredPublicStories.length === 0 ? (
                   <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
@@ -2146,12 +2028,12 @@ function SalonApp() {
       </main>
 
       <footer className="border-t border-stone-200 bg-[#FBF9F5] mt-12">
-        <div className="max-w-6xl mx-auto px-6 py-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500">
           <div className="space-y-1">
             <p>Lisière — Espace de récits personnels et de passerelles humaines</p>
             <p className="text-stone-700 font-medium">Créé par Kris Ivan N’dri</p>
           </div>
-          <div className="flex flex-wrap items-center gap-6">
+          <div className="flex flex-wrap items-center gap-5">
             <button
               type="button"
               onClick={() => enterSalon(null)}
@@ -2168,16 +2050,6 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                setProfilesSubTab('directory');
-                navigateTo('membres', null, null);
-              }}
-              className="hover:text-stone-900 transition-colors"
-            >
-              Profils
-            </button>
-            <button
-              type="button"
               onClick={() => navigateTo('themes')}
               className="hover:text-stone-900 transition-colors"
             >
@@ -2185,28 +2057,16 @@ function SalonApp() {
             </button>
             <button
               type="button"
-              onClick={() => navigateTo('passerelles')}
-              className="hover:text-stone-900 transition-colors"
-            >
-              Passerelles
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo('carnet')}
-              className="hover:text-stone-900 transition-colors"
-            >
-              Mon carnet
-            </button>
-            <button
-              type="button"
               onClick={() => navigateTo('confidentialite')}
               className="hover:text-stone-900 transition-colors font-medium text-stone-700"
             >
-              Politique de confidentialité
+              Confidentialité
             </button>
           </div>
         </div>
       </footer>
+        </div>
+      </div>
 
       {/* Reader Modal */}
       <StoryReaderModal

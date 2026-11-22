@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useDeferredValue, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -77,9 +77,10 @@ export function PeleMeleStoriesView({
     });
   }, [publicStories, customSalons]);
 
+  const deferredFilter = useDeferredValue(filterState);
   const displayedStories = useMemo(
-    () => filterAndSortStories(peleMeleEligibleStories, filterState),
-    [peleMeleEligibleStories, filterState]
+    () => filterAndSortStories(peleMeleEligibleStories, deferredFilter),
+    [peleMeleEligibleStories, deferredFilter]
   );
 
   const handleReshuffle = () => {
@@ -91,7 +92,7 @@ export function PeleMeleStoriesView({
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 sm:py-14 space-y-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-14 space-y-8 sm:space-y-10">
       {/* Header */}
       <section className="space-y-6 pb-8 border-b border-stone-200">
         <div className="flex flex-wrap items-center justify-between gap-4">

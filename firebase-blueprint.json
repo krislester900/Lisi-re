@@ -196,7 +196,7 @@
         },
         "theme": {
           "type": "string",
-          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien", "faq"]
         },
         "customSalonId": {
           "type": "string",
@@ -503,7 +503,7 @@
         },
         "salonId": {
           "type": "string",
-          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien", "faq"]
         },
         "senderId": {
           "type": "string",
@@ -870,7 +870,7 @@
         },
         "storyTheme": {
           "type": "string",
-          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien", "faq"]
         },
         "customSalonId": {
           "type": "string",
@@ -955,7 +955,7 @@
         },
         "storyTheme": {
           "type": "string",
-          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien", "faq"]
         },
         "customSalonId": {
           "type": "string",
@@ -1063,7 +1063,7 @@
         },
         "storyTheme": {
           "type": "string",
-          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien"]
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien", "faq"]
         },
         "customSalonId": {
           "type": "string",

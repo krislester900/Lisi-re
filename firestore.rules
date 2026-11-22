@@ -14,7 +14,7 @@ service cloud.firestore {
     }
 
     function isValidSalonId(salonId) {
-      return salonId in ['creation', 'rencontres', 'solitudes', 'premiers-elans', 'quotidien'];
+      return salonId in ['creation', 'rencontres', 'solitudes', 'premiers-elans', 'quotidien', 'faq'];
     }
 
     function incoming() {

@@ -28,13 +28,15 @@ export function ThemesView({ onStartFromTheme, onVisitSalon }: ThemesViewProps) 
               Des questions simples pour ouvrir la conversation sans malaise
             </h1>
             <p className="text-base text-stone-600 leading-relaxed max-w-xl">
-              Chaque fil correspond à l’un des cinq salons de Lisière. Vous pouvez visiter un salon pour en ressentir l’atmosphère, ou partir directement de sa question d’ouverture.
+              Chaque fil correspond à l’un des salons de Lisière (dont le Salon FAQ). Vous pouvez visiter un salon pour en ressentir l’atmosphère, ou partir directement de sa question d’ouverture.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-6 pt-6 border-t border-stone-200">
             <div>
-              <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">5</p>
+              <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
+                {STORY_THEMES.length}
+              </p>
               <p className="text-xs text-stone-600 mt-1">Salons et fils ouverts à tous les parcours</p>
             </div>
             <div>

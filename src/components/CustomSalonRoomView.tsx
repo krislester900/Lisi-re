@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
   Bookmark,
   BookOpen,
   Check,
+  ChevronDown,
   Clock,
   Eye,
   Feather,
@@ -117,6 +118,7 @@ export function CustomSalonRoomView({
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletingSalon, setDeletingSalon] = useState(false);
+  const [showRulesPanel, setShowRulesPanel] = useState(false);
 
   const salonId = salon?.salonId ?? '';
   const isOwner = Boolean(user && salon && user.uid === salon.ownerId);
@@ -133,6 +135,7 @@ export function CustomSalonRoomView({
     setActionFeedback(null);
     setActionError(null);
     setConfirmDelete(false);
+    setShowRulesPanel(false);
   }, [salonId]);
 
   useEffect(() => {
@@ -198,9 +201,10 @@ export function CustomSalonRoomView({
     return messages.filter((msg) => !hiddenUserIds.has(msg.senderId));
   }, [messages, hiddenUserIds]);
 
+  const deferredFilter = useDeferredValue(filterState);
   const filteredStories = useMemo(
-    () => filterAndSortStories(stories, filterState),
-    [stories, filterState]
+    () => filterAndSortStories(stories, deferredFilter),
+    [stories, deferredFilter]
   );
 
   const pendingRequests = useMemo(
@@ -357,9 +361,9 @@ export function CustomSalonRoomView({
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 sm:py-12 space-y-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8">
       {/* Top Rail */}
-      <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-stone-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-stone-200">
         <button
           type="button"
           onClick={onBackToSalons}
@@ -413,17 +417,17 @@ export function CustomSalonRoomView({
         )}
       </div>
 
-      {/* Salon Identity & Admission Rules Banner */}
+      {/* Compact Salon Identity & Admission Rules Banner */}
       <section
         style={{
           backgroundColor: palette.softBg,
           borderColor: palette.borderTint,
           borderTopColor: palette.swatch,
         }}
-        className="border border-t-2 rounded-lg p-6 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start"
+        className="border border-t-2 rounded-lg p-5 sm:p-7 space-y-4"
       >
-        <div className="lg:col-span-7 space-y-5">
-          <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs">
             <span
               style={{ color: palette.textAccent }}
               className="uppercase tracking-widest font-semibold inline-flex items-center gap-1.5"
@@ -431,12 +435,12 @@ export function CustomSalonRoomView({
               {salon.visibility === 'private' ? (
                 <>
                   <Lock className="w-3.5 h-3.5" />
-                  <span>Salon privé · Sur admission</span>
+                  <span>Salon privé</span>
                 </>
               ) : (
                 <>
                   <Globe className="w-3.5 h-3.5" />
-                  <span>Salon public · Accès libre</span>
+                  <span>Salon public</span>
                 </>
               )}
             </span>
@@ -460,38 +464,50 @@ export function CustomSalonRoomView({
           </div>
 
           <h1
-            className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
+            className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-tight"
             style={{ textWrap: 'balance' }}
           >
             {salon.name}
           </h1>
 
-          <p className="text-base text-stone-700 leading-relaxed max-w-2xl">
-            {salon.description}
-          </p>
+          {salon.description && (
+            <p className="text-sm sm:text-base text-stone-700 leading-relaxed max-w-2xl">
+              {salon.description}
+            </p>
+          )}
 
           {salon.promptQuestion && (
-            <div className="pt-4 border-t border-stone-900/10">
-              <p className="text-xs uppercase tracking-widest text-stone-500 mb-1">
-                Question sur la table
-              </p>
-              <p className="font-display text-lg text-stone-900 italic">
-                « {salon.promptQuestion} »
-              </p>
-            </div>
+            <p className="text-sm text-stone-700 italic">« {salon.promptQuestion} »</p>
           )}
 
           {/* Actions for members / visitors */}
-          <div className="pt-2 flex flex-wrap items-center gap-3">
+          <div className="pt-1 flex flex-wrap items-center gap-2.5">
             {canViewContent && (
               <button
                 type="button"
                 onClick={() => onWriteInCustomSalon(salon)}
                 style={{ backgroundColor: palette.accent }}
-                className="min-h-[42px] px-5 py-2 text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity inline-flex items-center gap-2 whitespace-nowrap"
+                className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-medium text-white rounded-md hover:opacity-90 transition-opacity inline-flex items-center gap-2 whitespace-nowrap"
               >
                 <Feather className="w-4 h-4" />
                 <span>Publier dans ce salon</span>
+              </button>
+            )}
+
+            {canViewContent && (
+              <button
+                type="button"
+                aria-expanded={showRulesPanel}
+                onClick={() => setShowRulesPanel((prev) => !prev)}
+                className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" style={{ color: palette.textAccent }} />
+                <span>Règles d’admission</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-stone-500 transition-transform duration-200 ${
+                    showRulesPanel ? 'rotate-180' : ''
+                  }`}
+                />
               </button>
             )}
 
@@ -501,7 +517,7 @@ export function CustomSalonRoomView({
                   type="button"
                   disabled={actionBusy}
                   onClick={() => void handleLeaveOrCancel()}
-                  className="min-h-[42px] px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
+                  className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
                 >
                   <UserCheck className="w-4 h-4 text-emerald-700" />
                   <span>Membre · Quitter</span>
@@ -511,7 +527,7 @@ export function CustomSalonRoomView({
                   type="button"
                   disabled={actionBusy}
                   onClick={() => void handleJoinOrRequest()}
-                  className="min-h-[42px] px-4 py-2 text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
+                  className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
                 >
                   <Users className="w-4 h-4" />
                   <span>{actionBusy ? 'Adhésion…' : 'Rejoindre ce salon'}</span>
@@ -524,7 +540,7 @@ export function CustomSalonRoomView({
                 type="button"
                 disabled={actionBusy}
                 onClick={() => void handleLeaveOrCancel()}
-                className="min-h-[42px] px-4 py-2 text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
+                className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
               >
                 <UserCheck className="w-4 h-4 text-emerald-700" />
                 <span>Membre admis · Quitter</span>
@@ -533,20 +549,22 @@ export function CustomSalonRoomView({
           </div>
         </div>
 
-        {/* Admission Rules Card */}
-        <aside className="lg:col-span-5 bg-white border border-stone-200 rounded-md p-5 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500">
-            <ShieldCheck className="w-4 h-4" style={{ color: palette.textAccent }} />
-            <span>Règles d’admission du salon</span>
-          </div>
-          <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-line">
-            {salon.admissionRules.trim()
-              ? salon.admissionRules
-              : salon.visibility === 'private'
-                ? 'Ce salon est privé. Envoyez une courte note de présentation au créateur pour demander votre admission.'
-                : 'Salon ouvert à tous dans un esprit d’écoute, de respect mutuel et de bienveillance littéraire.'}
-          </p>
-        </aside>
+        {/* Admission Rules Card: always visible when requesting admission, collapsible once inside */}
+        {(!canViewContent || showRulesPanel) && (
+          <aside className="bg-white border border-stone-200 rounded-md p-4 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500">
+              <ShieldCheck className="w-3.5 h-3.5" style={{ color: palette.textAccent }} />
+              <span>Règles d’admission</span>
+            </div>
+            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-line">
+              {salon.admissionRules.trim()
+                ? salon.admissionRules
+                : salon.visibility === 'private'
+                  ? 'Ce salon est privé. Envoyez une courte note de présentation au créateur pour demander votre admission.'
+                  : 'Salon ouvert à tous dans un esprit d’écoute, de respect mutuel et de bienveillance littéraire.'}
+            </p>
+          </aside>
+        )}
       </section>
 
       {actionFeedback && (

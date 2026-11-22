@@ -5,7 +5,8 @@ export type StoryThemeId =
   | 'rencontres'
   | 'solitudes'
   | 'premiers-elans'
-  | 'quotidien';
+  | 'quotidien'
+  | 'faq';
 
 export type StoryVisibility = 'public' | 'private';
 

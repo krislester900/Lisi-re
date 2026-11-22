@@ -8,7 +8,7 @@ import {
   WallAccentTone,
 } from '../types/story';
 
-export type SalonEmblemType = 'bridge' | 'horizon' | 'chairs' | 'leaf' | 'cup';
+export type SalonEmblemType = 'bridge' | 'horizon' | 'chairs' | 'leaf' | 'cup' | 'guide';
 
 export interface SalonPalette {
   /** Accessible deep color for solid buttons with white text (>= 4.5:1) */
@@ -308,6 +308,110 @@ export const STORY_THEMES: ThemeDefinition[] = [
       softBg: '#F7F4EE',
       borderTint: '#DDD4C6',
     },
+  },
+  {
+    id: 'faq',
+    romanIndex: 'VI',
+    salonName: 'Le Salon FAQ & Entraide',
+    shortSalonName: 'Salon FAQ',
+    label: 'Questions fréquentes & mode d’emploi',
+    shortLabel: 'FAQ & Entraide',
+    atmosphere: 'Bleu outremer & papier crème · Table ronde d’entraide',
+    description:
+      'Un espace clair pour comprendre à quoi servent les fonctionnalités de Lisière, poser vos questions et partager vos astuces avec les autres membres.',
+    curatorialNote:
+      'Le Salon FAQ sert de point de repère pour toute la communauté : découvrir comment publier en mode anonyme, écrire un roman en chapitres, lancer une ambiance musicale en mode Zen, gérer ses échanges privés ou signaler un contenu.',
+    epigraph:
+      '« Aucune question n’est trop simple lorsqu’on découvre une maison d’écriture pour la première fois. »',
+    roomPillars: [
+      {
+        title: 'Comprendre chaque outil',
+        body: 'Retrouver des réponses concrètes sur les confessions anonymes, les romans à chapitres, la lecture Zen et la recherche par mots-clés.',
+      },
+      {
+        title: 'Poser vos questions',
+        body: 'Publier un billet ou ouvrir le chat du salon pour demander conseil aux autres lecteurs et auteurs sur l’utilisation du site.',
+      },
+      {
+        title: 'Améliorer le salon',
+        body: 'Partager vos retours d’expérience, signaler un blocage ou proposer des idées pour rendre la lecture plus sereine.',
+      },
+    ],
+    promptQuestion:
+      'Quelle question vous êtes-vous posée en arrivant sur Lisière, ou quel conseil aimeriez-vous transmettre aux nouveaux membres ?',
+    starterSentence:
+      'Pour bien utiliser Lisière dès le début, voici ce que j’aimerais savoir ou partager...',
+    invitationTopics: [
+      'Comment publier une confession ou un roman en mode anonyme ?',
+      'Comment lire en mode Zen avec YouTube en arrière-plan ou sa propre musique ?',
+      'Comment fonctionne la protection anti-plagiat et la modération ?',
+    ],
+    imageUrl: '/assets/aistudio/81e1cb2d98f4d0407dd276e96bfde77f_04c63d1e.jpg',
+    imageAlt:
+      'Lecteurs réunis autour d’une table ronde bleue avec des tasses, un crayon et des carnets ouverts',
+    imageFit: 'cover',
+    imagePosition: 'center',
+    emblem: 'guide',
+    palette: {
+      accent: '#1E3A8A',
+      accentHover: '#162B69',
+      textAccent: '#1E3A8A',
+      swatch: '#1E3A8A',
+      softBg: '#F6F3E7',
+      borderTint: '#D8CFAC',
+    },
+  },
+];
+
+export interface SalonFaqItem {
+  id: string;
+  question: string;
+  answer: string;
+  category: 'ecriture' | 'lecture' | 'echanges' | 'securite';
+}
+
+export const SALON_FAQ_ITEMS: SalonFaqItem[] = [
+  {
+    id: 'faq-role-salon',
+    category: 'lecture',
+    question: 'À quoi sert le Salon FAQ ?',
+    answer:
+      'Il centralise le mode d’emploi de Lisière et permet aux membres de poser des questions publiques, publier des guides ou s’entraider en direct dans le chat du salon.',
+  },
+  {
+    id: 'faq-anonymous',
+    category: 'ecriture',
+    question: 'Comment publier une confession ou un roman en mode anonyme ?',
+    answer:
+      'Dans la fenêtre de rédaction (« Partager une histoire »), activez l’option Publication anonyme : votre nom est masqué sur les cartes et dans la lecture tout en restant rattaché à votre compte pour vous permettre d’éditer ou de supprimer votre texte.',
+  },
+  {
+    id: 'faq-novels',
+    category: 'ecriture',
+    question: 'Comment écrire un roman en plusieurs chapitres et plusieurs œuvres en parallèle ?',
+    answer:
+      'Choisissez le format « Roman / Récit long », indiquez un genre (drame, poème, romance…) et ajoutez une couverture. Vous pouvez ensuite ajouter de nouveaux chapitres à tout moment sur chacun de vos romans et basculer son statut entre « En cours » et « Terminé ».',
+  },
+  {
+    id: 'faq-zen-music',
+    category: 'lecture',
+    question: 'Comment écouter de la musique ou YouTube sans gêner la lecture en mode Zen ?',
+    answer:
+      'Dans le lecteur Zen, ouvrez le bouton Musique pour rechercher un morceau gratuit, importer un fichier audio depuis votre téléphone ou lancer une vidéo YouTube. Le lecteur vidéo reste discret et repliable afin de poursuivre votre lecture sans obstacle.',
+  },
+  {
+    id: 'faq-search-quotes',
+    category: 'lecture',
+    question: 'Comment rechercher par mots-clés ou sauvegarder des citations favorites ?',
+    answer:
+      'Utilisez la barre de recherche avancée des histoires (expressions entre guillemets, exclusions avec -mot, opérateur OR ou choix du champ : titres, texte intégral, auteurs). Pendant la lecture, sélectionnez un passage pour l’ajouter à vos citations favorites dans Mon carnet.',
+  },
+  {
+    id: 'faq-privacy-moderation',
+    category: 'securite',
+    question: 'Comment fonctionnent les messages privés, les blocages et les signalements ?',
+    answer:
+      'Dans Passerelles, chaque conversation dispose d’un menu Options pour rechercher un mot, archiver, passer un membre en « Pas intéressé », bloquer ou supprimer le fil. Tout contenu ou comportement outrageant peut être signalé pour étude de cas, pré-analysé par IA puis tranché par l’administrateur.',
   },
 ];
 

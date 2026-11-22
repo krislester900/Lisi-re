@@ -315,6 +315,7 @@ export const PUBLIC_INDEXABLE_ROUTES: ReadonlyArray<{
   { path: '/salons/rencontres', changefreq: 'daily', priority: '0.8' },
   { path: '/salons/solitudes', changefreq: 'daily', priority: '0.8' },
   { path: '/salons/quotidien', changefreq: 'daily', priority: '0.8' },
+  { path: '/salons/faq', changefreq: 'weekly', priority: '0.8' },
   { path: '/confidentialite', changefreq: 'monthly', priority: '0.4' },
 ];
 
