@@ -1,14 +1,18 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
+  Ban,
   BarChart3,
   Bookmark,
   BookOpen,
   Check,
+  CheckCircle2,
   Copy,
   Edit3,
   Eye,
   EyeOff,
   FileText,
+  Flag,
   Globe,
   Highlighter,
   Lock,
@@ -17,16 +21,28 @@ import {
   Quote,
   Repeat2,
   Search,
+  ShieldAlert,
   Trash2,
+  UserCheck,
   User as UserIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  MODERATION_CATEGORY_LABELS,
+  MODERATION_REVIEW_STEPS,
+  MODERATION_STATUS_LABELS,
+  MODERATION_TARGET_LABELS,
+  WARNING_SEVERITY_LABELS,
+} from '../lib/moderationLabels';
 import { sortStories, StorySortMode } from '../lib/storyFilter';
 import {
+  acknowledgeUserWarning,
   deleteStory,
   deleteStoryQuote,
   deleteStoryRepost,
+  formatFriendlyFirestoreError,
   removeStoryBookmark,
+  removeUserRelationship,
   updateNovelSeriesStatus,
   updateRepostVisibility,
   updateStory,
@@ -42,13 +58,24 @@ import {
 } from '../lib/themes';
 import {
   Exchange,
+  MemberWarning,
+  ModerationCase,
   Story,
   StoryBookmark,
   StoryQuote,
   StoryRepost,
+  UserRelationship,
 } from '../types/story';
 import { NovelCoverArt } from './NovelCoverArt';
 import { StoryAnalyticsChart } from './StoryAnalyticsChart';
+
+export type JournalSubTab =
+  | 'stories'
+  | 'bookmarks'
+  | 'quotes'
+  | 'reposts'
+  | 'stats'
+  | 'moderation';
 
 interface JournalViewProps {
   myStories: Story[];
@@ -56,6 +83,10 @@ interface JournalViewProps {
   bookmarks?: StoryBookmark[];
   quotes?: StoryQuote[];
   reposts?: StoryRepost[];
+  userWarnings?: MemberWarning[];
+  myModerationCases?: ModerationCase[];
+  relationships?: UserRelationship[];
+  requestedSubTab?: { tab: JournalSubTab; nonce: number } | null;
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
   onEditStory: (story: Story) => void;
@@ -64,8 +95,6 @@ interface JournalViewProps {
   onOpenExchange: (exchangeId: string) => void;
   onOpenMyProfile?: () => void;
 }
-
-type JournalSubTab = 'stories' | 'bookmarks' | 'quotes' | 'reposts' | 'stats';
 type StoryFilter =
   | 'all'
   | 'public'
@@ -80,6 +109,10 @@ export function JournalView({
   bookmarks = [],
   quotes = [],
   reposts = [],
+  userWarnings = [],
+  myModerationCases = [],
+  relationships = [],
+  requestedSubTab = null,
   onReadStory,
   onOpenStoryById,
   onEditStory,
@@ -107,6 +140,15 @@ export function JournalView({
   const [copiedQuoteId, setCopiedQuoteId] = useState<string | null>(null);
   const [busyRepostId, setBusyRepostId] = useState<string | null>(null);
   const [repostActionError, setRepostActionError] = useState<string | null>(null);
+  const [busyWarningId, setBusyWarningId] = useState<string | null>(null);
+  const [busyRelId, setBusyRelId] = useState<string | null>(null);
+  const [moderationError, setModerationError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (requestedSubTab) {
+      setSubTab(requestedSubTab.tab);
+    }
+  }, [requestedSubTab?.nonce, requestedSubTab?.tab]);
 
   const publicCount = useMemo(
     () => myStories.filter((s) => s.visibility === 'public').length,
@@ -394,6 +436,38 @@ export function JournalView({
     }
   };
 
+  const handleAckWarning = async (warningId: string) => {
+    if (busyWarningId) return;
+    setModerationError(null);
+    setBusyWarningId(warningId);
+    try {
+      await acknowledgeUserWarning(warningId);
+    } catch (err) {
+      setModerationError(
+        formatFriendlyFirestoreError(err, 'Impossible de confirmer la réception de cet avertissement.')
+      );
+    } finally {
+      setBusyWarningId(null);
+    }
+  };
+
+  const handleRestoreRelationship = async (targetUserId: string) => {
+    if (!user || busyRelId) return;
+    setModerationError(null);
+    setBusyRelId(targetUserId);
+    try {
+      await removeUserRelationship(user.uid, targetUserId);
+    } catch (err) {
+      setModerationError(
+        formatFriendlyFirestoreError(err, 'Impossible de rétablir ce membre.')
+      );
+    } finally {
+      setBusyRelId(null);
+    }
+  };
+
+  const unacknowledgedWarningsCount = userWarnings.filter((w) => !w.acknowledged).length;
+
   const navItems: Array<{
     id: JournalSubTab;
     label: string;
@@ -428,6 +502,13 @@ export function JournalView({
       shortLabel: 'Repartages',
       count: reposts.length,
       icon: Repeat2,
+    },
+    {
+      id: 'moderation',
+      label: 'Avertissements & signalements',
+      shortLabel: 'Sécurité',
+      count: unacknowledgedWarningsCount + myModerationCases.length,
+      icon: ShieldAlert,
     },
     {
       id: 'stats',
@@ -1466,6 +1547,235 @@ export function JournalView({
                 myStories={myStories}
                 onReadStory={onReadStory}
               />
+            </section>
+          )}
+
+          {/* Tab 5: Official Warnings, My Reports & Blocked / Not Interested Members */}
+          {subTab === 'moderation' && (
+            <section
+              aria-label="Avertissements, signalements et membres masqués"
+              className="space-y-6"
+            >
+              {moderationError && (
+                <div
+                  role="alert"
+                  className="bg-red-50 border border-red-200 rounded-md px-4 py-2.5 text-xs text-red-800"
+                >
+                  {moderationError}
+                </div>
+              )}
+
+              {/* 1. Official Warnings Received */}
+              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-700" />
+                    <h2 className="font-display text-xl font-medium text-stone-900">
+                      Avertissements officiels reçus ({userWarnings.length})
+                    </h2>
+                  </div>
+                  {unacknowledgedWarningsCount > 0 && (
+                    <span className="px-2.5 py-0.5 rounded border border-red-300 bg-red-50 text-red-900 text-[11px] font-medium tabular-nums">
+                      {unacknowledgedWarningsCount} à confirmer
+                    </span>
+                  )}
+                </div>
+
+                {userWarnings.length === 0 ? (
+                  <p className="text-sm text-stone-600">
+                    Aucun avertissement officiel n’a été émis sur votre compte.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {userWarnings.map((warning) => {
+                      const sev = WARNING_SEVERITY_LABELS[warning.severity];
+                      const cat = MODERATION_CATEGORY_LABELS[warning.category];
+                      const isBusy = busyWarningId === warning.warningId;
+                      return (
+                        <article
+                          key={warning.warningId}
+                          className={`p-4 sm:p-5 rounded-md border space-y-3 ${
+                            warning.acknowledged
+                              ? 'border-stone-200 bg-[#FBF9F5]'
+                              : 'border-red-300 bg-red-50/40'
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded border text-[11px] font-semibold ${sev.toneClass}`}
+                              >
+                                {sev.label}
+                              </span>
+                              <span className="font-medium text-stone-800">{cat.label}</span>
+                            </div>
+                            <span className="text-stone-500">
+                              Émis le {formatFrenchDate(warning.createdAt?.toDate() ?? null)}
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-line">
+                            {warning.justification}
+                          </p>
+
+                          {warning.excerptSnapshot && (
+                            <blockquote className="text-xs text-stone-600 italic bg-white border border-stone-200 rounded p-3 whitespace-pre-line">
+                              Extrait retenu lors de l’étude de cas : « {warning.excerptSnapshot} »
+                            </blockquote>
+                          )}
+
+                          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                            <span className="text-[11px] text-stone-500">
+                              Étude de cas clôturée par {warning.issuedByName}
+                            </span>
+
+                            {warning.acknowledged ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                <span>Accusé de réception confirmé</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => void handleAckWarning(warning.warningId)}
+                                className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-red-800 rounded-md hover:bg-red-900 disabled:opacity-60 inline-flex items-center gap-1.5"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                                <span>{isBusy ? 'Confirmation…' : 'Accuser réception'}</span>
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. My Submitted Moderation Reports */}
+              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Flag className="w-4 h-4 text-[#1B365D]" />
+                  <h2 className="font-display text-xl font-medium text-stone-900">
+                    Mes signalements transmis ({myModerationCases.length})
+                  </h2>
+                </div>
+
+                {myModerationCases.length === 0 ? (
+                  <p className="text-sm text-stone-600">
+                    Vous n’avez soumis aucun signalement pour le moment.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-stone-200 border border-stone-200 rounded-md">
+                    {myModerationCases.map((c) => {
+                      const statusMeta = MODERATION_STATUS_LABELS[c.status];
+                      const catMeta = MODERATION_CATEGORY_LABELS[c.category];
+                      const stepMeta =
+                        MODERATION_REVIEW_STEPS.find((s) => s.id === c.reviewStep) ??
+                        MODERATION_REVIEW_STEPS[0];
+                      return (
+                        <article key={c.caseId} className="p-4 sm:p-5 space-y-2.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded border text-[11px] font-medium ${statusMeta.toneClass}`}
+                              >
+                                {statusMeta.label}
+                              </span>
+                              <span className="text-stone-700 font-medium">
+                                {MODERATION_TARGET_LABELS[c.targetType]} · {c.targetUserName}
+                              </span>
+                            </div>
+                            <span className="text-stone-500">
+                              {formatFrenchDate(c.createdAt?.toDate() ?? null)}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-stone-600">
+                            <span className="font-medium text-stone-800">{catMeta.label}</span> · Étape actuelle :{' '}
+                            <span className="text-[#1B365D] font-medium">{stepMeta.label}</span>
+                          </p>
+
+                          {c.targetExcerpt && (
+                            <blockquote className="text-xs text-stone-600 italic bg-[#FBF9F5] border-l-2 border-stone-300 pl-3 py-1.5 line-clamp-3">
+                              « {c.targetExcerpt} »
+                            </blockquote>
+                          )}
+
+                          {c.decisionReason && (
+                            <p className="text-xs text-stone-700 bg-[#F3F6FA] border border-[#CBD6E6] rounded px-3 py-2">
+                              <span className="font-semibold text-[#1B365D]">Conclusion de l’étude de cas : </span>
+                              {c.decisionReason}
+                            </p>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Blocked & Not Interested Members */}
+              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Ban className="w-4 h-4 text-stone-700" />
+                  <h2 className="font-display text-xl font-medium text-stone-900">
+                    Membres bloqués &amp; « Pas intéressé » ({relationships.length})
+                  </h2>
+                </div>
+
+                {relationships.length === 0 ? (
+                  <p className="text-sm text-stone-600">
+                    Vous n’avez bloqué ni marqué « Pas intéressé » aucun membre.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-stone-200 border border-stone-200 rounded-md">
+                    {relationships.map((rel) => {
+                      const isBlocked = rel.relation === 'blocked';
+                      const isBusy = busyRelId === rel.targetUserId;
+                      return (
+                        <div
+                          key={rel.targetUserId}
+                          className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-stone-900">
+                                {rel.targetName}
+                              </span>
+                              <span
+                                className={`px-2 py-0.5 rounded border text-[11px] font-medium ${
+                                  isBlocked
+                                    ? 'border-red-200 bg-red-50 text-red-900'
+                                    : 'border-stone-200 bg-stone-100 text-stone-700'
+                                }`}
+                              >
+                                {isBlocked ? 'Bloqué' : 'Pas intéressé'}
+                              </span>
+                            </div>
+                            <p className="text-xs text-stone-500">
+                              {isBlocked
+                                ? 'Échanges privés verrouillés dans les deux sens et contenus masqués.'
+                                : 'Ses récits et échanges sont mis à l’écart de vos fils principaux.'}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => void handleRestoreRelationship(rel.targetUserId)}
+                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap self-start sm:self-center"
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                            <span>{isBlocked ? 'Débloquer' : 'Rétablir'}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </section>
           )}
         </div>

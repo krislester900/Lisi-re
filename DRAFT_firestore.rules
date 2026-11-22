@@ -37,6 +37,21 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isAdminEmail() {
+      return isVerifiedUser()
+        && request.auth.token.email == 'krislester900@gmail.com';
+    }
+
+    function isBlockedBetween(uidA, uidB) {
+      return (
+        exists(/databases/$(database)/documents/users/$(uidA)/relationships/$(uidB))
+        && get(/databases/$(database)/documents/users/$(uidA)/relationships/$(uidB)).data.relation == 'blocked'
+      ) || (
+        exists(/databases/$(database)/documents/users/$(uidB)/relationships/$(uidA))
+        && get(/databases/$(database)/documents/users/$(uidB)/relationships/$(uidA)).data.relation == 'blocked'
+      );
+    }
+
     function isApprovedCustomSalonMember(salonId) {
       return isSignedIn()
         && isValidId(salonId)
@@ -411,7 +426,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'exchangeId', 'kind', 'storyId', 'storyTitle', 'initiatorId', 'initiatorName',
-          'recipientId', 'recipientName', 'participantIds', 'status',
+          'recipientId', 'recipientName', 'participantIds', 'hiddenFor', 'status',
           'lastMessagePreview', 'lastSenderId', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.exchangeId)
@@ -428,6 +443,12 @@ service cloud.firestore {
         && isValidId(data.participantIds[0])
         && isValidId(data.participantIds[1])
         && data.participantIds[0] != data.participantIds[1]
+        && (!('hiddenFor' in data) || (
+          data.hiddenFor is list
+          && data.hiddenFor.size() <= 2
+          && (data.hiddenFor.size() < 1 || (isValidId(data.hiddenFor[0]) && data.hiddenFor[0] in data.participantIds))
+          && (data.hiddenFor.size() < 2 || (isValidId(data.hiddenFor[1]) && data.hiddenFor[1] in data.participantIds))
+        ))
         && data.status in ['active', 'archived']
         && data.lastMessagePreview is string && data.lastMessagePreview.size() <= 160
         && isValidId(data.lastSenderId)
@@ -442,7 +463,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'messageId', 'exchangeId', 'senderId', 'senderName',
-          'participantIds', 'content', 'createdAt'
+          'participantIds', 'hiddenFor', 'content', 'createdAt'
         ])
         && isValidId(data.messageId)
         && isValidId(data.exchangeId)
@@ -452,8 +473,117 @@ service cloud.firestore {
         && data.participantIds.size() == 2
         && isValidId(data.participantIds[0])
         && isValidId(data.participantIds[1])
+        && (!('hiddenFor' in data) || (
+          data.hiddenFor is list
+          && data.hiddenFor.size() <= 2
+          && (data.hiddenFor.size() < 1 || (isValidId(data.hiddenFor[0]) && data.hiddenFor[0] in data.participantIds))
+          && (data.hiddenFor.size() < 2 || (isValidId(data.hiddenFor[1]) && data.hiddenFor[1] in data.participantIds))
+        ))
         && data.content is string && data.content.size() >= 1 && data.content.size() <= 2000
         && data.createdAt is timestamp;
+    }
+
+    function isValidUserRelationship(data) {
+      return data.keys().hasAll([
+          'ownerId', 'targetUserId', 'targetName', 'relation',
+          'reason', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'targetUserId', 'targetName', 'relation',
+          'reason', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isValidId(data.targetUserId)
+        && data.ownerId != data.targetUserId
+        && data.targetName is string && data.targetName.size() >= 2 && data.targetName.size() <= 60
+        && data.relation in ['blocked', 'not_interested']
+        && data.reason is string && data.reason.size() <= 240
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidModerationCase(data) {
+      return data.keys().hasAll([
+          'caseId', 'reporterId', 'reporterName', 'targetUserId', 'targetUserName',
+          'targetType', 'targetId', 'targetContextId', 'targetExcerpt',
+          'category', 'description', 'status', 'reviewStep',
+          'evaluationCriteria', 'gravityLevel', 'caseNotes', 'decisionReason',
+          'warningIssued', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'caseId', 'reporterId', 'reporterName', 'targetUserId', 'targetUserName',
+          'targetType', 'targetId', 'targetContextId', 'targetExcerpt',
+          'category', 'description', 'status', 'reviewStep',
+          'evaluationCriteria', 'gravityLevel', 'caseNotes', 'decisionReason',
+          'warningIssued', 'warningId', 'reviewerId', 'reviewerName', 'reviewedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.caseId)
+        && isValidId(data.reporterId)
+        && data.reporterName is string && data.reporterName.size() >= 2 && data.reporterName.size() <= 60
+        && isValidId(data.targetUserId)
+        && data.reporterId != data.targetUserId
+        && data.targetUserName is string && data.targetUserName.size() >= 2 && data.targetUserName.size() <= 60
+        && data.targetType in ['private_message', 'story', 'echo', 'salon_message', 'profile']
+        && isValidId(data.targetId)
+        && isValidId(data.targetContextId)
+        && data.targetExcerpt is string && data.targetExcerpt.size() <= 1000
+        && data.category in [
+          'propos-outrageants', 'harcelement', 'haine-discrimination',
+          'contenu-inapproprie', 'usurpation-spam', 'plagiat', 'autre'
+        ]
+        && data.description is string && data.description.size() >= 10 && data.description.size() <= 800
+        && data.status in ['open', 'under_review', 'resolved_warned', 'resolved_dismissed']
+        && data.reviewStep in ['recu', 'analyse_faits', 'evaluation_gravite', 'decision_prise']
+        && data.evaluationCriteria is list
+        && data.evaluationCriteria.size() <= 6
+        && (data.evaluationCriteria.size() < 1 || (data.evaluationCriteria[0] is string && data.evaluationCriteria[0].size() <= 80))
+        && (data.evaluationCriteria.size() < 2 || (data.evaluationCriteria[1] is string && data.evaluationCriteria[1].size() <= 80))
+        && (data.evaluationCriteria.size() < 3 || (data.evaluationCriteria[2] is string && data.evaluationCriteria[2].size() <= 80))
+        && (data.evaluationCriteria.size() < 4 || (data.evaluationCriteria[3] is string && data.evaluationCriteria[3].size() <= 80))
+        && (data.evaluationCriteria.size() < 5 || (data.evaluationCriteria[4] is string && data.evaluationCriteria[4].size() <= 80))
+        && (data.evaluationCriteria.size() < 6 || (data.evaluationCriteria[5] is string && data.evaluationCriteria[5].size() <= 80))
+        && data.gravityLevel in ['aucune', 'moderee', 'grave', 'critique']
+        && data.caseNotes is string && data.caseNotes.size() <= 1000
+        && data.decisionReason is string && data.decisionReason.size() <= 800
+        && data.warningIssued is bool
+        && (!('warningId' in data) || isValidId(data.warningId))
+        && (!('reviewerId' in data) || isValidId(data.reviewerId))
+        && (!('reviewerName' in data) || (data.reviewerName is string && data.reviewerName.size() >= 2 && data.reviewerName.size() <= 60))
+        && (!('reviewedAt' in data) || data.reviewedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMemberWarning(data) {
+      return data.keys().hasAll([
+          'warningId', 'caseId', 'targetUserId', 'targetUserName',
+          'category', 'severity', 'justification', 'excerptSnapshot',
+          'issuedById', 'issuedByName', 'acknowledged', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'warningId', 'caseId', 'targetUserId', 'targetUserName',
+          'category', 'severity', 'justification', 'excerptSnapshot',
+          'issuedById', 'issuedByName', 'acknowledged', 'acknowledgedAt',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.warningId)
+        && isValidId(data.caseId)
+        && isValidId(data.targetUserId)
+        && data.targetUserName is string && data.targetUserName.size() >= 2 && data.targetUserName.size() <= 60
+        && data.category in [
+          'propos-outrageants', 'harcelement', 'haine-discrimination',
+          'contenu-inapproprie', 'usurpation-spam', 'plagiat', 'autre'
+        ]
+        && data.severity in ['moderee', 'grave', 'critique']
+        && data.justification is string && data.justification.size() >= 10 && data.justification.size() <= 800
+        && data.excerptSnapshot is string && data.excerptSnapshot.size() <= 1000
+        && isValidId(data.issuedById)
+        && data.issuedByName is string && data.issuedByName.size() >= 2 && data.issuedByName.size() <= 60
+        && data.acknowledged is bool
+        && (!('acknowledgedAt' in data) || data.acknowledgedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
     }
 
     // --- Collection Rules ---
@@ -653,6 +783,40 @@ service cloud.firestore {
         && isValidId(quoteId)
         && isOwner(userId)
         && existing().userId == request.auth.uid;
+    }
+
+    // Per-user block and not-interested member preferences
+    match /users/{userId}/relationships/{targetUserId} {
+      allow get: if isValidId(userId) && isValidId(targetUserId) && isOwner(userId);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(targetUserId)
+        && isOwner(userId)
+        && userId != targetUserId
+        && isValidUserRelationship(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().targetUserId == targetUserId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/publicProfiles/$(targetUserId));
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(targetUserId)
+        && isOwner(userId)
+        && isValidUserRelationship(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().targetUserId == existing().targetUserId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'targetName', 'relation', 'reason', 'updatedAt'
+        ]);
+      allow delete: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(targetUserId)
+        && isOwner(userId)
+        && existing().ownerId == request.auth.uid;
     }
 
     // Personal stories & serialized novels
@@ -1210,6 +1374,7 @@ service cloud.firestore {
         && incoming().status == 'active'
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time
+        && !isBlockedBetween(request.auth.uid, incoming().recipientId)
         && (
           (
             incoming().storyId == 'direct'
@@ -1246,13 +1411,29 @@ service cloud.firestore {
           // Action A: Participant sends a new message
           (
             existing().status == 'active'
+            && !isBlockedBetween(existing().initiatorId, existing().recipientId)
             && incoming().lastSenderId == request.auth.uid
-            && incoming().diff(existing()).affectedKeys().hasOnly(['lastMessagePreview', 'lastSenderId', 'updatedAt'])
+            && incoming().diff(existing()).affectedKeys().hasOnly(['lastMessagePreview', 'lastSenderId', 'hiddenFor', 'updatedAt'])
+            && (!('hiddenFor' in incoming()) || incoming().hiddenFor.size() == 0)
           )
           ||
           // Action B: Participant archives or reopens exchange
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+          ||
+          // Action C: Participant hides/deletes conversation from their own view
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['hiddenFor', 'updatedAt'])
+            && 'hiddenFor' in incoming()
+            && request.auth.uid in incoming().hiddenFor
+          )
+          ||
+          // Action D: Participant updates conversation preview after deleting own message
+          (
+            existing().status == 'active'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['lastMessagePreview', 'lastSenderId', 'updatedAt'])
+            && incoming().lastSenderId in existing().participantIds
           )
         );
 
@@ -1274,12 +1455,172 @@ service cloud.firestore {
           && incoming().exchangeId == exchangeId
           && incoming().senderId == request.auth.uid
           && incoming().createdAt == request.time
+          && (!('hiddenFor' in incoming()) || incoming().hiddenFor.size() == 0)
+          && !isBlockedBetween(incoming().participantIds[0], incoming().participantIds[1])
           && getAfter(/databases/$(database)/documents/exchanges/$(exchangeId)).data.status == 'active'
           && request.auth.uid in getAfter(/databases/$(database)/documents/exchanges/$(exchangeId)).data.participantIds
           && incoming().participantIds == getAfter(/databases/$(database)/documents/exchanges/$(exchangeId)).data.participantIds;
-        allow update: if false;
-        allow delete: if false;
+        allow update: if isVerifiedUser()
+          && isValidId(exchangeId)
+          && isValidId(messageId)
+          && request.auth.uid in existing().participantIds
+          && isValidMessage(incoming())
+          && incoming().messageId == existing().messageId
+          && incoming().exchangeId == existing().exchangeId
+          && incoming().senderId == existing().senderId
+          && incoming().senderName == existing().senderName
+          && incoming().participantIds == existing().participantIds
+          && incoming().content == existing().content
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['hiddenFor'])
+          && 'hiddenFor' in incoming()
+          && request.auth.uid in incoming().hiddenFor;
+        allow delete: if isVerifiedUser()
+          && isValidId(exchangeId)
+          && isValidId(messageId)
+          && existing().senderId == request.auth.uid
+          && request.auth.uid in existing().participantIds;
       }
+    }
+
+    // User-submitted moderation reports & structured case-study reviews
+    match /moderationCases/{caseId} {
+      allow get: if isSignedIn()
+        && isValidId(caseId)
+        && (existing().reporterId == request.auth.uid || isAdminEmail());
+      allow list: if isSignedIn()
+        && (resource.data.reporterId == request.auth.uid || isAdminEmail());
+
+      allow create: if isVerifiedUser()
+        && isValidId(caseId)
+        && isValidModerationCase(incoming())
+        && incoming().caseId == caseId
+        && incoming().reporterId == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().reviewStep == 'recu'
+        && incoming().evaluationCriteria.size() == 0
+        && incoming().gravityLevel == 'aucune'
+        && incoming().caseNotes == ''
+        && incoming().decisionReason == ''
+        && incoming().warningIssued == false
+        && !('warningId' in incoming())
+        && !('reviewerId' in incoming())
+        && !('reviewerName' in incoming())
+        && !('reviewedAt' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isAdminEmail()
+        && isValidId(caseId)
+        && isValidModerationCase(incoming())
+        && incoming().caseId == existing().caseId
+        && incoming().reporterId == existing().reporterId
+        && incoming().reporterName == existing().reporterName
+        && incoming().targetUserId == existing().targetUserId
+        && incoming().targetUserName == existing().targetUserName
+        && incoming().targetType == existing().targetType
+        && incoming().targetId == existing().targetId
+        && incoming().targetContextId == existing().targetContextId
+        && incoming().targetExcerpt == existing().targetExcerpt
+        && incoming().category == existing().category
+        && incoming().description == existing().description
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && existing().status in ['open', 'under_review']
+        && (
+          // Action A: Advance structured case-study analysis & notes
+          (
+            incoming().status == 'under_review'
+            && incoming().warningIssued == false
+            && !('warningId' in incoming())
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'reviewStep', 'evaluationCriteria', 'gravityLevel',
+              'caseNotes', 'reviewerId', 'reviewerName', 'updatedAt'
+            ])
+          )
+          ||
+          // Action B: Substantiate outrageous act & atomically issue official MemberWarning
+          (
+            incoming().status == 'resolved_warned'
+            && incoming().reviewStep == 'decision_prise'
+            && incoming().warningIssued == true
+            && 'warningId' in incoming()
+            && incoming().gravityLevel in ['moderee', 'grave', 'critique']
+            && incoming().decisionReason.size() >= 10
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'reviewStep', 'evaluationCriteria', 'gravityLevel',
+              'caseNotes', 'decisionReason', 'warningIssued', 'warningId',
+              'reviewerId', 'reviewerName', 'reviewedAt', 'updatedAt'
+            ])
+            && incoming().reviewedAt == request.time
+            && existsAfter(/databases/$(database)/documents/warnings/$(incoming().warningId))
+          )
+          ||
+          // Action C: Dismiss case without sanction after case study
+          (
+            incoming().status == 'resolved_dismissed'
+            && incoming().reviewStep == 'decision_prise'
+            && incoming().warningIssued == false
+            && !('warningId' in incoming())
+            && incoming().decisionReason.size() >= 10
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'reviewStep', 'evaluationCriteria', 'gravityLevel',
+              'caseNotes', 'decisionReason', 'reviewerId', 'reviewerName',
+              'reviewedAt', 'updatedAt'
+            ])
+            && incoming().reviewedAt == request.time
+          )
+        );
+
+      allow delete: if false;
+    }
+
+    // Official moderation warnings issued to members
+    match /warnings/{warningId} {
+      allow get: if isSignedIn()
+        && isValidId(warningId)
+        && (existing().targetUserId == request.auth.uid || isAdminEmail());
+      allow list: if isSignedIn()
+        && (resource.data.targetUserId == request.auth.uid || isAdminEmail());
+
+      allow create: if isAdminEmail()
+        && isValidId(warningId)
+        && isValidMemberWarning(incoming())
+        && incoming().warningId == warningId
+        && incoming().issuedById == request.auth.uid
+        && incoming().acknowledged == false
+        && !('acknowledgedAt' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/moderationCases/$(incoming().caseId))
+        && get(/databases/$(database)/documents/moderationCases/$(incoming().caseId)).data.targetUserId == incoming().targetUserId
+        && getAfter(/databases/$(database)/documents/moderationCases/$(incoming().caseId)).data.status == 'resolved_warned'
+        && getAfter(/databases/$(database)/documents/moderationCases/$(incoming().caseId)).data.warningId == warningId;
+
+      allow update: if isVerifiedUser()
+        && isValidId(warningId)
+        && existing().targetUserId == request.auth.uid
+        && isValidMemberWarning(incoming())
+        && incoming().warningId == existing().warningId
+        && incoming().caseId == existing().caseId
+        && incoming().targetUserId == existing().targetUserId
+        && incoming().targetUserName == existing().targetUserName
+        && incoming().category == existing().category
+        && incoming().severity == existing().severity
+        && incoming().justification == existing().justification
+        && incoming().excerptSnapshot == existing().excerptSnapshot
+        && incoming().issuedById == existing().issuedById
+        && incoming().issuedByName == existing().issuedByName
+        && incoming().createdAt == existing().createdAt
+        && existing().acknowledged == false
+        && incoming().acknowledged == true
+        && incoming().acknowledgedAt == request.time
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'acknowledged', 'acknowledgedAt', 'updatedAt'
+        ]);
+
+      allow delete: if false;
     }
   }
 }

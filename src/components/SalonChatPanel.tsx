@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Send, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Flag, MessageSquare, Send, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   deleteSalonMessage,
@@ -8,13 +8,21 @@ import {
 } from '../lib/storyService';
 import { formatFrenchDate, THEME_MAP } from '../lib/themes';
 import { FIELD_LIMITS, SalonMessage, StoryThemeId } from '../types/story';
+import type { ReportDraft } from './ReportModal';
 
 interface SalonChatPanelProps {
   salonId: StoryThemeId;
+  hiddenUserIds?: Set<string>;
   onOpenMemberWall: (userId: string) => void;
+  onOpenReport?: (draft: ReportDraft) => void;
 }
 
-export function SalonChatPanel({ salonId, onOpenMemberWall }: SalonChatPanelProps) {
+export function SalonChatPanel({
+  salonId,
+  hiddenUserIds,
+  onOpenMemberWall,
+  onOpenReport,
+}: SalonChatPanelProps) {
   const { user, profile, signInWithGoogle } = useAuth();
   const [messages, setMessages] = useState<SalonMessage[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -41,9 +49,14 @@ export function SalonChatPanel({ salonId, onOpenMemberWall }: SalonChatPanelProp
     return () => unsub();
   }, [salonId, user]);
 
+  const visibleMessages = useMemo(() => {
+    if (!hiddenUserIds || hiddenUserIds.size === 0) return messages;
+    return messages.filter((m) => !hiddenUserIds.has(m.senderId));
+  }, [messages, hiddenUserIds]);
+
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+  }, [visibleMessages.length]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +124,7 @@ export function SalonChatPanel({ salonId, onOpenMemberWall }: SalonChatPanelProp
           </p>
         </div>
         <span className="text-xs text-stone-500 tabular-nums whitespace-nowrap shrink-0">
-          {messages.length} message{messages.length > 1 ? 's' : ''}
+          {visibleMessages.length} message{visibleMessages.length > 1 ? 's' : ''}
         </span>
       </div>
 
@@ -120,7 +133,7 @@ export function SalonChatPanel({ salonId, onOpenMemberWall }: SalonChatPanelProp
           <p className="text-sm text-stone-500 italic text-center py-12">
             Ouverture du fil de discussion…
           </p>
-        ) : messages.length === 0 ? (
+        ) : visibleMessages.length === 0 ? (
           <div className="text-center py-14 space-y-2">
             <p className="font-display text-lg text-stone-800">
               Le salon est silencieux pour l’instant
@@ -130,7 +143,7 @@ export function SalonChatPanel({ salonId, onOpenMemberWall }: SalonChatPanelProp
             </p>
           </div>
         ) : (
-          messages.map((msg) => {
+          visibleMessages.map((msg) => {
             const isMine = msg.senderId === user.uid;
             return (
               <div
@@ -147,7 +160,7 @@ export function SalonChatPanel({ salonId, onOpenMemberWall }: SalonChatPanelProp
                   </button>
                   <span aria-hidden="true">·</span>
                   <span>{formatFrenchDate(msg.createdAt?.toDate() ?? null)}</span>
-                  {isMine && (
+                  {isMine ? (
                     <button
                       type="button"
                       onClick={() => void deleteSalonMessage(salonId, msg.messageId)}
@@ -156,6 +169,28 @@ export function SalonChatPanel({ salonId, onOpenMemberWall }: SalonChatPanelProp
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
+                  ) : (
+                    onOpenReport && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenReport({
+                            targetUserId: msg.senderId,
+                            targetUserName: msg.senderName,
+                            targetType: 'salon_message',
+                            targetId: msg.messageId,
+                            targetContextId: salonId,
+                            targetExcerpt: msg.content,
+                            targetSummaryLabel: `Signaler un message dans ${salon.shortSalonName}`,
+                          })
+                        }
+                        title="Signaler ce message"
+                        aria-label="Signaler ce message"
+                        className="text-stone-400 hover:text-red-700 p-0.5 ml-1"
+                      >
+                        <Flag className="w-3 h-3" />
+                      </button>
+                    )
                   )}
                 </div>
 

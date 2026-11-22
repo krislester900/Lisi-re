@@ -28,6 +28,7 @@ import {
 } from '../lib/themes';
 import { Story, StoryThemeId } from '../types/story';
 import { NovelCoverArt } from './NovelCoverArt';
+import type { ReportDraft } from './ReportModal';
 import { SalonChatPanel } from './SalonChatPanel';
 import { SalonEmblem } from './SalonEmblem';
 import { StoryFilterBar } from './StoryFilterBar';
@@ -36,6 +37,7 @@ interface SalonRoomViewProps {
   salonId: StoryThemeId;
   publicStories: Story[];
   storiesLoaded: boolean;
+  hiddenUserIds?: Set<string>;
   bookmarkedStoryIds?: Set<string>;
   repostedStoryIds?: Set<string>;
   onToggleBookmark?: (story: Story) => void;
@@ -44,12 +46,14 @@ interface SalonRoomViewProps {
   onReadStory: (story: Story) => void;
   onWriteInSalon: (theme: StoryThemeId, promptQuestion?: string, starter?: string) => void;
   onOpenMemberWall: (userId: string) => void;
+  onOpenReport?: (draft: ReportDraft) => void;
 }
 
 export function SalonRoomView({
   salonId,
   publicStories,
   storiesLoaded,
+  hiddenUserIds,
   bookmarkedStoryIds,
   repostedStoryIds,
   onToggleBookmark,
@@ -58,6 +62,7 @@ export function SalonRoomView({
   onReadStory,
   onWriteInSalon,
   onOpenMemberWall,
+  onOpenReport,
 }: SalonRoomViewProps) {
   const [filterState, setFilterState] = useState<StoryFilterState>(() =>
     createDefaultStoryFilterState('recent')
@@ -83,9 +88,10 @@ export function SalonRoomView({
         (story) =>
           story.theme === salonId &&
           !story.customSalonId &&
-          story.storyScope !== 'pelemele'
+          story.storyScope !== 'pelemele' &&
+          !(hiddenUserIds && hiddenUserIds.has(story.authorId))
       ),
-    [publicStories, salonId]
+    [publicStories, salonId, hiddenUserIds]
   );
 
   const salonStories = useMemo(
@@ -369,7 +375,12 @@ export function SalonRoomView({
 
       {/* Section A: Public Text-Only Salon Chat */}
       {roomSection === 'chat' && (
-        <SalonChatPanel salonId={salonId} onOpenMemberWall={onOpenMemberWall} />
+        <SalonChatPanel
+          salonId={salonId}
+          hiddenUserIds={hiddenUserIds}
+          onOpenMemberWall={onOpenMemberWall}
+          onOpenReport={onOpenReport}
+        />
       )}
 
       {/* Section B: Salon Stories & Novels Feed */}

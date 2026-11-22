@@ -31,6 +31,12 @@ import {
   ExchangeStatus,
   FIELD_LIMITS,
   ID_PATTERN,
+  MemberWarning,
+  ModerationCase,
+  ModerationGravityLevel,
+  ModerationReportCategory,
+  ModerationReviewStep,
+  ModerationTargetType,
   NovelGenre,
   PlagiarismReportReason,
   PublicProfile,
@@ -49,10 +55,42 @@ import {
   StoryThemeId,
   StoryViewEvent,
   StoryVisibility,
+  UserRelationship,
+  UserRelationshipKind,
   WallAccentTone,
   WallItem,
   WallItemKind,
+  WarningSeverity,
 } from '../types/story';
+
+export function formatFriendlyFirestoreError(
+  err: unknown,
+  fallback: string,
+  permissionMessage?: string
+): string {
+  if (!(err instanceof Error)) return fallback;
+  try {
+    const parsed = JSON.parse(err.message) as { error?: string };
+    if (parsed?.error) {
+      if (parsed.error.toLowerCase().includes('permission')) {
+        return (
+          permissionMessage ||
+          'Action refusée par les règles de sécurité. Vérifiez votre connexion Google ou si un blocage est actif.'
+        );
+      }
+      return parsed.error;
+    }
+  } catch {
+    // Not JSON
+  }
+  if (err.message.toLowerCase().includes('permission')) {
+    return (
+      permissionMessage ||
+      'Action refusée par les règles de sécurité. Vérifiez votre connexion Google ou si un blocage est actif.'
+    );
+  }
+  return err.message || fallback;
+}
 
 function clampString(value: string, max: number): string {
   return value.trim().slice(0, max);
@@ -1066,6 +1104,7 @@ export async function createExchangeWithFirstMessage(params: {
       recipientId: params.recipientId,
       recipientName: recipientName.length >= 2 ? recipientName : 'Auteur',
       participantIds,
+      hiddenFor: [],
       status: 'active',
       lastMessagePreview,
       lastSenderId: params.initiatorId,
@@ -1078,6 +1117,7 @@ export async function createExchangeWithFirstMessage(params: {
       senderId: params.initiatorId,
       senderName: initiatorName.length >= 2 ? initiatorName : 'Auteur',
       participantIds,
+      hiddenFor: [],
       content,
       createdAt: serverTimestamp(),
     });
@@ -1145,6 +1185,7 @@ export async function createDirectExchangeWithFirstMessage(params: {
       recipientId: params.recipientId,
       recipientName: recipientName.length >= 2 ? recipientName : 'Auteur',
       participantIds,
+      hiddenFor: [],
       status: 'active',
       lastMessagePreview,
       lastSenderId: params.initiatorId,
@@ -1157,6 +1198,7 @@ export async function createDirectExchangeWithFirstMessage(params: {
       senderId: params.initiatorId,
       senderName: initiatorName.length >= 2 ? initiatorName : 'Auteur',
       participantIds,
+      hiddenFor: [],
       content,
       createdAt: serverTimestamp(),
     });
@@ -1201,12 +1243,14 @@ export async function sendExchangeMessage(params: {
       senderId: params.senderId,
       senderName: senderName.length >= 2 ? senderName : 'Auteur',
       participantIds: params.exchange.participantIds,
+      hiddenFor: [],
       content,
       createdAt: serverTimestamp(),
     });
     batch.update(exchangeRef, {
       lastMessagePreview,
       lastSenderId: params.senderId,
+      hiddenFor: [],
       updatedAt: serverTimestamp(),
     });
     await batch.commit();
@@ -1228,6 +1272,97 @@ export async function updateExchangeStatus(
   try {
     await updateDoc(doc(db, 'exchanges', exchangeId), {
       status,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function deleteOwnExchangeMessage(params: {
+  exchange: Exchange;
+  message: ExchangeMessage;
+  remainingMessages: ExchangeMessage[];
+}): Promise<void> {
+  assertValidId(params.exchange.exchangeId, 'exchangeId');
+  assertValidId(params.message.messageId, 'messageId');
+
+  const messageRef = doc(
+    db,
+    'exchanges',
+    params.exchange.exchangeId,
+    'messages',
+    params.message.messageId
+  );
+  const exchangeRef = doc(db, 'exchanges', params.exchange.exchangeId);
+  const path = `exchanges/${params.exchange.exchangeId}/messages/${params.message.messageId}`;
+
+  try {
+    const sortedRemaining = [...params.remainingMessages]
+      .filter((m) => m.messageId !== params.message.messageId)
+      .sort((a, b) => toTimestampMs(a.createdAt) - toTimestampMs(b.createdAt));
+    const latest = sortedRemaining[sortedRemaining.length - 1] ?? null;
+
+    if (params.exchange.status === 'active') {
+      const batch = writeBatch(db);
+      batch.delete(messageRef);
+      batch.update(exchangeRef, {
+        lastMessagePreview: latest
+          ? clampString(latest.content, FIELD_LIMITS.lastMessagePreview.max)
+          : 'Message supprimé',
+        lastSenderId: latest ? latest.senderId : params.exchange.initiatorId,
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+    } else {
+      await deleteDoc(messageRef);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function hideExchangeMessageForUser(params: {
+  exchangeId: string;
+  message: ExchangeMessage;
+  userId: string;
+}): Promise<void> {
+  assertValidId(params.exchangeId, 'exchangeId');
+  assertValidId(params.message.messageId, 'messageId');
+  assertValidId(params.userId, 'userId');
+
+  const nextHiddenFor = Array.from(
+    new Set([...(params.message.hiddenFor ?? []), params.userId])
+  ).filter((id) => params.message.participantIds.includes(id));
+
+  const path = `exchanges/${params.exchangeId}/messages/${params.message.messageId}`;
+  try {
+    await updateDoc(
+      doc(db, 'exchanges', params.exchangeId, 'messages', params.message.messageId),
+      {
+        hiddenFor: nextHiddenFor,
+      }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function hideExchangeForUser(params: {
+  exchange: Exchange;
+  userId: string;
+}): Promise<void> {
+  assertValidId(params.exchange.exchangeId, 'exchangeId');
+  assertValidId(params.userId, 'userId');
+
+  const nextHiddenFor = Array.from(
+    new Set([...(params.exchange.hiddenFor ?? []), params.userId])
+  ).filter((id) => params.exchange.participantIds.includes(id));
+
+  const path = `exchanges/${params.exchange.exchangeId}`;
+  try {
+    await updateDoc(doc(db, 'exchanges', params.exchange.exchangeId), {
+      hiddenFor: nextHiddenFor,
       updatedAt: serverTimestamp(),
     });
   } catch (error) {
@@ -2092,5 +2227,420 @@ export async function deleteStoryQuote(userId: string, quoteId: string): Promise
     await deleteDoc(doc(db, 'users', userId, 'quotes', quoteId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- User Relationships ("Bloquer" & "Pas intéressé") ---
+
+export function subscribeToUserRelationships(
+  userId: string,
+  onData: (relationships: UserRelationship[]) => void
+): () => void {
+  assertValidId(userId, 'userId');
+  const path = `users/${userId}/relationships`;
+  const q = query(
+    collection(db, 'users', userId, 'relationships'),
+    where('ownerId', '==', userId),
+    limit(250)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as UserRelationship);
+      list.sort(
+        (a, b) =>
+          toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt)
+      );
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function upsertUserRelationship(params: {
+  ownerId: string;
+  targetUserId: string;
+  targetName: string;
+  relation: UserRelationshipKind;
+  reason?: string;
+}): Promise<void> {
+  assertValidId(params.ownerId, 'ownerId');
+  assertValidId(params.targetUserId, 'targetUserId');
+  if (params.ownerId === params.targetUserId) {
+    throw new Error('Vous ne pouvez pas appliquer cette préférence à vous-même.');
+  }
+
+  const rawName = clampString(params.targetName, FIELD_LIMITS.displayName.max);
+  const targetName = rawName.length >= FIELD_LIMITS.displayName.min ? rawName : 'Membre';
+  const reason = clampString(params.reason ?? '', FIELD_LIMITS.relationshipReason.max);
+  const relRef = doc(db, 'users', params.ownerId, 'relationships', params.targetUserId);
+  const path = `users/${params.ownerId}/relationships/${params.targetUserId}`;
+
+  try {
+    const existing = await getDoc(relRef);
+    if (existing.exists()) {
+      await updateDoc(relRef, {
+        targetName,
+        relation: params.relation,
+        reason,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await setDoc(relRef, {
+        ownerId: params.ownerId,
+        targetUserId: params.targetUserId,
+        targetName,
+        relation: params.relation,
+        reason,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function removeUserRelationship(
+  ownerId: string,
+  targetUserId: string
+): Promise<void> {
+  assertValidId(ownerId, 'ownerId');
+  assertValidId(targetUserId, 'targetUserId');
+  const path = `users/${ownerId}/relationships/${targetUserId}`;
+  try {
+    await deleteDoc(doc(db, 'users', ownerId, 'relationships', targetUserId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- Moderation Reporting & Case Study Workflow ---
+
+export function subscribeToMyModerationCases(
+  reporterId: string,
+  onData: (cases: ModerationCase[]) => void
+): () => void {
+  assertValidId(reporterId, 'reporterId');
+  const path = 'moderationCases';
+  const q = query(
+    collection(db, 'moderationCases'),
+    where('reporterId', '==', reporterId),
+    limit(100)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as ModerationCase);
+      list.sort(
+        (a, b) =>
+          toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt)
+      );
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export function subscribeToAllModerationCases(
+  onData: (cases: ModerationCase[]) => void
+): () => void {
+  const path = 'moderationCases';
+  const q = query(collection(db, 'moderationCases'), limit(200));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as ModerationCase);
+      list.sort(
+        (a, b) =>
+          toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt)
+      );
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function submitModerationCase(params: {
+  reporterId: string;
+  reporterName: string;
+  targetUserId: string;
+  targetUserName: string;
+  targetType: ModerationTargetType;
+  targetId: string;
+  targetContextId?: string;
+  targetExcerpt: string;
+  category: ModerationReportCategory;
+  description: string;
+}): Promise<string> {
+  assertValidId(params.reporterId, 'reporterId');
+  assertValidId(params.targetUserId, 'targetUserId');
+  assertValidId(params.targetId, 'targetId');
+
+  if (params.reporterId === params.targetUserId) {
+    throw new Error('Vous ne pouvez pas signaler votre propre compte.');
+  }
+
+  const description = clampString(params.description, FIELD_LIMITS.moderationDescription.max);
+  if (description.length < FIELD_LIMITS.moderationDescription.min) {
+    throw new Error('Décrivez les faits ou propos en au moins 10 caractères.');
+  }
+
+  const rawReporter = clampString(params.reporterName, FIELD_LIMITS.displayName.max);
+  const reporterName = rawReporter.length >= FIELD_LIMITS.displayName.min ? rawReporter : 'Membre';
+  const rawTarget = clampString(params.targetUserName, FIELD_LIMITS.displayName.max);
+  const targetUserName = rawTarget.length >= FIELD_LIMITS.displayName.min ? rawTarget : 'Membre';
+  const targetExcerpt = clampString(params.targetExcerpt, FIELD_LIMITS.moderationExcerpt.max);
+  const rawContext = (params.targetContextId || params.targetId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  const targetContextId = (rawContext || 'global').slice(0, 128);
+
+  const caseId = generateSafeId('case');
+  const path = `moderationCases/${caseId}`;
+
+  try {
+    await setDoc(doc(db, 'moderationCases', caseId), {
+      caseId,
+      reporterId: params.reporterId,
+      reporterName,
+      targetUserId: params.targetUserId,
+      targetUserName,
+      targetType: params.targetType,
+      targetId: params.targetId,
+      targetContextId,
+      targetExcerpt,
+      category: params.category,
+      description,
+      status: 'open',
+      reviewStep: 'recu',
+      evaluationCriteria: [],
+      gravityLevel: 'aucune',
+      caseNotes: '',
+      decisionReason: '',
+      warningIssued: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return caseId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateModerationCaseStudy(params: {
+  caseId: string;
+  reviewStep: ModerationReviewStep;
+  evaluationCriteria: string[];
+  gravityLevel: ModerationGravityLevel;
+  caseNotes: string;
+  reviewerId: string;
+  reviewerName: string;
+}): Promise<void> {
+  assertValidId(params.caseId, 'caseId');
+  assertValidId(params.reviewerId, 'reviewerId');
+
+  const rawReviewer = clampString(params.reviewerName, FIELD_LIMITS.displayName.max);
+  const reviewerName = rawReviewer.length >= FIELD_LIMITS.displayName.min ? rawReviewer : 'Modérateur';
+  const safeCriteria = params.evaluationCriteria
+    .map((c) => clampString(c, 80))
+    .filter(Boolean)
+    .slice(0, 6);
+  const caseNotes = clampString(params.caseNotes, FIELD_LIMITS.moderationNotes.max);
+
+  const path = `moderationCases/${params.caseId}`;
+  try {
+    await updateDoc(doc(db, 'moderationCases', params.caseId), {
+      status: 'under_review',
+      reviewStep: params.reviewStep === 'decision_prise' ? 'evaluation_gravite' : params.reviewStep,
+      evaluationCriteria: safeCriteria,
+      gravityLevel: params.gravityLevel,
+      caseNotes,
+      reviewerId: params.reviewerId,
+      reviewerName,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function resolveModerationCaseWithWarning(params: {
+  moderationCase: ModerationCase;
+  severity: WarningSeverity;
+  evaluationCriteria: string[];
+  caseNotes: string;
+  decisionReason: string;
+  reviewerId: string;
+  reviewerName: string;
+}): Promise<string> {
+  assertValidId(params.moderationCase.caseId, 'caseId');
+  assertValidId(params.reviewerId, 'reviewerId');
+
+  const decisionReason = clampString(
+    params.decisionReason,
+    FIELD_LIMITS.moderationDecisionReason.max
+  );
+  if (decisionReason.length < FIELD_LIMITS.moderationDecisionReason.min) {
+    throw new Error(
+      'Rédigez une justification claire de l’acte outrageant (au moins 10 caractères).'
+    );
+  }
+
+  const rawReviewer = clampString(params.reviewerName, FIELD_LIMITS.displayName.max);
+  const reviewerName = rawReviewer.length >= FIELD_LIMITS.displayName.min ? rawReviewer : 'Modérateur';
+  const safeCriteria = params.evaluationCriteria
+    .map((c) => clampString(c, 80))
+    .filter(Boolean)
+    .slice(0, 6);
+  const caseNotes = clampString(params.caseNotes, FIELD_LIMITS.moderationNotes.max);
+
+  const warningId = generateSafeId('warn');
+  const caseRef = doc(db, 'moderationCases', params.moderationCase.caseId);
+  const warningRef = doc(db, 'warnings', warningId);
+  const path = `warnings/${warningId}`;
+
+  try {
+    const batch = writeBatch(db);
+    batch.set(warningRef, {
+      warningId,
+      caseId: params.moderationCase.caseId,
+      targetUserId: params.moderationCase.targetUserId,
+      targetUserName: params.moderationCase.targetUserName,
+      category: params.moderationCase.category,
+      severity: params.severity,
+      justification: decisionReason,
+      excerptSnapshot: clampString(
+        params.moderationCase.targetExcerpt,
+        FIELD_LIMITS.moderationExcerpt.max
+      ),
+      issuedById: params.reviewerId,
+      issuedByName: reviewerName,
+      acknowledged: false,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(caseRef, {
+      status: 'resolved_warned',
+      reviewStep: 'decision_prise',
+      evaluationCriteria: safeCriteria,
+      gravityLevel: params.severity,
+      caseNotes,
+      decisionReason,
+      warningIssued: true,
+      warningId,
+      reviewerId: params.reviewerId,
+      reviewerName,
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return warningId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function dismissModerationCase(params: {
+  moderationCase: ModerationCase;
+  evaluationCriteria: string[];
+  caseNotes: string;
+  decisionReason: string;
+  reviewerId: string;
+  reviewerName: string;
+}): Promise<void> {
+  assertValidId(params.moderationCase.caseId, 'caseId');
+  assertValidId(params.reviewerId, 'reviewerId');
+
+  const decisionReason = clampString(
+    params.decisionReason,
+    FIELD_LIMITS.moderationDecisionReason.max
+  );
+  if (decisionReason.length < FIELD_LIMITS.moderationDecisionReason.min) {
+    throw new Error('Précisez le motif du classement en au moins 10 caractères.');
+  }
+
+  const rawReviewer = clampString(params.reviewerName, FIELD_LIMITS.displayName.max);
+  const reviewerName = rawReviewer.length >= FIELD_LIMITS.displayName.min ? rawReviewer : 'Modérateur';
+  const safeCriteria = params.evaluationCriteria
+    .map((c) => clampString(c, 80))
+    .filter(Boolean)
+    .slice(0, 6);
+  const caseNotes = clampString(params.caseNotes, FIELD_LIMITS.moderationNotes.max);
+
+  const path = `moderationCases/${params.moderationCase.caseId}`;
+  try {
+    await updateDoc(doc(db, 'moderationCases', params.moderationCase.caseId), {
+      status: 'resolved_dismissed',
+      reviewStep: 'decision_prise',
+      evaluationCriteria: safeCriteria,
+      gravityLevel: 'aucune',
+      caseNotes,
+      decisionReason,
+      reviewerId: params.reviewerId,
+      reviewerName,
+      reviewedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export function subscribeToUserWarnings(
+  userId: string,
+  onData: (warnings: MemberWarning[]) => void
+): () => void {
+  assertValidId(userId, 'userId');
+  const path = 'warnings';
+  const q = query(
+    collection(db, 'warnings'),
+    where('targetUserId', '==', userId),
+    limit(50)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as MemberWarning);
+      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export function subscribeToAllWarnings(onData: (warnings: MemberWarning[]) => void): () => void {
+  const path = 'warnings';
+  const q = query(collection(db, 'warnings'), limit(150));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as MemberWarning);
+      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function acknowledgeUserWarning(warningId: string): Promise<void> {
+  assertValidId(warningId, 'warningId');
+  const path = `warnings/${warningId}`;
+  try {
+    await updateDoc(doc(db, 'warnings', warningId), {
+      acknowledged: true,
+      acknowledgedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }

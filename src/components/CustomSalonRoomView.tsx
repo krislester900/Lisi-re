@@ -8,6 +8,7 @@ import {
   Clock,
   Eye,
   Feather,
+  Flag,
   Globe,
   Heart,
   Lock,
@@ -56,6 +57,7 @@ import {
   Story,
 } from '../types/story';
 import { NovelCoverArt } from './NovelCoverArt';
+import type { ReportDraft } from './ReportModal';
 import { StoryFilterBar } from './StoryFilterBar';
 
 interface CustomSalonRoomViewProps {
@@ -63,6 +65,7 @@ interface CustomSalonRoomViewProps {
   salonsLoaded: boolean;
   publicStories?: Story[];
   myStories?: Story[];
+  hiddenUserIds?: Set<string>;
   bookmarkedStoryIds?: Set<string>;
   repostedStoryIds?: Set<string>;
   onToggleBookmark?: (story: Story) => void;
@@ -72,6 +75,7 @@ interface CustomSalonRoomViewProps {
   onReadStory: (story: Story) => void;
   onWriteInCustomSalon: (salon: CustomSalon) => void;
   onOpenMemberWall: (userId: string) => void;
+  onOpenReport?: (draft: ReportDraft) => void;
 }
 
 export function CustomSalonRoomView({
@@ -79,6 +83,7 @@ export function CustomSalonRoomView({
   salonsLoaded,
   publicStories = [],
   myStories = [],
+  hiddenUserIds,
   bookmarkedStoryIds,
   repostedStoryIds,
   onToggleBookmark,
@@ -88,6 +93,7 @@ export function CustomSalonRoomView({
   onReadStory,
   onWriteInCustomSalon,
   onOpenMemberWall,
+  onOpenReport,
 }: CustomSalonRoomViewProps) {
   const { user, profile, signInWithGoogle } = useAuth();
   const [memberRecord, setMemberRecord] = useState<SalonMember | null>(null);
@@ -158,7 +164,10 @@ export function CustomSalonRoomView({
     const byId = new Map<string, Story>();
     const sourceList = salon.visibility === 'private' ? privateSalonStories : publicStories;
     for (const s of sourceList) {
-      if (s.customSalonId === salon.salonId) {
+      if (
+        s.customSalonId === salon.salonId &&
+        !(hiddenUserIds && hiddenUserIds.has(s.authorId) && s.authorId !== user?.uid)
+      ) {
         byId.set(s.storyId, s);
       }
     }
@@ -174,7 +183,7 @@ export function CustomSalonRoomView({
       return bMs - aMs;
     });
     return merged;
-  }, [salon, privateSalonStories, publicStories, myStories]);
+  }, [salon, privateSalonStories, publicStories, myStories, hiddenUserIds, user?.uid]);
 
   useEffect(() => {
     if (!salon || !user || !canViewContent) {
@@ -183,6 +192,11 @@ export function CustomSalonRoomView({
     }
     return subscribeToCustomSalonMessages(salon.salonId, setMessages);
   }, [salon?.salonId, user?.uid, canViewContent]);
+
+  const visibleMessages = useMemo(() => {
+    if (!hiddenUserIds || hiddenUserIds.size === 0) return messages;
+    return messages.filter((msg) => !hiddenUserIds.has(msg.senderId));
+  }, [messages, hiddenUserIds]);
 
   const filteredStories = useMemo(
     () => filterAndSortStories(stories, filterState),
@@ -657,7 +671,7 @@ export function CustomSalonRoomView({
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5" />
-                <span>Discussion ({messages.length})</span>
+                <span>Discussion ({visibleMessages.length})</span>
               </button>
               {isOwner && (
                 <button
@@ -907,13 +921,14 @@ export function CustomSalonRoomView({
               ) : (
                 <>
                   <div className="p-6 space-y-4 max-h-[440px] overflow-y-auto">
-                    {messages.length === 0 ? (
+                    {visibleMessages.length === 0 ? (
                       <p className="text-sm text-stone-500 italic text-center py-8">
                         Aucun message pour le moment. Ouvrez la conversation !
                       </p>
                     ) : (
-                      messages.map((msg) => {
+                      visibleMessages.map((msg) => {
                         const canDeleteMsg = msg.senderId === user.uid || isOwner;
+                        const canReportMsg = Boolean(onOpenReport && msg.senderId !== user.uid);
                         return (
                           <div
                             key={msg.messageId}
@@ -933,18 +948,41 @@ export function CustomSalonRoomView({
                                   {formatFrenchDate(msg.createdAt?.toDate() ?? null)}
                                 </span>
                               </div>
-                              {canDeleteMsg && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void deleteCustomSalonMessage(salon.salonId, msg.messageId)
-                                  }
-                                  aria-label="Supprimer le message"
-                                  className="text-stone-400 hover:text-red-700 p-1"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
+                              <div className="flex items-center gap-1">
+                                {canReportMsg && onOpenReport && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      onOpenReport({
+                                        targetUserId: msg.senderId,
+                                        targetUserName: msg.senderName,
+                                        targetType: 'salon_message',
+                                        targetId: msg.messageId,
+                                        targetContextId: salon.salonId,
+                                        targetExcerpt: msg.content,
+                                        targetSummaryLabel: `Signaler un message dans ${salon.name}`,
+                                      })
+                                    }
+                                    title="Signaler ce message"
+                                    aria-label="Signaler ce message"
+                                    className="text-stone-400 hover:text-red-700 p-1"
+                                  >
+                                    <Flag className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                                {canDeleteMsg && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void deleteCustomSalonMessage(salon.salonId, msg.messageId)
+                                    }
+                                    aria-label="Supprimer le message"
+                                    className="text-stone-400 hover:text-red-700 p-1"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-wrap">
                               {msg.content}

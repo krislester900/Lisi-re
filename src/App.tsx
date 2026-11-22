@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowRight,
   ArrowUpRight,
   Bookmark,
   BookOpen,
+  Check,
   Compass,
   Eye,
   Feather,
@@ -14,6 +16,7 @@ import {
   MessageCircle,
   Plus,
   Repeat2,
+  ShieldAlert,
   ShieldCheck,
   Users,
   X,
@@ -23,13 +26,15 @@ import { CustomSalonModal } from './components/CustomSalonModal';
 import { CustomSalonRoomView } from './components/CustomSalonRoomView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExchangesView } from './components/ExchangesView';
-import { JournalView } from './components/JournalView';
+import { JournalSubTab, JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
 import { MembersDirectoryView } from './components/MembersDirectoryView';
+import { ModerationCenterView } from './components/ModerationCenterView';
 import { NovelCoverArt } from './components/NovelCoverArt';
 import { PeleMeleStoriesView } from './components/PeleMeleStoriesView';
 import { PrivacyPolicyView } from './components/PrivacyPolicyView';
+import { ReportDraft, ReportModal } from './components/ReportModal';
 import { RepostModal } from './components/RepostModal';
 import { SalonEmblem } from './components/SalonEmblem';
 import { SalonRoomView } from './components/SalonRoomView';
@@ -39,21 +44,29 @@ import { StoryReaderModal } from './components/StoryReaderModal';
 import { ThemesView } from './components/ThemesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { db } from './lib/firebase';
+import { isModerationAdminEmail, WARNING_SEVERITY_LABELS } from './lib/moderationLabels';
 import {
   createDefaultStoryFilterState,
   filterAndSortStories,
   StoryFilterState,
 } from './lib/storyFilter';
 import {
+  acknowledgeUserWarning,
   buildDirectExchangeId,
+  formatFriendlyFirestoreError,
+  subscribeToAllModerationCases,
+  subscribeToAllWarnings,
   subscribeToCustomSalons,
   subscribeToDiscoverableProfiles,
+  subscribeToMyModerationCases,
   subscribeToProfileReposts,
   subscribeToPublicStories,
   subscribeToUserBookmarks,
   subscribeToUserExchanges,
   subscribeToUserQuotes,
+  subscribeToUserRelationships,
   subscribeToUserStories,
+  subscribeToUserWarnings,
   toggleStoryBookmark,
 } from './lib/storyService';
 import {
@@ -68,6 +81,8 @@ import {
 import {
   CustomSalon,
   Exchange,
+  MemberWarning,
+  ModerationCase,
   PublicProfile,
   Story,
   StoryBookmark,
@@ -75,6 +90,7 @@ import {
   StoryQuote,
   StoryRepost,
   StoryThemeId,
+  UserRelationship,
 } from './types/story';
 
 type NavTab =
@@ -84,6 +100,7 @@ type NavTab =
   | 'themes'
   | 'passerelles'
   | 'carnet'
+  | 'moderation'
   | 'confidentialite';
 
 const VALID_SALON_IDS = new Set<string>(STORY_THEMES.map((t) => t.id));
@@ -144,6 +161,9 @@ function parseLocationPath(pathname: string): {
   if (clean === '/carnet') {
     return { tab: 'carnet', salonId: null, customSalonId: null, memberId: null };
   }
+  if (clean === '/moderation') {
+    return { tab: 'moderation', salonId: null, customSalonId: null, memberId: null };
+  }
   if (clean === '/confidentialite') {
     return { tab: 'confidentialite', salonId: null, customSalonId: null, memberId: null };
   }
@@ -163,6 +183,7 @@ function buildLocationPath(
   if (tab === 'themes') return '/themes';
   if (tab === 'passerelles') return '/passerelles';
   if (tab === 'carnet') return '/carnet';
+  if (tab === 'moderation') return '/moderation';
   if (tab === 'confidentialite') return '/confidentialite';
   if (customSalonId) return `/communaute/${encodeURIComponent(customSalonId)}`;
   if (salonId) return `/salons/${salonId}`;
@@ -197,6 +218,18 @@ function SalonApp() {
   const [discoverableProfiles, setDiscoverableProfiles] = useState<PublicProfile[]>([]);
   const [profilesLoaded, setProfilesLoaded] = useState(false);
   const [storiesLoaded, setStoriesLoaded] = useState(false);
+
+  const [userRelationships, setUserRelationships] = useState<UserRelationship[]>([]);
+  const [myModerationCases, setMyModerationCases] = useState<ModerationCase[]>([]);
+  const [userWarnings, setUserWarnings] = useState<MemberWarning[]>([]);
+  const [allModerationCases, setAllModerationCases] = useState<ModerationCase[]>([]);
+  const [allWarnings, setAllWarnings] = useState<MemberWarning[]>([]);
+  const [reportDraft, setReportDraft] = useState<ReportDraft | null>(null);
+  const [ackBannerBusyId, setAckBannerBusyId] = useState<string | null>(null);
+  const [journalSubTabRequest, setJournalSubTabRequest] = useState<{
+    tab: JournalSubTab;
+    nonce: number;
+  } | null>(null);
 
   const [feedFilter, setFeedFilter] = useState<StoryFilterState>(() =>
     createDefaultStoryFilterState('recent')
@@ -242,6 +275,8 @@ function SalonApp() {
     };
   }, []);
 
+  const isModerationAdmin = isModerationAdminEmail(user?.email);
+
   useEffect(() => {
     if (!user) {
       setMyStories([]);
@@ -251,6 +286,11 @@ function SalonApp() {
       setMyReposts([]);
       setDiscoverableProfiles([]);
       setProfilesLoaded(false);
+      setUserRelationships([]);
+      setMyModerationCases([]);
+      setUserWarnings([]);
+      setAllModerationCases([]);
+      setAllWarnings([]);
       return;
     }
     const unsubMyStories = subscribeToUserStories(user.uid, setMyStories);
@@ -262,6 +302,20 @@ function SalonApp() {
       setDiscoverableProfiles(profilesList);
       setProfilesLoaded(true);
     });
+    const unsubRelationships = subscribeToUserRelationships(user.uid, setUserRelationships);
+    const unsubMyCases = subscribeToMyModerationCases(user.uid, setMyModerationCases);
+    const unsubWarnings = subscribeToUserWarnings(user.uid, setUserWarnings);
+
+    let unsubAllCases: (() => void) | null = null;
+    let unsubAllWarnings: (() => void) | null = null;
+    if (isModerationAdmin) {
+      unsubAllCases = subscribeToAllModerationCases(setAllModerationCases);
+      unsubAllWarnings = subscribeToAllWarnings(setAllWarnings);
+    } else {
+      setAllModerationCases([]);
+      setAllWarnings([]);
+    }
+
     return () => {
       unsubMyStories();
       unsubExchanges();
@@ -269,8 +323,13 @@ function SalonApp() {
       unsubQuotes();
       unsubMyReposts();
       unsubProfiles();
+      unsubRelationships();
+      unsubMyCases();
+      unsubWarnings();
+      if (unsubAllCases) unsubAllCases();
+      if (unsubAllWarnings) unsubAllWarnings();
     };
-  }, [user]);
+  }, [user, isModerationAdmin]);
 
   useEffect(() => {
     if (!readingStory) return;
@@ -382,16 +441,39 @@ function SalonApp() {
     }
   };
 
+  const hiddenUserIds = useMemo(
+    () => new Set(userRelationships.map((r) => r.targetUserId)),
+    [userRelationships]
+  );
+
+  const visiblePublicStories = useMemo(() => {
+    if (hiddenUserIds.size === 0) return publicStories;
+    return publicStories.filter(
+      (story) => !hiddenUserIds.has(story.authorId) || story.authorId === user?.uid
+    );
+  }, [publicStories, hiddenUserIds, user?.uid]);
+
+  const unacknowledgedWarnings = useMemo(
+    () => userWarnings.filter((w) => !w.acknowledged),
+    [userWarnings]
+  );
+
+  const pendingModerationCount = useMemo(
+    () =>
+      allModerationCases.filter((c) => c.status === 'open' || c.status === 'under_review').length,
+    [allModerationCases]
+  );
+
   const openFeedStories = useMemo(() => {
     const privateCustomIds = new Set(
       customSalons.filter((cs) => cs.visibility === 'private').map((cs) => cs.salonId)
     );
-    return publicStories.filter((story) => {
+    return visiblePublicStories.filter((story) => {
       if (story.customSalonVisibility === 'private') return false;
       if (story.customSalonId && privateCustomIds.has(story.customSalonId)) return false;
       return true;
     });
-  }, [publicStories, customSalons]);
+  }, [visiblePublicStories, customSalons]);
 
   const filteredPublicStories = useMemo(
     () => filterAndSortStories(openFeedStories, feedFilter),
@@ -541,6 +623,8 @@ function SalonApp() {
       document.title = 'Passerelles privées — Lisière';
     } else if (activeTab === 'carnet') {
       document.title = 'Mon carnet — Lisière';
+    } else if (activeTab === 'moderation') {
+      document.title = 'Modération & études de cas — Lisière';
     } else if (activeTab === 'confidentialite') {
       document.title = 'Politique de confidentialité — Lisière';
     } else {
@@ -566,6 +650,15 @@ function SalonApp() {
       void signInWithGoogle();
       return;
     }
+    const isBlocked = userRelationships.some(
+      (r) => r.targetUserId === member.userId && r.relation === 'blocked'
+    );
+    if (isBlocked) {
+      showNotice(
+        `Vous avez bloqué ${member.displayName}. Débloquez ce membre pour lui écrire en privé.`
+      );
+      return;
+    }
     const directId = buildDirectExchangeId(user.uid, member.userId);
     const existing = exchanges.find(
       (ex) =>
@@ -581,6 +674,19 @@ function SalonApp() {
       setPendingDirectRecipientId(member.userId);
     }
     navigateTo('passerelles');
+  };
+
+  const handleAckBannerWarning = async (warningId: string) => {
+    if (ackBannerBusyId) return;
+    setAckBannerBusyId(warningId);
+    try {
+      await acknowledgeUserWarning(warningId);
+      showNotice('Accusé de réception enregistré.');
+    } catch (err) {
+      showNotice(formatFriendlyFirestoreError(err, 'Action impossible pour le moment.'));
+    } finally {
+      setAckBannerBusyId(null);
+    }
   };
 
   const leadStory = filteredPublicStories[0] ?? null;
@@ -674,8 +780,24 @@ function SalonApp() {
                   : 'text-stone-600 border-transparent hover:text-stone-900'
               }`}
             >
-              Mon carnet
+              Mon carnet{unacknowledgedWarnings.length > 0 ? ` (${unacknowledgedWarnings.length})` : ''}
             </button>
+            {isModerationAdmin && (
+              <button
+                type="button"
+                onClick={() => navigateTo('moderation')}
+                className={`py-1 transition-colors whitespace-nowrap shrink-0 border-b-2 inline-flex items-center gap-1.5 ${
+                  highlightedTab === 'moderation'
+                    ? 'text-stone-900 border-red-800'
+                    : 'text-stone-600 border-transparent hover:text-stone-900'
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-red-700" />
+                <span>
+                  Modération{pendingModerationCount > 0 ? ` (${pendingModerationCount})` : ''}
+                </span>
+              </button>
+            )}
           </nav>
 
           {/* Zone 3: Primary action + mobile menu button */}
@@ -749,8 +871,19 @@ function SalonApp() {
                     id: 'passerelles',
                     label: `Passerelles${exchanges.length > 0 ? ` (${exchanges.length})` : ''}`,
                   },
-                  { id: 'carnet', label: 'Mon carnet' },
-                ] as const
+                  {
+                    id: 'carnet',
+                    label: `Mon carnet${unacknowledgedWarnings.length > 0 ? ` (${unacknowledgedWarnings.length})` : ''}`,
+                  },
+                  ...(isModerationAdmin
+                    ? [
+                        {
+                          id: 'moderation' as const,
+                          label: `Modération${pendingModerationCount > 0 ? ` (${pendingModerationCount})` : ''}`,
+                        },
+                      ]
+                    : []),
+                ] as ReadonlyArray<{ id: NavTab; label: string }>
               ).map((item) => {
                 const isActive = highlightedTab === item.id;
                 return (
@@ -813,6 +946,63 @@ function SalonApp() {
         </div>
       )}
 
+      {unacknowledgedWarnings.length > 0 && (() => {
+        const latestWarning = unacknowledgedWarnings[0];
+        const sev = WARNING_SEVERITY_LABELS[latestWarning.severity];
+        return (
+          <div className="max-w-6xl mx-auto w-full px-6 pt-4">
+            <div
+              role="alert"
+              className="bg-red-50 border border-red-300 rounded-md p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+            >
+              <div className="space-y-1.5 min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-red-900">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span>Avertissement officiel de modération</span>
+                  </span>
+                  <span className={`px-2 py-0.5 rounded border text-[11px] font-semibold ${sev.toneClass}`}>
+                    {sev.label}
+                  </span>
+                  {unacknowledgedWarnings.length > 1 && (
+                    <span className="text-red-800 tabular-nums">
+                      ({unacknowledgedWarnings.length} avertissements en attente)
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-red-950 leading-relaxed">{latestWarning.justification}</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={ackBannerBusyId === latestWarning.warningId}
+                  onClick={() => void handleAckBannerWarning(latestWarning.warningId)}
+                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-white bg-red-800 rounded-md hover:bg-red-900 disabled:opacity-60 inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>
+                    {ackBannerBusyId === latestWarning.warningId
+                      ? 'Confirmation…'
+                      : 'Accuser réception'}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setJournalSubTabRequest({ tab: 'moderation', nonce: Date.now() });
+                    navigateTo('carnet');
+                  }}
+                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-red-900 bg-white border border-red-200 rounded-md hover:border-red-400 whitespace-nowrap"
+                >
+                  Voir dans Mon carnet
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       <main
         className={`flex-1 transition-opacity duration-200 ease-out ${
           isViewFading ? 'opacity-0' : 'opacity-100'
@@ -821,8 +1011,9 @@ function SalonApp() {
         {activeTab === 'recits' && activeSalonId !== null && (
           <SalonRoomView
             salonId={activeSalonId}
-            publicStories={publicStories}
+            publicStories={visiblePublicStories}
             storiesLoaded={storiesLoaded}
+            hiddenUserIds={hiddenUserIds}
             bookmarkedStoryIds={bookmarkedStoryIds}
             repostedStoryIds={repostedStoryIds}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
@@ -833,6 +1024,7 @@ function SalonApp() {
               void openComposer({ theme, prompt, starter })
             }
             onOpenMemberWall={openMemberWall}
+            onOpenReport={setReportDraft}
           />
         )}
 
@@ -840,8 +1032,9 @@ function SalonApp() {
           <CustomSalonRoomView
             salon={activeCustomSalon}
             salonsLoaded={customSalonsLoaded}
-            publicStories={publicStories}
+            publicStories={visiblePublicStories}
             myStories={myStories}
+            hiddenUserIds={hiddenUserIds}
             bookmarkedStoryIds={bookmarkedStoryIds}
             repostedStoryIds={repostedStoryIds}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
@@ -857,12 +1050,13 @@ function SalonApp() {
               })
             }
             onOpenMemberWall={openMemberWall}
+            onOpenReport={setReportDraft}
           />
         )}
 
         {activeTab === 'pelemele' && (
           <PeleMeleStoriesView
-            publicStories={publicStories}
+            publicStories={visiblePublicStories}
             customSalons={customSalons}
             storiesLoaded={storiesLoaded}
             bookmarkedStoryIds={bookmarkedStoryIds}
@@ -888,10 +1082,11 @@ function SalonApp() {
             profilesLoaded={profilesLoaded}
             selectedMemberId={selectedMemberId}
             initialSubTab={profilesSubTab}
-            publicStories={publicStories}
+            publicStories={visiblePublicStories}
             myStories={myStories}
             myReposts={myReposts}
             existingExchanges={exchanges}
+            relationships={userRelationships}
             onSelectMember={(memberId) => navigateTo('membres', null, memberId)}
             onReadStory={(story) => setReadingStory(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
@@ -900,6 +1095,7 @@ function SalonApp() {
               navigateTo('passerelles');
             }}
             onStartDirectChat={handleStartDirectChat}
+            onOpenReport={setReportDraft}
           />
         )}
 
@@ -1855,6 +2051,7 @@ function SalonApp() {
           <ExchangesView
             exchanges={exchanges}
             discoverableProfiles={discoverableProfiles}
+            relationships={userRelationships}
             selectedExchangeId={selectedExchangeId}
             initialRecipientId={pendingDirectRecipientId}
             onClearInitialRecipient={() => setPendingDirectRecipientId(null)}
@@ -1862,6 +2059,7 @@ function SalonApp() {
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onOpenMemberWall={openMemberWall}
             onExploreStories={() => enterSalon(null)}
+            onOpenReport={setReportDraft}
           />
         )}
 
@@ -1872,6 +2070,10 @@ function SalonApp() {
             bookmarks={bookmarks}
             quotes={userQuotes}
             reposts={myReposts}
+            userWarnings={userWarnings}
+            myModerationCases={myModerationCases}
+            relationships={userRelationships}
+            requestedSubTab={journalSubTabRequest}
             onReadStory={(story) => setReadingStory(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onEditStory={(story) => void openComposer({ edit: story })}
@@ -1894,6 +2096,16 @@ function SalonApp() {
               setProfilesSubTab('my-profile');
               navigateTo('membres', null, null);
             }}
+          />
+        )}
+
+        {activeTab === 'moderation' && (
+          <ModerationCenterView
+            allCases={allModerationCases}
+            allWarnings={allWarnings}
+            myCases={myModerationCases}
+            userWarnings={userWarnings}
+            onOpenMemberWall={openMemberWall}
           />
         )}
       </main>
@@ -1969,6 +2181,7 @@ function SalonApp() {
         existingStories={[...publicStories, ...myStories]}
         customSalons={customSalons}
         userQuotes={userQuotes}
+        hiddenUserIds={hiddenUserIds}
         isBookmarked={Boolean(readingStory && bookmarkedStoryIds.has(readingStory.storyId))}
         isReposted={Boolean(readingStory && repostedStoryIds.has(readingStory.storyId))}
         onToggleBookmark={(story) => void handleToggleBookmark(story)}
@@ -1981,6 +2194,20 @@ function SalonApp() {
         onEnterSalon={(salonId) => enterSalon(salonId)}
         onEnterCustomSalon={(customSalonId) => enterCustomSalon(customSalonId)}
         onOpenPeleMele={() => navigateTo('pelemele')}
+        onOpenReport={setReportDraft}
+      />
+
+      {/* Global Reporting Modal */}
+      <ReportModal
+        draft={reportDraft}
+        onClose={() => setReportDraft(null)}
+        onSubmitted={(_caseId, blockedNow) => {
+          showNotice(
+            blockedNow
+              ? 'Signalement transmis pour étude de cas et membre bloqué.'
+              : 'Signalement transmis pour étude de cas.'
+          );
+        }}
       />
 
       {/* Repost Modal */}

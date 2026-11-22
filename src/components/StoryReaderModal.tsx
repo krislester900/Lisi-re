@@ -29,6 +29,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { checkNovelPlagiarism } from '../lib/plagiarismCheck';
 import { ReadingMusicPanel, useReadingAudioEngine } from './ReadingMusicPanel';
+import type { ReportDraft } from './ReportModal';
 import { NovelCoverArt } from './NovelCoverArt';
 import {
   addStoryChapter,
@@ -38,6 +39,7 @@ import {
   createStoryQuote,
   deleteStoryQuote,
   fetchPublicProfile,
+  formatFriendlyFirestoreError,
   formatLocalDateKey,
   recordStoryView,
   submitPlagiarismReport,
@@ -79,6 +81,7 @@ interface StoryReaderModalProps {
   existingStories?: Story[];
   customSalons?: CustomSalon[];
   userQuotes?: StoryQuote[];
+  hiddenUserIds?: Set<string>;
   isBookmarked?: boolean;
   isReposted?: boolean;
   onToggleBookmark?: (story: Story) => void;
@@ -88,6 +91,7 @@ interface StoryReaderModalProps {
   onEnterSalon?: (salonId: StoryThemeId) => void;
   onEnterCustomSalon?: (customSalonId: string) => void;
   onOpenPeleMele?: () => void;
+  onOpenReport?: (draft: ReportDraft) => void;
 }
 
 export function StoryReaderModal({
@@ -97,6 +101,7 @@ export function StoryReaderModal({
   existingStories = [],
   customSalons = [],
   userQuotes = [],
+  hiddenUserIds,
   isBookmarked = false,
   isReposted = false,
   onToggleBookmark,
@@ -106,6 +111,7 @@ export function StoryReaderModal({
   onEnterSalon,
   onEnterCustomSalon,
   onOpenPeleMele,
+  onOpenReport,
 }: StoryReaderModalProps) {
   const { user, profile, signInWithGoogle } = useAuth();
   const [echoes, setEchoes] = useState<Echo[]>([]);
@@ -498,6 +504,11 @@ export function StoryReaderModal({
     });
   }, [story, chapterContent, chapterTitle, user?.uid, existingStories]);
 
+  const visibleEchoes = useMemo(() => {
+    if (!hiddenUserIds || hiddenUserIds.size === 0) return echoes;
+    return echoes.filter((echo) => !hiddenUserIds.has(echo.authorId));
+  }, [echoes, hiddenUserIds]);
+
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
@@ -740,7 +751,7 @@ export function StoryReaderModal({
       onOpenExchange(exchangeId);
     } catch (err) {
       setBridgeError(
-        err instanceof Error ? err.message : 'Impossible d’ouvrir cette passerelle.'
+        formatFriendlyFirestoreError(err, 'Impossible d’ouvrir cette passerelle.')
       );
     } finally {
       setBridgeBusy(false);
@@ -2076,6 +2087,30 @@ export function StoryReaderModal({
                       </button>
                     )
                   )}
+
+                  {!isAuthor && story.visibility === 'public' && onOpenReport && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenReport({
+                          targetUserId: story.authorId,
+                          targetUserName: publicAuthorLabel,
+                          targetType: 'story',
+                          targetId: story.storyId,
+                          targetContextId: story.storyId,
+                          targetExcerpt: activeFollowupChapter
+                            ? activeFollowupChapter.content.slice(0, 600)
+                            : story.excerpt || story.content.slice(0, 600),
+                          targetSummaryLabel: `Signaler « ${story.title} »`,
+                          isAnonymousTarget: isAnonymousStory,
+                        });
+                      }}
+                      className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium rounded-md border border-stone-200 text-stone-600 bg-white hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <Flag className="w-3.5 h-3.5" />
+                      <span>Signaler</span>
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
@@ -2086,7 +2121,7 @@ export function StoryReaderModal({
                     </span>
                   )}
                   <span>
-                    {echoes.length} commentaire{echoes.length > 1 ? 's' : ''}
+                    {visibleEchoes.length} commentaire{visibleEchoes.length > 1 ? 's' : ''}
                   </span>
                 </div>
               </div>
@@ -2299,31 +2334,54 @@ export function StoryReaderModal({
                   Réactions, retours de lecture et échos sincères sous cette histoire.
                 </p>
 
-                {echoes.length === 0 ? (
+                {visibleEchoes.length === 0 ? (
                   <p className="text-sm text-stone-500 italic py-4">
                     Aucun commentaire pour l’instant. Soyez la première personne à réagir à cette histoire.
                   </p>
                 ) : (
                   <div className="divide-y divide-stone-200 mb-8">
-                    {echoes.map((echo) => (
+                    {visibleEchoes.map((echo) => (
                       <div key={echo.echoId} className="py-5">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 mb-2">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onClose();
-                              onOpenMemberWall(echo.authorId);
-                            }}
-                            className="font-semibold text-stone-900 hover:text-[#1B365D] hover:underline"
-                          >
-                            {echo.authorName}
-                          </button>
-                          <span aria-hidden="true">·</span>
-                          <span className="text-[#1E3A8A] font-medium">
-                            {ECHO_TYPE_LABELS[echo.replyType]?.label ?? 'Commentaire'}
-                          </span>
-                          <span aria-hidden="true">·</span>
-                          <span>{formatFrenchDate(echo.createdAt?.toDate() ?? null)}</span>
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 mb-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOpenMemberWall(echo.authorId);
+                              }}
+                              className="font-semibold text-stone-900 hover:text-[#1B365D] hover:underline"
+                            >
+                              {echo.authorName}
+                            </button>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-[#1E3A8A] font-medium">
+                              {ECHO_TYPE_LABELS[echo.replyType]?.label ?? 'Commentaire'}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span>{formatFrenchDate(echo.createdAt?.toDate() ?? null)}</span>
+                          </div>
+                          {onOpenReport && echo.authorId !== user?.uid && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onOpenReport({
+                                  targetUserId: echo.authorId,
+                                  targetUserName: echo.authorName,
+                                  targetType: 'echo',
+                                  targetId: echo.echoId,
+                                  targetContextId: story.storyId,
+                                  targetExcerpt: echo.content,
+                                  targetSummaryLabel: `Signaler le commentaire de ${echo.authorName}`,
+                                })
+                              }
+                              title="Signaler ce commentaire"
+                              aria-label="Signaler ce commentaire"
+                              className="text-stone-400 hover:text-red-700 p-1 rounded"
+                            >
+                              <Flag className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                         <p className="text-sm leading-relaxed text-stone-800 whitespace-pre-line">
                           {echo.content}

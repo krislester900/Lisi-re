@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
+  Ban,
   BookOpen,
   Camera,
   Eye,
   EyeOff,
   Feather,
+  Flag,
   Globe,
   Image as ImageIcon,
   Lock,
@@ -26,11 +28,14 @@ import {
   deleteStoryRepost,
   deleteWallItem,
   ensureUserProfiles,
+  formatFriendlyFirestoreError,
+  removeUserRelationship,
   subscribeToProfileReposts,
   subscribeToPublicProfile,
   subscribeToWallItems,
   updatePublicProfile,
   updateRepostVisibility,
+  upsertUserRelationship,
 } from '../lib/storyService';
 import {
   formatFrenchDate,
@@ -45,6 +50,7 @@ import {
   PublicProfile,
   Story,
   StoryRepost,
+  UserRelationship,
   WallAccentTone,
   WallItem,
   WallItemKind,
@@ -52,6 +58,7 @@ import {
 import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 import { NovelCoverArt } from './NovelCoverArt';
+import type { ReportDraft } from './ReportModal';
 
 import { Settings } from 'lucide-react';
 
@@ -59,11 +66,13 @@ interface ProfileWallViewProps {
   memberId: string;
   memberStories: Story[];
   existingExchanges: Exchange[];
+  relationships?: UserRelationship[];
   onBack?: () => void;
   onEditProfile?: () => void;
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
   onOpenExchange: (exchangeId: string) => void;
+  onOpenReport?: (draft: ReportDraft) => void;
   embedded?: boolean;
 }
 
@@ -125,11 +134,13 @@ export function ProfileWallView({
   memberId,
   memberStories,
   existingExchanges,
+  relationships = [],
   onBack,
   onEditProfile,
   onReadStory,
   onOpenStoryById,
   onOpenExchange,
+  onOpenReport,
   embedded = false,
 }: ProfileWallViewProps) {
   const { user, profile: myProfile, signInWithGoogle } = useAuth();
@@ -152,11 +163,17 @@ export function ProfileWallView({
   const [wallActionError, setWallActionError] = useState<string | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
 
-  // Direct private message box
+  // Direct private message box & safety actions
   const [showDmBox, setShowDmBox] = useState(false);
   const [dmText, setDmText] = useState('');
   const [dmBusy, setDmBusy] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
+  const [relBusy, setRelBusy] = useState(false);
+  const [confirmBlock, setConfirmBlock] = useState(false);
+
+  const memberRelationship = relationships.find((r) => r.targetUserId === memberId);
+  const isBlockedMember = memberRelationship?.relation === 'blocked';
+  const isNotInterestedMember = memberRelationship?.relation === 'not_interested';
 
   // Unified Wall Composer Modal
   const [composerOpen, setComposerOpen] = useState(false);
@@ -461,9 +478,43 @@ export function ProfileWallView({
       setShowDmBox(false);
       onOpenExchange(exchangeId);
     } catch (err) {
-      setDmError(formatReadableWallError(err, 'Impossible d’ouvrir la conversation.'));
+      setDmError(
+        formatFriendlyFirestoreError(
+          err,
+          'Impossible d’ouvrir la conversation.',
+          'Impossible d’ouvrir la conversation : les échanges privés avec ce membre sont restreints ou bloqués.'
+        )
+      );
     } finally {
       setDmBusy(false);
+    }
+  };
+
+  const handleSetMemberRelation = async (next: 'blocked' | 'not_interested' | null) => {
+    if (!user || isOwner || !memberProfile || relBusy) return;
+    setWallActionError(null);
+    setRelBusy(true);
+    try {
+      if (next === null) {
+        await removeUserRelationship(user.uid, memberProfile.userId);
+      } else {
+        await upsertUserRelationship({
+          ownerId: user.uid,
+          targetUserId: memberProfile.userId,
+          targetName: memberProfile.displayName,
+          relation: next,
+        });
+        if (next === 'blocked') {
+          setShowDmBox(false);
+        }
+      }
+      setConfirmBlock(false);
+    } catch (err) {
+      setWallActionError(
+        formatFriendlyFirestoreError(err, 'Impossible de mettre à jour cette préférence.')
+      );
+    } finally {
+      setRelBusy(false);
     }
   };
 
@@ -780,36 +831,158 @@ export function ProfileWallView({
                   </button>
                 )}
               </>
-            ) : existingDirectExchange ? (
-              <button
-                type="button"
-                onClick={() => onOpenExchange(existingDirectExchange.exchangeId)}
-                className="min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-2 whitespace-nowrap"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Ouvrir le chat privé</span>
-              </button>
             ) : (
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!user) {
-                    await signInWithGoogle();
-                    return;
-                  }
-                  setShowDmBox((prev) => !prev);
-                }}
-                className="min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-2 whitespace-nowrap"
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Message privé</span>
-              </button>
+              <>
+                {!isBlockedMember && (
+                  existingDirectExchange ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenExchange(existingDirectExchange.exchangeId)}
+                      className="min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-2 whitespace-nowrap"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Ouvrir le chat privé</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!user) {
+                          await signInWithGoogle();
+                          return;
+                        }
+                        setShowDmBox((prev) => !prev);
+                      }}
+                      className="min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-2 whitespace-nowrap"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                      <span>Message privé</span>
+                    </button>
+                  )
+                )}
+
+                {user && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={relBusy}
+                      onClick={() =>
+                        void handleSetMemberRelation(
+                          isNotInterestedMember ? null : 'not_interested'
+                        )
+                      }
+                      className={`min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap ${
+                        isNotInterestedMember
+                          ? 'border-amber-300 bg-amber-50 text-amber-900'
+                          : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-stone-400'
+                      }`}
+                    >
+                      <EyeOff className="w-3.5 h-3.5" />
+                      <span>
+                        {isNotInterestedMember ? 'Retirer « Pas intéressé »' : 'Pas intéressé'}
+                      </span>
+                    </button>
+
+                    {isBlockedMember ? (
+                      <button
+                        type="button"
+                        disabled={relBusy}
+                        onClick={() => void handleSetMemberRelation(null)}
+                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-red-300 bg-red-50 text-red-900 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        <span>Débloquer</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmBlock((prev) => !prev)}
+                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        <span>Bloquer</span>
+                      </button>
+                    )}
+
+                    {onOpenReport && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onOpenReport({
+                            targetUserId: memberProfile.userId,
+                            targetUserName: memberProfile.displayName,
+                            targetType: 'profile',
+                            targetId: memberProfile.userId,
+                            targetContextId: memberProfile.userId,
+                            targetExcerpt:
+                              memberProfile.bio || `Mur de ${memberProfile.displayName}`,
+                            targetSummaryLabel: `Signaler ${memberProfile.displayName}`,
+                          })
+                        }
+                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Flag className="w-3.5 h-3.5" />
+                        <span>Signaler</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
 
+        {!isOwner && confirmBlock && !isBlockedMember && (
+          <div className="p-3.5 bg-red-50 border border-red-200 rounded-md flex flex-wrap items-center justify-between gap-3 text-xs text-red-950">
+            <span>
+              Bloquer <strong>{memberProfile.displayName}</strong> empêchera tout message privé entre vous et masquera ses récits et commentaires.
+            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={relBusy}
+                onClick={() => void handleSetMemberRelation('blocked')}
+                className="px-3 py-1.5 rounded bg-red-800 text-white font-medium hover:bg-red-900"
+              >
+                Confirmer le blocage
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmBlock(false)}
+                className="px-2.5 py-1.5 text-stone-700 hover:text-stone-900"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isOwner && (isBlockedMember || isNotInterestedMember) && (
+          <div
+            className={`px-4 py-2.5 rounded-md border flex flex-wrap items-center justify-between gap-2 text-xs ${
+              isBlockedMember
+                ? 'bg-red-50 border-red-200 text-red-950'
+                : 'bg-amber-50 border-amber-200 text-amber-950'
+            }`}
+          >
+            <span>
+              {isBlockedMember
+                ? `Vous avez bloqué ${memberProfile.displayName}.`
+                : `${memberProfile.displayName} est marqué(e) comme « Pas intéressé ».`}
+            </span>
+            <button
+              type="button"
+              disabled={relBusy}
+              onClick={() => void handleSetMemberRelation(null)}
+              className="font-medium underline whitespace-nowrap"
+            >
+              {isBlockedMember ? 'Débloquer ce membre' : 'Rétablir dans mon fil'}
+            </button>
+          </div>
+        )}
+
         {/* Direct 1-on-1 Message Box */}
-        {showDmBox && !isOwner && (
+        {showDmBox && !isOwner && !isBlockedMember && (
           <form onSubmit={handleStartDm} className="pt-5 border-t border-stone-200 space-y-3">
             <p className="text-sm font-medium text-stone-900">
               Démarrer un chat privé avec {memberProfile.displayName}

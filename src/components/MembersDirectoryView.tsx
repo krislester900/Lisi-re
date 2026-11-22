@@ -10,9 +10,16 @@ import {
   Users,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { Exchange, PublicProfile, Story, StoryRepost } from '../types/story';
+import {
+  Exchange,
+  PublicProfile,
+  Story,
+  StoryRepost,
+  UserRelationship,
+} from '../types/story';
 import { ProfileSettingsPanel } from './ProfileSettingsPanel';
 import { ProfileWallView } from './ProfileWallView';
+import type { ReportDraft } from './ReportModal';
 
 export type ProfilesPageTab = 'directory' | 'my-profile' | 'edit-profile';
 
@@ -25,11 +32,13 @@ interface MembersDirectoryViewProps {
   myStories?: Story[];
   myReposts?: StoryRepost[];
   existingExchanges: Exchange[];
+  relationships?: UserRelationship[];
   onSelectMember: (userId: string | null) => void;
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
   onOpenExchange: (exchangeId: string) => void;
   onStartDirectChat: (member: PublicProfile) => void;
+  onOpenReport?: (draft: ReportDraft) => void;
 }
 
 export function MembersDirectoryView({
@@ -41,11 +50,13 @@ export function MembersDirectoryView({
   myStories = [],
   myReposts = [],
   existingExchanges,
+  relationships = [],
   onSelectMember,
   onReadStory,
   onOpenStoryById,
   onOpenExchange,
   onStartDirectChat,
+  onOpenReport,
 }: MembersDirectoryViewProps) {
   const { user, signInWithGoogle } = useAuth();
   const [subTab, setSubTab] = useState<ProfilesPageTab>(initialSubTab);
@@ -65,10 +76,20 @@ export function MembersDirectoryView({
     return map;
   }, [publicStories]);
 
+  const hiddenMemberIds = useMemo(
+    () => new Set(relationships.map((r) => r.targetUserId)),
+    [relationships]
+  );
+
+  const visibleProfiles = useMemo(
+    () => profiles.filter((p) => p.userId === user?.uid || !hiddenMemberIds.has(p.userId)),
+    [profiles, hiddenMemberIds, user?.uid]
+  );
+
   const filteredProfiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return profiles;
-    return profiles.filter(
+    if (!q) return visibleProfiles;
+    return visibleProfiles.filter(
       (p) =>
         p.displayName.toLowerCase().includes(q) ||
         (p.bio || '').toLowerCase().includes(q) ||
@@ -76,7 +97,7 @@ export function MembersDirectoryView({
         (p.favoriteNovel || '').toLowerCase().includes(q) ||
         (p.interests || '').toLowerCase().includes(q)
     );
-  }, [profiles, searchQuery]);
+  }, [visibleProfiles, searchQuery]);
 
   if (selectedMemberId) {
     const isOwnSelected = Boolean(user && user.uid === selectedMemberId);
@@ -89,6 +110,7 @@ export function MembersDirectoryView({
         memberId={selectedMemberId}
         memberStories={memberStories}
         existingExchanges={existingExchanges}
+        relationships={relationships}
         onBack={() => {
           setSubTab('directory');
           onSelectMember(null);
@@ -104,6 +126,7 @@ export function MembersDirectoryView({
         onReadStory={onReadStory}
         onOpenStoryById={onOpenStoryById}
         onOpenExchange={onOpenExchange}
+        onOpenReport={onOpenReport}
       />
     );
   }

@@ -574,6 +574,9 @@
         "participantIds": {
           "type": "array"
         },
+        "hiddenFor": {
+          "type": "array"
+        },
         "status": {
           "type": "string",
           "enum": ["active", "archived"]
@@ -638,6 +641,9 @@
           "maxLength": 60
         },
         "participantIds": {
+          "type": "array"
+        },
+        "hiddenFor": {
           "type": "array"
         },
         "content": {
@@ -1134,6 +1140,279 @@
         }
       },
       "required": ["storyId", "reporterId", "reporterName", "reason", "details", "referenceUrl", "createdAt"]
+    },
+    "UserRelationship": {
+      "title": "UserRelationship",
+      "description": "Per-user block or not-interested preference targeting another member.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetUserId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "relation": {
+          "type": "string",
+          "enum": ["blocked", "not_interested"]
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "targetUserId", "targetName", "relation", "reason", "createdAt", "updatedAt"]
+    },
+    "ModerationCase": {
+      "title": "ModerationCase",
+      "description": "A user-submitted report and structured case-study review record for offensive or abusive acts.",
+      "type": "object",
+      "properties": {
+        "caseId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reporterId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reporterName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "targetUserId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetUserName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "targetType": {
+          "type": "string",
+          "enum": ["private_message", "story", "echo", "salon_message", "profile"]
+        },
+        "targetId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetContextId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetExcerpt": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "propos-outrageants",
+            "harcelement",
+            "haine-discrimination",
+            "contenu-inapproprie",
+            "usurpation-spam",
+            "plagiat",
+            "autre"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 800
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "under_review", "resolved_warned", "resolved_dismissed"]
+        },
+        "reviewStep": {
+          "type": "string",
+          "enum": ["recu", "analyse_faits", "evaluation_gravite", "decision_prise"]
+        },
+        "evaluationCriteria": {
+          "type": "array"
+        },
+        "gravityLevel": {
+          "type": "string",
+          "enum": ["aucune", "moderee", "grave", "critique"]
+        },
+        "caseNotes": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "decisionReason": {
+          "type": "string",
+          "maxLength": 800
+        },
+        "warningIssued": {
+          "type": "boolean"
+        },
+        "warningId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reviewerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "reviewerName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "caseId",
+        "reporterId",
+        "reporterName",
+        "targetUserId",
+        "targetUserName",
+        "targetType",
+        "targetId",
+        "targetContextId",
+        "targetExcerpt",
+        "category",
+        "description",
+        "status",
+        "reviewStep",
+        "evaluationCriteria",
+        "gravityLevel",
+        "caseNotes",
+        "decisionReason",
+        "warningIssued",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "MemberWarning": {
+      "title": "MemberWarning",
+      "description": "An official warning sent to a member when a moderation case study substantiates an offensive act.",
+      "type": "object",
+      "properties": {
+        "warningId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "caseId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetUserId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "targetUserName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "propos-outrageants",
+            "harcelement",
+            "haine-discrimination",
+            "contenu-inapproprie",
+            "usurpation-spam",
+            "plagiat",
+            "autre"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["moderee", "grave", "critique"]
+        },
+        "justification": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 800
+        },
+        "excerptSnapshot": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "issuedById": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "issuedByName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "acknowledged": {
+          "type": "boolean"
+        },
+        "acknowledgedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "warningId",
+        "caseId",
+        "targetUserId",
+        "targetUserName",
+        "category",
+        "severity",
+        "justification",
+        "excerptSnapshot",
+        "issuedById",
+        "issuedByName",
+        "acknowledged",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -1172,6 +1451,12 @@
         "$ref": "#/entities/StoryQuote"
       },
       "description": "Private favorite highlighted quotes saved per user from stories."
+    },
+    "/users/{userId}/relationships/{targetUserId}": {
+      "schema": {
+        "$ref": "#/entities/UserRelationship"
+      },
+      "description": "Per-user member block and not-interested preferences."
     },
     "/stories/{storyId}": {
       "schema": {
@@ -1244,6 +1529,18 @@
         "$ref": "#/entities/CustomSalonMessage"
       },
       "description": "Text-only discussion messages inside a user-created salon."
+    },
+    "/moderationCases/{caseId}": {
+      "schema": {
+        "$ref": "#/entities/ModerationCase"
+      },
+      "description": "Reports filed by members and case-study review records."
+    },
+    "/warnings/{warningId}": {
+      "schema": {
+        "$ref": "#/entities/MemberWarning"
+      },
+      "description": "Official moderation warnings issued to members when a reported act is substantiated."
     }
   }
 }

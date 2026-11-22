@@ -216,6 +216,7 @@ export interface Exchange {
   recipientId: string;
   recipientName: string;
   participantIds: string[];
+  hiddenFor?: string[];
   status: ExchangeStatus;
   lastMessagePreview: string;
   lastSenderId: string;
@@ -229,8 +230,97 @@ export interface ExchangeMessage {
   senderId: string;
   senderName: string;
   participantIds: string[];
+  hiddenFor?: string[];
   content: string;
   createdAt: Timestamp | null;
+}
+
+export type UserRelationshipKind = 'blocked' | 'not_interested';
+
+export interface UserRelationship {
+  ownerId: string;
+  targetUserId: string;
+  targetName: string;
+  relation: UserRelationshipKind;
+  reason: string;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
+export type ModerationTargetType =
+  | 'private_message'
+  | 'story'
+  | 'echo'
+  | 'salon_message'
+  | 'profile';
+
+export type ModerationReportCategory =
+  | 'propos-outrageants'
+  | 'harcelement'
+  | 'haine-discrimination'
+  | 'contenu-inapproprie'
+  | 'usurpation-spam'
+  | 'plagiat'
+  | 'autre';
+
+export type ModerationCaseStatus =
+  | 'open'
+  | 'under_review'
+  | 'resolved_warned'
+  | 'resolved_dismissed';
+
+export type ModerationReviewStep =
+  | 'recu'
+  | 'analyse_faits'
+  | 'evaluation_gravite'
+  | 'decision_prise';
+
+export type ModerationGravityLevel = 'aucune' | 'moderee' | 'grave' | 'critique';
+
+export interface ModerationCase {
+  caseId: string;
+  reporterId: string;
+  reporterName: string;
+  targetUserId: string;
+  targetUserName: string;
+  targetType: ModerationTargetType;
+  targetId: string;
+  targetContextId: string;
+  targetExcerpt: string;
+  category: ModerationReportCategory;
+  description: string;
+  status: ModerationCaseStatus;
+  reviewStep: ModerationReviewStep;
+  evaluationCriteria: string[];
+  gravityLevel: ModerationGravityLevel;
+  caseNotes: string;
+  decisionReason: string;
+  warningIssued: boolean;
+  warningId?: string;
+  reviewerId?: string;
+  reviewerName?: string;
+  reviewedAt?: Timestamp | null;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
+export type WarningSeverity = 'moderee' | 'grave' | 'critique';
+
+export interface MemberWarning {
+  warningId: string;
+  caseId: string;
+  targetUserId: string;
+  targetUserName: string;
+  category: ModerationReportCategory;
+  severity: WarningSeverity;
+  justification: string;
+  excerptSnapshot: string;
+  issuedById: string;
+  issuedByName: string;
+  acknowledged: boolean;
+  acknowledgedAt?: Timestamp | null;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
 }
 
 export interface StoryBookmark {
@@ -326,4 +416,9 @@ export const FIELD_LIMITS = {
   coverUrl: { max: 160000 },
   plagiarismDetails: { min: 10, max: 600 },
   plagiarismRefUrl: { max: 300 },
+  relationshipReason: { max: 240 },
+  moderationExcerpt: { max: 1000 },
+  moderationDescription: { min: 10, max: 800 },
+  moderationNotes: { max: 1000 },
+  moderationDecisionReason: { min: 10, max: 800 },
 } as const;
