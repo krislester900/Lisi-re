@@ -2275,6 +2275,7 @@ function SalonApp() {
           <ThemesView
             stories={openFeedStories}
             storiesLoaded={storiesLoaded}
+            myStories={myStories}
             customSalons={customSalons}
             discoverableProfiles={discoverableProfiles}
             bookmarkedStoryIds={bookmarkedStoryIds}

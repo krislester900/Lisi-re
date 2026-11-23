@@ -11,11 +11,8 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
-  Star,
   User as UserIcon,
 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { toggleFavoriteAuthor } from '../lib/storyService';
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
@@ -31,12 +28,14 @@ import {
   Story,
   StoryThemeId,
 } from '../types/story';
+import { AuthorsSpotlight } from './AuthorsSpotlight';
 import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 
 interface ThemesViewProps {
   stories: Story[];
   storiesLoaded: boolean;
+  myStories?: Story[];
   customSalons: CustomSalon[];
   discoverableProfiles: PublicProfile[];
   bookmarkedStoryIds: Set<string>;
@@ -50,20 +49,6 @@ interface ThemesViewProps {
   onOpenPeleMele: () => void;
   onWriteNovel: (genre?: NovelGenre) => void;
   onShowNotice?: (message: string) => void;
-}
-
-interface RankedAuthorEntry {
-  authorId: string;
-  authorName: string;
-  avatarUrl?: string;
-  bio?: string;
-  novelViews: number;
-  totalViews: number;
-  totalResonances: number;
-  totalEchoes: number;
-  novelCount: number;
-  storyCount: number;
-  topStory: Story;
 }
 
 function getNovelCategory(story: Story): NovelGenre {
@@ -97,53 +82,10 @@ function getSalonDisplayInfo(story: Story, customSalons: CustomSalon[]) {
   return { label, accentColor };
 }
 
-function AuthorAvatar({
-  name,
-  avatarUrl,
-  size = 'md',
-}: {
-  name: string;
-  avatarUrl?: string;
-  size?: 'sm' | 'md' | 'lg';
-}) {
-  const [failed, setFailed] = useState(false);
-  const initial = (name.trim()[0] || 'A').toUpperCase();
-  const sizeClass =
-    size === 'lg'
-      ? 'w-14 h-14 text-lg'
-      : size === 'md'
-        ? 'w-10 h-10 text-sm'
-        : 'w-8 h-8 text-xs';
-
-  if (avatarUrl && !failed) {
-    return (
-      <div
-        className={`${sizeClass} rounded-full overflow-hidden border border-stone-200 bg-stone-100 shrink-0`}
-      >
-        <img
-          src={avatarUrl}
-          alt={name}
-          referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
-          className="w-full h-full object-cover"
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`${sizeClass} rounded-full border border-stone-300 bg-[#F3F6FA] text-[#1B365D] font-display font-medium flex items-center justify-center shrink-0`}
-      aria-hidden="true"
-    >
-      {initial}
-    </div>
-  );
-}
-
 export function ThemesView({
   stories,
   storiesLoaded,
+  myStories = [],
   customSalons,
   discoverableProfiles,
   bookmarkedStoryIds,
@@ -158,22 +100,7 @@ export function ThemesView({
   onWriteNovel,
   onShowNotice,
 }: ThemesViewProps) {
-  const { user, favoriteAuthors, signInWithGoogle } = useAuth();
   const [selectedGenre, setSelectedGenre] = useState<'all' | NovelGenre>('all');
-  const [busyFollowId, setBusyFollowId] = useState<string | null>(null);
-
-  const profileMap = useMemo(() => {
-    const map = new Map<string, PublicProfile>();
-    for (const prof of discoverableProfiles) {
-      map.set(prof.userId, prof);
-    }
-    return map;
-  }, [discoverableProfiles]);
-
-  const favoriteAuthorIds = useMemo(
-    () => new Set(favoriteAuthors.map((a) => a.authorId)),
-    [favoriteAuthors]
-  );
 
   // Public novels sorted by readership
   const allPublicNovels = useMemo(
@@ -213,124 +140,8 @@ export function ThemesView({
     [novelsByGenre]
   );
 
-  // Strictly aggregate ONLY signed (!isAnonymous) public stories for author rankings
-  // so anonymous works never leak author identity until claimed.
-  const rankedAuthors = useMemo<RankedAuthorEntry[]>(() => {
-    const byAuthor = new Map<
-      string,
-      {
-        authorId: string;
-        authorName: string;
-        novelViews: number;
-        totalViews: number;
-        totalResonances: number;
-        totalEchoes: number;
-        novelCount: number;
-        storyCount: number;
-        stories: Story[];
-      }
-    >();
-
-    for (const story of stories) {
-      if (story.isAnonymous) continue;
-      if (!story.authorId) continue;
-      const existing = byAuthor.get(story.authorId);
-      const views = story.viewCount ?? 0;
-      const isNovel = story.storyFormat === 'roman';
-
-      if (existing) {
-        existing.totalViews += views;
-        existing.totalResonances += story.resonanceCount ?? 0;
-        existing.totalEchoes += story.echoCount ?? 0;
-        existing.storyCount += 1;
-        if (isNovel) {
-          existing.novelCount += 1;
-          existing.novelViews += views;
-        }
-        existing.stories.push(story);
-      } else {
-        byAuthor.set(story.authorId, {
-          authorId: story.authorId,
-          authorName: story.authorName || 'Auteur',
-          novelViews: isNovel ? views : 0,
-          totalViews: views,
-          totalResonances: story.resonanceCount ?? 0,
-          totalEchoes: story.echoCount ?? 0,
-          novelCount: isNovel ? 1 : 0,
-          storyCount: 1,
-          stories: [story],
-        });
-      }
-    }
-
-    const entries: RankedAuthorEntry[] = [];
-    for (const item of byAuthor.values()) {
-      const sortedAuthorStories = item.stories
-        .slice()
-        .sort((a, b) => {
-          const novelBias =
-            (b.storyFormat === 'roman' ? 1 : 0) - (a.storyFormat === 'roman' ? 1 : 0);
-          if (novelBias !== 0 && ((b.viewCount ?? 0) > 0 || (a.viewCount ?? 0) > 0)) {
-            return compareStoriesByPopularity(a, b);
-          }
-          return compareStoriesByPopularity(a, b);
-        });
-      const prof = profileMap.get(item.authorId);
-      entries.push({
-        authorId: item.authorId,
-        authorName: prof?.displayName || item.authorName,
-        avatarUrl: prof?.avatarUrl,
-        bio: prof?.bio || (prof?.favoriteNovel ? `Roman marquant : ${prof.favoriteNovel}` : undefined),
-        novelViews: item.novelViews,
-        totalViews: item.totalViews,
-        totalResonances: item.totalResonances,
-        totalEchoes: item.totalEchoes,
-        novelCount: item.novelCount,
-        storyCount: item.storyCount,
-        topStory: sortedAuthorStories[0],
-      });
-    }
-
-    entries.sort((a, b) => {
-      const viewDiff = b.totalViews - a.totalViews;
-      if (viewDiff !== 0) return viewDiff;
-      const novelViewDiff = b.novelViews - a.novelViews;
-      if (novelViewDiff !== 0) return novelViewDiff;
-      const resDiff = b.totalResonances - a.totalResonances;
-      if (resDiff !== 0) return resDiff;
-      const novelCountDiff = b.novelCount - a.novelCount;
-      if (novelCountDiff !== 0) return novelCountDiff;
-      return b.storyCount - a.storyCount;
-    });
-
-    return entries;
-  }, [stories, profileMap]);
-
-  const topAuthor = rankedAuthors[0] ?? null;
-  const runnerUpAuthors = rankedAuthors.slice(1, 5);
   const leadNovel = activeGenreNovels[0] ?? null;
   const otherNovels = activeGenreNovels.slice(1);
-
-  const handleToggleFollowAuthor = async (authorId: string, authorName: string) => {
-    if (!user) {
-      await signInWithGoogle();
-      return;
-    }
-    if (user.uid === authorId || busyFollowId) return;
-    setBusyFollowId(authorId);
-    try {
-      const added = await toggleFavoriteAuthor(user.uid, authorId, authorName);
-      onShowNotice?.(
-        added
-          ? `${authorName} ajouté à vos auteurs suivis (« Pour vous »).`
-          : `${authorName} retiré de vos auteurs suivis.`
-      );
-    } catch {
-      onShowNotice?.('Impossible de mettre à jour votre suivi pour le moment.');
-    } finally {
-      setBusyFollowId(null);
-    }
-  };
 
   const renderOriginLink = (story: Story) => {
     const { label, accentColor } = getSalonDisplayInfo(story, customSalons);
@@ -410,249 +221,19 @@ export function ThemesView({
         </div>
       </section>
 
-      {/* Most-Read Author Spotlight + Top Authors */}
-      <section aria-label="L’auteur le plus lu" className="space-y-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-stone-500">
-              Plume à l’honneur
-            </p>
-            <h2 className="font-display text-2xl font-medium text-stone-900 mt-1">
-              L’auteur le plus lu
-            </h2>
-          </div>
-          <p className="text-xs text-stone-500">
-            Calculé uniquement sur les textes signés (hors écrits anonymes)
-          </p>
-        </div>
-
-        {!storiesLoaded ? (
-          <div className="bg-white border border-stone-200 rounded-lg p-8 text-sm text-stone-500">
-            Chargement du palmarès des auteurs…
-          </div>
-        ) : !topAuthor ? (
-          <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-            <p className="font-display text-xl text-stone-900">
-              Aucun auteur signé n’apparaît encore au palmarès
-            </p>
-            <p className="text-sm text-stone-600 max-w-lg mx-auto">
-              Publiez un roman ou revendiquez l’un de vos écrits anonymes depuis votre carnet pour entrer dans le classement des auteurs lus.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-            {/* #1 Most-Read Author Card */}
-            <article className="lg:col-span-7 bg-white border border-stone-200 rounded-lg p-6 sm:p-7 flex flex-col justify-between space-y-6">
-              <div className="space-y-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <AuthorAvatar
-                      name={topAuthor.authorName}
-                      avatarUrl={topAuthor.avatarUrl}
-                      size="lg"
-                    />
-                    <div className="min-w-0">
-                      <p className="text-[11px] uppercase tracking-widest text-[#1B365D] font-medium">
-                        N° 1 · Auteur le plus lu
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => onOpenMemberWall(topAuthor.authorId)}
-                        className="font-display text-2xl sm:text-3xl font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate max-w-full block"
-                      >
-                        {topAuthor.authorName}
-                      </button>
-                      {topAuthor.bio && (
-                        <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 mt-1">
-                          {topAuthor.bio}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {user?.uid !== topAuthor.authorId && (
-                    <button
-                      type="button"
-                      disabled={busyFollowId === topAuthor.authorId}
-                      onClick={() =>
-                        void handleToggleFollowAuthor(topAuthor.authorId, topAuthor.authorName)
-                      }
-                      aria-pressed={favoriteAuthorIds.has(topAuthor.authorId)}
-                      className={`min-h-[36px] px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
-                        favoriteAuthorIds.has(topAuthor.authorId)
-                          ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                          : 'border-stone-200 bg-white text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
-                      }`}
-                    >
-                      <Star
-                        className={`w-3.5 h-3.5 ${
-                          favoriteAuthorIds.has(topAuthor.authorId) ? 'fill-current' : ''
-                        }`}
-                      />
-                      <span>
-                        {favoriteAuthorIds.has(topAuthor.authorId) ? 'Suivi' : 'Suivre'}
-                      </span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-y border-stone-200">
-                  <div>
-                    <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                      {topAuthor.totalViews}
-                    </p>
-                    <p className="text-xs text-stone-500">Lectures totales</p>
-                  </div>
-                  <div>
-                    <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                      {topAuthor.novelCount}
-                    </p>
-                    <p className="text-xs text-stone-500">
-                      Roman{topAuthor.novelCount > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                      {topAuthor.storyCount}
-                    </p>
-                    <p className="text-xs text-stone-500">
-                      Texte{topAuthor.storyCount > 1 ? 's' : ''} signé{topAuthor.storyCount > 1 ? 's' : ''}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                      {topAuthor.totalResonances}
-                    </p>
-                    <p className="text-xs text-stone-500">Résonances</p>
-                  </div>
-                </div>
-
-                <div className="rounded-md bg-[#F7F4EE] border border-stone-200 p-4 flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 min-w-0">
-                    {topAuthor.topStory.storyFormat === 'roman' && (
-                      <NovelCoverArt
-                        coverUrl={topAuthor.topStory.coverUrl}
-                        title={topAuthor.topStory.title}
-                        genre={topAuthor.topStory.novelGenre}
-                        size="xs"
-                        showFallbackWhenMissing={true}
-                      />
-                    )}
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-[11px] uppercase tracking-widest text-stone-500">
-                        Œuvre la plus lue
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => onReadStory(topAuthor.topStory)}
-                        className="font-display text-lg font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left block truncate max-w-full"
-                      >
-                        {topAuthor.topStory.title}
-                      </button>
-                      <p className="text-xs text-stone-600 tabular-nums">
-                        {topAuthor.topStory.viewCount ?? 0} vue
-                        {(topAuthor.topStory.viewCount ?? 0) > 1 ? 's' : ''} ·{' '}
-                        {topAuthor.topStory.resonanceCount} résonance
-                        {topAuthor.topStory.resonanceCount > 1 ? 's' : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onReadStory(topAuthor.topStory)}
-                    className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] bg-white border border-[#CBD6E6] rounded hover:bg-[#F3F6FA] whitespace-nowrap shrink-0 self-center"
-                  >
-                    Lire
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                <button
-                  type="button"
-                  onClick={() => onOpenMemberWall(topAuthor.authorId)}
-                  className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
-                >
-                  <span>Découvrir tout son mur littéraire</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </article>
-
-            {/* Runner-up Most-Read Authors */}
-            <div className="lg:col-span-5 bg-white border border-stone-200 rounded-lg p-5 sm:p-6 flex flex-col justify-between">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-                  <h3 className="font-display text-lg font-medium text-stone-900">
-                    Autres plumes les plus lues
-                  </h3>
-                  <span className="text-xs text-stone-500 tabular-nums">
-                    Top {rankedAuthors.length > 5 ? 5 : rankedAuthors.length}
-                  </span>
-                </div>
-
-                {runnerUpAuthors.length === 0 ? (
-                  <p className="text-sm text-stone-500 py-6 text-center">
-                    Les prochains auteurs signés apparaîtront ici dès que leurs récits seront lus.
-                  </p>
-                ) : (
-                  <ol className="divide-y divide-stone-200">
-                    {runnerUpAuthors.map((author, idx) => {
-                      const rank = idx + 2;
-                      return (
-                        <li
-                          key={author.authorId}
-                          className="py-3.5 first:pt-1 last:pb-1 flex items-center justify-between gap-3"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-display text-base font-medium text-stone-400 tabular-nums w-5 shrink-0">
-                              0{rank}
-                            </span>
-                            <AuthorAvatar
-                              name={author.authorName}
-                              avatarUrl={author.avatarUrl}
-                              size="sm"
-                            />
-                            <div className="min-w-0">
-                              <button
-                                type="button"
-                                onClick={() => onOpenMemberWall(author.authorId)}
-                                className="text-sm font-medium text-stone-900 hover:text-[#1B365D] hover:underline truncate block max-w-full text-left"
-                              >
-                                {author.authorName}
-                              </button>
-                              <p className="text-xs text-stone-500 tabular-nums">
-                                {author.totalViews} lecture{author.totalViews > 1 ? 's' : ''} ·{' '}
-                                {author.novelCount} roman{author.novelCount > 1 ? 's' : ''} ·{' '}
-                                {author.totalResonances} résonance
-                                {author.totalResonances > 1 ? 's' : ''}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => onReadStory(author.topStory)}
-                              className="min-h-[32px] px-2.5 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
-                            >
-                              Lire
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                )}
-              </div>
-
-              <p className="text-[11px] text-stone-500 pt-4 mt-4 border-t border-stone-100">
-                Vous publiez sous anonymat ? Vous pouvez revendiquer votre texte à tout moment depuis votre carnet ou votre lecture pour rejoindre le classement.
-              </p>
-            </div>
-          </div>
-        )}
-      </section>
+      {/* Authors Spotlight ("Auteurs en lumière") */}
+      <AuthorsSpotlight
+        stories={stories}
+        storiesLoaded={storiesLoaded}
+        myStories={myStories}
+        discoverableProfiles={discoverableProfiles}
+        onReadStory={onReadStory}
+        onOpenMemberWall={onOpenMemberWall}
+        onWriteNovel={() =>
+          onWriteNovel(selectedGenre === 'all' ? undefined : selectedGenre)
+        }
+        onShowNotice={onShowNotice}
+      />
 
       {/* Most-Read Novels by Category */}
       <section aria-label="Romans les plus lus par catégorie" className="space-y-6 pt-4 border-t border-stone-200">

@@ -771,6 +771,67 @@ export async function claimAnonymousStory(
   }
 }
 
+export async function setStoryAnonymity(
+  storyId: string,
+  isAnonymous: boolean,
+  realAuthorName: string
+): Promise<string> {
+  assertValidId(storyId, 'storyId');
+  const cleanName = clampString(realAuthorName, FIELD_LIMITS.displayName.max);
+  if (!isAnonymous && cleanName.length < FIELD_LIMITS.displayName.min) {
+    throw new Error(
+      'Votre nom d’auteur doit contenir au moins 2 caractères pour afficher votre identité réelle.'
+    );
+  }
+  const nextAuthorName = isAnonymous ? 'Auteur anonyme' : cleanName;
+  const path = `stories/${storyId}`;
+  try {
+    await updateDoc(doc(db, 'stories', storyId), {
+      isAnonymous,
+      authorName: nextAuthorName,
+      updatedAt: serverTimestamp(),
+    });
+    return nextAuthorName;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function setStoriesAnonymityBatch(
+  storyIds: string[],
+  isAnonymous: boolean,
+  realAuthorName: string
+): Promise<string> {
+  const uniqueIds = Array.from(new Set(storyIds)).filter((id) => ID_PATTERN.test(id));
+  const cleanName = clampString(realAuthorName, FIELD_LIMITS.displayName.max);
+  if (!isAnonymous && cleanName.length < FIELD_LIMITS.displayName.min) {
+    throw new Error(
+      'Votre nom d’auteur doit contenir au moins 2 caractères pour afficher votre identité réelle.'
+    );
+  }
+  const nextAuthorName = isAnonymous ? 'Auteur anonyme' : cleanName;
+  if (uniqueIds.length === 0) return nextAuthorName;
+
+  const CHUNK_SIZE = 400;
+  try {
+    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+      const slice = uniqueIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const storyId of slice) {
+        batch.update(doc(db, 'stories', storyId), {
+          isAnonymous,
+          authorName: nextAuthorName,
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+    return nextAuthorName;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `stories/${uniqueIds[0]}`);
+  }
+}
+
 export async function deleteStory(storyId: string): Promise<void> {
   assertValidId(storyId, 'storyId');
   const path = `stories/${storyId}`;
