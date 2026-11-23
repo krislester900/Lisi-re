@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { Globe, Lock, ShieldCheck, X } from 'lucide-react';
-import { createCustomSalon, updateCustomSalon } from '../lib/storyService';
+import { Camera, Globe, Lock, ShieldCheck, Trash2, X } from 'lucide-react';
+import { AGE_RATING_OPTIONS, checkLocalContentHygiene } from '../lib/contentRegulation';
+import { compressAvatarForProfile } from '../lib/storageService';
+import {
+  createCustomSalon,
+  runAutomatedContentBotGuard,
+  updateCustomSalon,
+} from '../lib/storyService';
 import { ACCENT_TONE_PALETTES } from '../lib/themes';
 import {
+  AgeRating,
   CustomSalon,
   CustomSalonVisibility,
   FIELD_LIMITS,
@@ -34,12 +41,17 @@ export function CustomSalonModal({
   const [admissionRules, setAdmissionRules] = useState('');
   const [visibility, setVisibility] = useState<CustomSalonVisibility>('public');
   const [accentTone, setAccentTone] = useState<WallAccentTone>('ink');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
+  const [minAge, setMinAge] = useState<AgeRating>(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setError(null);
+    setAvatarPreviewFailed(false);
     if (editingSalon) {
       setName(editingSalon.name);
       setDescription(editingSalon.description);
@@ -47,6 +59,8 @@ export function CustomSalonModal({
       setAdmissionRules(editingSalon.admissionRules);
       setVisibility(editingSalon.visibility);
       setAccentTone(editingSalon.accentTone);
+      setAvatarUrl(editingSalon.avatarUrl ?? '');
+      setMinAge(editingSalon.minAge ?? 0);
     } else {
       setName('');
       setDescription('');
@@ -56,10 +70,31 @@ export function CustomSalonModal({
       );
       setVisibility('public');
       setAccentTone('ink');
+      setAvatarUrl('');
+      setMinAge(0);
     }
   }, [isOpen, editingSalon]);
 
   if (!isOpen) return null;
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setAvatarBusy(true);
+    try {
+      const compressed = await compressAvatarForProfile(file);
+      setAvatarUrl(compressed);
+      setAvatarPreviewFailed(false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Impossible de préparer la photo de ce salon.'
+      );
+    } finally {
+      setAvatarBusy(false);
+      e.target.value = '';
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,8 +109,40 @@ export function CustomSalonModal({
       return;
     }
 
+    const nameCheck = checkLocalContentHygiene(name, { label: 'Le nom du salon' });
+    if (!nameCheck.ok) {
+      setError(nameCheck.reason ?? 'Nom de salon invalide.');
+      return;
+    }
+    const descCheck = checkLocalContentHygiene(description, {
+      label: 'La présentation du salon',
+      minWords: 2,
+      strictSentenceQuality: true,
+    });
+    if (!descCheck.ok) {
+      setError(descCheck.reason ?? 'Présentation invalide.');
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const verdict = await runAutomatedContentBotGuard({
+        kind: 'custom_salon',
+        title: name.trim(),
+        text: `${description.trim()}\n${admissionRules.trim()}`,
+        declaredMinAge: minAge,
+      });
+
+      if (!verdict.allowed) {
+        setError(
+          verdict.blockedReason ||
+            'Le bot de régulation Lisière a bloqué la création de ce salon (propos haineux ou incohérents).'
+        );
+        return;
+      }
+
+      const effectiveMinAge = Math.max(minAge, verdict.recommendedMinAge) as AgeRating;
+
       const payload = {
         name,
         description,
@@ -83,6 +150,8 @@ export function CustomSalonModal({
         admissionRules,
         visibility,
         accentTone,
+        avatarUrl,
+        minAge: effectiveMinAge,
       };
       if (editingSalon) {
         await updateCustomSalon(editingSalon.salonId, ownerName, payload);
@@ -184,6 +253,81 @@ export function CustomSalonModal({
             </div>
           </div>
 
+          {/* Salon Profile Photo */}
+          <div className="p-4 bg-white border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
+            {avatarUrl && !avatarPreviewFailed ? (
+              <img
+                src={avatarUrl}
+                alt={name || 'Photo du salon'}
+                referrerPolicy="no-referrer"
+                onError={() => setAvatarPreviewFailed(true)}
+                className="w-16 h-16 rounded-lg object-cover border border-stone-300 shrink-0"
+              />
+            ) : (
+              <div
+                style={{
+                  backgroundColor: ACCENT_TONE_PALETTES[accentTone]?.softBg ?? '#F3F6FA',
+                  color: ACCENT_TONE_PALETTES[accentTone]?.textAccent ?? '#1B365D',
+                  borderColor: ACCENT_TONE_PALETTES[accentTone]?.borderTint ?? '#CBD6E6',
+                }}
+                className="w-16 h-16 rounded-lg border flex items-center justify-center font-display text-2xl shrink-0"
+              >
+                {(name.trim() || 'S').slice(0, 1).toUpperCase()}
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0 space-y-2">
+              <div>
+                <p className="text-xs font-medium text-stone-800">
+                  Photo de profil du salon (facultative)
+                </p>
+                <p className="text-xs text-stone-500">
+                  Affichée dans la barre latérale, sur la carte du salon et en tête du salon.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="min-h-[34px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>{avatarBusy ? 'Préparation…' : 'Choisir une image'}</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarFileChange}
+                    className="sr-only"
+                  />
+                </label>
+
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAvatarUrl('');
+                      setAvatarPreviewFailed(false);
+                    }}
+                    className="min-h-[34px] px-3 py-1.5 text-xs font-medium text-red-700 bg-white border border-stone-200 rounded-md hover:border-red-300 inline-flex items-center gap-1"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Retirer</span>
+                  </button>
+                )}
+              </div>
+
+              <input
+                type="url"
+                aria-label="Lien d’image pour le salon"
+                maxLength={FIELD_LIMITS.avatarUrl.max}
+                value={avatarUrl.startsWith('data:') ? '' : avatarUrl}
+                onChange={(e) => {
+                  setAvatarUrl(e.target.value);
+                  setAvatarPreviewFailed(false);
+                }}
+                placeholder="Ou coller un lien d’image (https://…)"
+                className="w-full px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+              />
+            </div>
+          </div>
+
           {/* Name */}
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
@@ -278,6 +422,25 @@ export function CustomSalonModal({
               placeholder="Ex. Quel souvenir ou chapitre vous habite cette semaine ?"
               className="w-full px-4 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
             />
+          </div>
+
+          {/* Optional Salon Age Restriction */}
+          <div className="bg-white border border-stone-200 rounded-md p-4 space-y-2">
+            <label htmlFor="salon-min-age" className="block text-sm font-medium text-stone-900">
+              Public conseillé pour ce salon
+            </label>
+            <select
+              id="salon-min-age"
+              value={minAge}
+              onChange={(e) => setMinAge(Number(e.target.value) as AgeRating)}
+              className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+            >
+              {AGE_RATING_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Accent Tone */}

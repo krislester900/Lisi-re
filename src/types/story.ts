@@ -78,6 +78,16 @@ export type SalonMemberStatus = 'pending' | 'approved' | 'rejected';
 
 export type SalonMemberRole = 'owner' | 'member';
 
+export type AgeRating = 0 | 13 | 16 | 18;
+
+export interface PrivateUserInfo {
+  email: string;
+  declaredAge?: number;
+  birthYear?: number;
+  ageUpdatedAt?: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
 export interface Story {
   storyId: string;
   authorId: string;
@@ -101,6 +111,10 @@ export interface Story {
   promptQuestion: string;
   visibility: StoryVisibility;
   isAnonymous?: boolean;
+  minAge?: AgeRating;
+  isMature?: boolean;
+  matureReason?: string;
+  charterAttested?: boolean;
   readingMinutes: number;
   resonanceCount: number;
   echoCount: number;
@@ -131,9 +145,40 @@ export interface CustomSalon {
   ownerId: string;
   ownerName: string;
   accentTone: WallAccentTone;
+  avatarUrl?: string;
+  minAge?: AgeRating;
   memberCount: number;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
+}
+
+export type SalonThreadScope = 'predefined' | 'custom';
+
+export interface SalonThread {
+  threadId: string;
+  salonScope: SalonThreadScope;
+  salonId: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  body: string;
+  minAge?: AgeRating;
+  isMature?: boolean;
+  matureReason?: string;
+  replyCount: number;
+  lastReplyId?: string;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
+
+export interface SalonThreadReply {
+  replyId: string;
+  threadId: string;
+  salonId: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  createdAt: Timestamp | null;
 }
 
 export interface SalonMember {
@@ -253,7 +298,29 @@ export type ModerationTargetType =
   | 'story'
   | 'echo'
   | 'salon_message'
+  | 'salon_thread'
+  | 'thread_reply'
   | 'profile';
+
+export type ContentGuardKind =
+  | 'story'
+  | 'chapter'
+  | 'thread'
+  | 'reply'
+  | 'echo'
+  | 'chat'
+  | 'custom_salon';
+
+export interface ContentGuardVerdict {
+  allowed: boolean;
+  blockedReason: string;
+  botNotice: string;
+  isMature: boolean;
+  recommendedMinAge: AgeRating;
+  matureReason: string;
+  qualityIssue: boolean;
+  model: string;
+}
 
 export type ModerationReportCategory =
   | 'propos-outrageants'
@@ -414,6 +481,7 @@ export const FIELD_LIMITS = {
   favoriteNovel: { max: 140 },
   interests: { max: 240 },
   avatarUrl: { max: 60000 },
+  userAge: { min: 13, max: 115 },
   wallTitle: { min: 1, max: 140 },
   wallSubtitle: { max: 140 },
   wallBody: { max: 600 },
@@ -421,10 +489,14 @@ export const FIELD_LIMITS = {
   title: { min: 3, max: 140 },
   excerpt: { min: 10, max: 300 },
   content: { min: 20, max: 8000 },
+  romanChapterMinChars: 3000,
+  confessionMinChars: 160,
+  confessionMinLines: 4,
   chapterTitle: { min: 2, max: 140 },
   chapterContent: { min: 20, max: 12000 },
   chapterNote: { max: 400 },
   promptQuestion: { max: 240 },
+  matureReason: { max: 180 },
   echoContent: { min: 2, max: 1500 },
   salonChatContent: { min: 1, max: 1000 },
   messageContent: { min: 1, max: 2000 },
@@ -434,6 +506,9 @@ export const FIELD_LIMITS = {
   salonPrompt: { max: 240 },
   salonAdmissionRules: { max: 500 },
   salonRequestNote: { max: 300 },
+  threadTitle: { min: 4, max: 140 },
+  threadBody: { max: 1500 },
+  threadReply: { min: 2, max: 1200 },
   repostNote: { max: 280 },
   quoteText: { min: 3, max: 800 },
   coverUrl: { max: 160000 },

@@ -87,6 +87,23 @@ export function PrivacyPolicyView({ onBackToSalons }: PrivacyPolicyViewProps) {
           </p>
         </section>
 
+        <section className="space-y-3">
+          <h2 className="font-display text-2xl font-medium text-stone-900">
+            5. Protection par âge, avertissements matures et bot de régulation
+          </h2>
+          <ul className="list-disc pl-5 space-y-2 text-sm sm:text-base">
+            <li>
+              <strong>Âge strictement privé</strong> : l’âge que vous indiquez lors de la configuration de votre compte ou dans vos réglages est conservé uniquement dans votre espace privé (<code className="text-xs bg-stone-100 px-1.5 py-0.5 rounded">users/&#123;uid&#125;/private/info</code>). Il n’est jamais affiché aux autres membres et sert uniquement à adapter les récits et fils de discussion à votre âge.
+            </li>
+            <li>
+              <strong>Mention « Contenu mature »</strong> : même lorsque votre âge permet l’accès à un récit ou à un fil classé 16+, 18+ ou mature, un bandeau d’avertissement explicite s’affiche avant la lecture.
+            </li>
+            <li>
+              <strong>Cadre éditorial &amp; qualité</strong> : les chapitres de romans demandent au moins deux pages construites (3 000 caractères), les confessions plus de trois lignes, et tout propos haineux, offensant ou incohérent est refusé par le bot de régulation automatique de Lisière avant publication.
+            </li>
+          </ul>
+        </section>
+
         <section className="pt-4 border-t border-stone-200 text-xs sm:text-sm text-stone-500">
           Dernière mise à jour : Lisière — Maison d’édition participative créée par Kris Ivan N’dri.
         </section>

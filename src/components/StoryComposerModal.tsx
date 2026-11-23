@@ -13,14 +13,27 @@ import {
   ImagePlus,
   Lock,
   Plus,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
   User as UserIcon,
   X,
 } from 'lucide-react';
+import {
+  AGE_RATING_OPTIONS,
+  checkLocalContentHygiene,
+  CONTENT_CHARTER_RULES,
+  evaluateConfessionLength,
+  evaluateNovelChapterLength,
+} from '../lib/contentRegulation';
 import { checkNovelPlagiarism } from '../lib/plagiarismCheck';
 import { compressNovelCover } from '../lib/storageService';
-import { addStoryChapter, createStory, updateStory } from '../lib/storyService';
+import {
+  addStoryChapter,
+  createStory,
+  runAutomatedContentBotGuard,
+  updateStory,
+} from '../lib/storyService';
 import {
   ACCENT_TONE_PALETTES,
   estimateReadingMinutes,
@@ -33,6 +46,7 @@ import {
   THEME_MAP,
 } from '../lib/themes';
 import {
+  AgeRating,
   CustomSalon,
   FIELD_LIMITS,
   NovelGenre,
@@ -44,6 +58,7 @@ import {
   StoryThemeId,
   StoryVisibility,
 } from '../types/story';
+import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 
 type ComposerStep = 1 | 2 | 3;
@@ -117,6 +132,10 @@ export function StoryComposerModal({
   const [excerpt, setExcerpt] = useState('');
   const [visibility, setVisibility] = useState<StoryVisibility>('public');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  const [minAge, setMinAge] = useState<AgeRating>(0);
+  const [isMature, setIsMature] = useState(false);
+  const [matureReason, setMatureReason] = useState('');
+  const [charterAttested, setCharterAttested] = useState(false);
   const [selectedCustomSalonId, setSelectedCustomSalonId] = useState<string | null>(
     initialCustomSalonId
   );
@@ -131,6 +150,7 @@ export function StoryComposerModal({
   const [appendSeriesStatus, setAppendSeriesStatus] = useState<SeriesStatus>('en-cours');
 
   const [submitting, setSubmitting] = useState(false);
+  const [botCheckBusy, setBotCheckBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const coverFileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollBodyRef = useRef<HTMLDivElement | null>(null);
@@ -173,6 +193,7 @@ export function StoryComposerModal({
     if (!isOpen) return;
     setError(null);
     setCoverError(null);
+    setBotCheckBusy(false);
     if (editingStory) {
       setTheme(editingStory.theme);
       setStoryScope(
@@ -192,6 +213,11 @@ export function StoryComposerModal({
       setExcerpt(editingStory.excerpt);
       setVisibility(editingStory.visibility);
       setIsAnonymous(Boolean(editingStory.isAnonymous));
+      const editMinAge: AgeRating = editingStory.minAge ?? 0;
+      setMinAge(editMinAge);
+      setIsMature(Boolean(editingStory.isMature || editMinAge >= 16));
+      setMatureReason(editingStory.matureReason ?? '');
+      setCharterAttested(editingStory.charterAttested ?? true);
       setSelectedCustomSalonId(editingStory.customSalonId ?? null);
       setShowDestinationPicker(false);
       setShowCoverPicker(Boolean(editingStory.coverUrl));
@@ -247,6 +273,11 @@ export function StoryComposerModal({
       setShowWritingExtras(false);
       setVisibility(initialCs?.visibility === 'private' ? 'private' : 'public');
       setIsAnonymous(false);
+      const defaultSalonAge: AgeRating = initialCs?.minAge ?? 0;
+      setMinAge(defaultSalonAge);
+      setIsMature(defaultSalonAge >= 16);
+      setMatureReason('');
+      setCharterAttested(false);
 
       // Jump straight to writing when opened directly from a salon prompt/starter or append chapter
       const openedWithDirectContext =
@@ -302,12 +333,12 @@ export function StoryComposerModal({
   const activeTitleValue = isAppendMode ? chapterTitle : title;
   const activeContentValue = isAppendMode ? chapterContent : content;
   const minTitleLen = isAppendMode ? FIELD_LIMITS.chapterTitle.min : FIELD_LIMITS.title.min;
-  const minContentLen = isAppendMode
-    ? FIELD_LIMITS.chapterContent.min
-    : FIELD_LIMITS.content.min;
+  const novelLengthEval = evaluateNovelChapterLength(activeContentValue);
+  const confessionLengthEval = evaluateConfessionLength(content);
+  const activeLengthOk =
+    storyFormat === 'roman' ? novelLengthEval.ok : confessionLengthEval.ok;
   const isWritingReady =
-    activeTitleValue.trim().length >= minTitleLen &&
-    activeContentValue.trim().length >= minContentLen;
+    activeTitleValue.trim().length >= minTitleLen && activeLengthOk;
 
   const destinationSummaryLabel = (() => {
     if (isAppendMode && selectedNovel) {
@@ -337,6 +368,8 @@ export function StoryComposerModal({
     if (!salonId) {
       setSelectedCustomSalonId(null);
       setVisibility('public');
+      setMinAge(0);
+      setIsMature(false);
       if (!initialPrompt) {
         setPromptQuestion(THEME_MAP[theme].promptQuestion);
       }
@@ -347,6 +380,10 @@ export function StoryComposerModal({
     if (found) {
       if (found.visibility === 'private') {
         setVisibility('private');
+      }
+      if (found.minAge) {
+        setMinAge(found.minAge);
+        if (found.minAge >= 16) setIsMature(true);
       }
       if (!initialPrompt && found.promptQuestion) {
         setPromptQuestion(found.promptQuestion);
@@ -383,18 +420,33 @@ export function StoryComposerModal({
 
   const handleGoToStep = (target: ComposerStep) => {
     setError(null);
-    if (target === 3 && !isWritingReady) {
+    if (target === 3) {
       if (activeTitleValue.trim().length < minTitleLen) {
         setError(
           isAppendMode
             ? 'Donnez un titre d’au moins 2 caractères à ce chapitre.'
             : 'Donnez un titre d’au moins 3 caractères à votre récit.'
         );
-      } else {
-        setError('Prenez un instant pour écrire au moins 20 caractères avant de publier.');
+        setStep(2);
+        return;
       }
-      setStep(2);
-      return;
+      if (!activeLengthOk) {
+        setError(
+          storyFormat === 'roman' ? novelLengthEval.message : confessionLengthEval.message
+        );
+        setStep(2);
+        return;
+      }
+      const hygiene = checkLocalContentHygiene(activeContentValue, {
+        label: storyFormat === 'roman' ? 'Ce chapitre' : 'Votre confession',
+        minWords: storyFormat === 'roman' ? 200 : 12,
+        strictSentenceQuality: true,
+      });
+      if (!hygiene.ok) {
+        setError(hygiene.reason ?? 'Veuillez vérifier la qualité et le respect de votre texte.');
+        setStep(2);
+        return;
+      }
     }
     setStep(target);
   };
@@ -425,9 +477,26 @@ export function StoryComposerModal({
         setStep(2);
         return;
       }
-      if (chapterContent.trim().length < FIELD_LIMITS.chapterContent.min) {
-        setError('Le chapitre doit contenir au moins 20 caractères.');
+      const chapLength = evaluateNovelChapterLength(chapterContent);
+      if (!chapLength.ok) {
+        setError(chapLength.message);
         setStep(2);
+        return;
+      }
+      const chapHygiene = checkLocalContentHygiene(chapterContent, {
+        label: 'Ce chapitre',
+        minWords: 200,
+        strictSentenceQuality: true,
+      });
+      if (!chapHygiene.ok) {
+        setError(chapHygiene.reason ?? 'Veuillez vérifier la rédaction de ce chapitre.');
+        setStep(2);
+        return;
+      }
+      if (!charterAttested) {
+        setError(
+          'Veuillez accepter la charte anti-haine et de respect de Lisière avant de publier.'
+        );
         return;
       }
       if (!plagiarismAttested) {
@@ -444,7 +513,26 @@ export function StoryComposerModal({
       }
 
       setSubmitting(true);
+      setBotCheckBusy(true);
       try {
+        const verdict = await runAutomatedContentBotGuard({
+          kind: 'chapter',
+          title: chapterTitle,
+          text: chapterContent,
+          declaredMinAge: selectedNovel.minAge ?? 0,
+          isMature: selectedNovel.isMature,
+        });
+        setBotCheckBusy(false);
+
+        if (!verdict.allowed) {
+          setError(
+            verdict.blockedReason ||
+              verdict.botNotice ||
+              'Ce chapitre a été bloqué par le bot de régulation Lisière.'
+          );
+          return;
+        }
+
         const nextNum = (selectedNovel.chapterCount ?? 1) + 1;
         await addStoryChapter({
           story: selectedNovel,
@@ -472,6 +560,7 @@ export function StoryComposerModal({
           err instanceof Error ? err.message : 'Impossible d’ajouter ce chapitre pour le moment.'
         );
       } finally {
+        setBotCheckBusy(false);
         setSubmitting(false);
       }
       return;
@@ -482,11 +571,44 @@ export function StoryComposerModal({
       setStep(2);
       return;
     }
-    if (content.trim().length < FIELD_LIMITS.content.min) {
-      setError('Prenez un instant pour écrire au moins 20 caractères.');
+
+    const titleHygiene = checkLocalContentHygiene(title, {
+      label: 'Le titre',
+      minWords: 1,
+      strictSentenceQuality: false,
+    });
+    if (!titleHygiene.ok) {
+      setError(titleHygiene.reason ?? 'Veuillez choisir un titre conforme à la charte.');
       setStep(2);
       return;
     }
+
+    if (!activeLengthOk) {
+      setError(
+        storyFormat === 'roman' ? novelLengthEval.message : confessionLengthEval.message
+      );
+      setStep(2);
+      return;
+    }
+
+    const bodyHygiene = checkLocalContentHygiene(content, {
+      label: storyFormat === 'roman' ? 'Ce chapitre' : 'Votre confession',
+      minWords: storyFormat === 'roman' ? 200 : 12,
+      strictSentenceQuality: true,
+    });
+    if (!bodyHygiene.ok) {
+      setError(bodyHygiene.reason ?? 'Veuillez relire votre texte avant publication.');
+      setStep(2);
+      return;
+    }
+
+    if (!charterAttested) {
+      setError(
+        'Veuillez confirmer votre engagement envers la charte anti-haine et de bienveillance de Lisière.'
+      );
+      return;
+    }
+
     if (storyFormat === 'roman') {
       if (!plagiarismAttested) {
         setError(
@@ -503,7 +625,30 @@ export function StoryComposerModal({
     }
 
     setSubmitting(true);
+    setBotCheckBusy(true);
     try {
+      const verdict = await runAutomatedContentBotGuard({
+        kind: 'story',
+        title,
+        text: content,
+        declaredMinAge: minAge,
+        isMature,
+      });
+      setBotCheckBusy(false);
+
+      if (!verdict.allowed) {
+        setError(
+          verdict.blockedReason ||
+            verdict.botNotice ||
+            'Ce récit ne respecte pas les règles de publication de Lisière.'
+        );
+        return;
+      }
+
+      const finalMinAge = Math.max(minAge, verdict.recommendedMinAge ?? 0) as AgeRating;
+      const finalIsMature = Boolean(isMature || verdict.isMature || finalMinAge >= 16);
+      const finalMatureReason = matureReason.trim() || verdict.matureReason || '';
+
       const effectiveVisibility: StoryVisibility = isPrivateCustomSalon ? 'private' : visibility;
       const customSalonTarget =
         !editingStory && storyScope === 'salon' && selectedCustomSalon
@@ -531,6 +676,10 @@ export function StoryComposerModal({
         promptQuestion,
         visibility: effectiveVisibility,
         isAnonymous,
+        minAge: finalMinAge,
+        isMature: finalIsMature,
+        matureReason: finalMatureReason,
+        charterAttested: true,
       };
       if (editingStory) {
         await updateStory(editingStory.storyId, authorName, payload);
@@ -557,6 +706,7 @@ export function StoryComposerModal({
         err instanceof Error ? err.message : 'Impossible d’enregistrer votre récit pour le moment.'
       );
     } finally {
+      setBotCheckBusy(false);
       setSubmitting(false);
     }
   };
@@ -569,7 +719,7 @@ export function StoryComposerModal({
     {
       id: 3,
       shortLabel: '3. Publication',
-      done: isWritingReady && (storyFormat !== 'roman' || plagiarismAttested),
+      done: isWritingReady && charterAttested && (storyFormat !== 'roman' || plagiarismAttested),
     },
   ];
 
@@ -824,26 +974,38 @@ export function StoryComposerModal({
                           style={{ backgroundColor: pal.softBg, borderColor: pal.borderTint }}
                           className="p-4 border rounded-md flex items-center justify-between gap-4"
                         >
-                          <div className="space-y-0.5 min-w-0">
-                            <p
-                              style={{ color: pal.textAccent }}
-                              className="text-xs font-semibold inline-flex items-center gap-1.5"
-                            >
-                              {selectedCustomSalon.visibility === 'private' ? (
-                                <>
-                                  <Lock className="w-3.5 h-3.5 shrink-0" />
-                                  <span>Salon privé</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Globe className="w-3.5 h-3.5 shrink-0" />
-                                  <span>Salon public communautaire</span>
-                                </>
-                              )}
-                            </p>
-                            <p className="font-display text-lg font-medium text-stone-900 truncate">
-                              {selectedCustomSalon.name}
-                            </p>
+                          <div className="flex items-center gap-3 min-w-0">
+                            {selectedCustomSalon.avatarUrl && (
+                              <img
+                                src={selectedCustomSalon.avatarUrl}
+                                alt={selectedCustomSalon.name}
+                                className="w-10 h-10 rounded-md object-cover border border-stone-200 shrink-0"
+                              />
+                            )}
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p
+                                  style={{ color: pal.textAccent }}
+                                  className="text-xs font-semibold inline-flex items-center gap-1.5"
+                                >
+                                  {selectedCustomSalon.visibility === 'private' ? (
+                                    <>
+                                      <Lock className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Salon privé</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Globe className="w-3.5 h-3.5 shrink-0" />
+                                      <span>Salon public communautaire</span>
+                                    </>
+                                  )}
+                                </p>
+                                <MatureContentBadge minAge={selectedCustomSalon.minAge} compact />
+                              </div>
+                              <p className="font-display text-lg font-medium text-stone-900 truncate">
+                                {selectedCustomSalon.name}
+                              </p>
+                            </div>
                           </div>
                           <button
                             type="button"
@@ -991,7 +1153,8 @@ export function StoryComposerModal({
                                 {selectableCustomSalons.map((cs) => (
                                   <option key={cs.salonId} value={cs.salonId}>
                                     {cs.name} (
-                                    {cs.visibility === 'private' ? 'Salon privé' : 'Salon public'})
+                                    {cs.visibility === 'private' ? 'Salon privé' : 'Salon public'}
+                                    {cs.minAge ? ` · ${cs.minAge}+` : ''})
                                   </option>
                                 ))}
                               </select>
@@ -1269,9 +1432,27 @@ export function StoryComposerModal({
                       maxLength={FIELD_LIMITS.chapterContent.max}
                       value={chapterContent}
                       onChange={(e) => setChapterContent(e.target.value)}
-                      placeholder="Poursuivez le fil de votre roman…"
+                      placeholder="Poursuivez le fil de votre roman (minimum 2 pages / 3 000 caractères)…"
                       className="w-full px-4 py-3 bg-white border border-stone-200 rounded-md text-base leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
                     />
+                    <div
+                      className={`mt-2 px-3 py-2 rounded-md border text-xs flex flex-wrap items-center justify-between gap-2 ${
+                        novelLengthEval.ok
+                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                          : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                      }`}
+                    >
+                      <span className="font-medium">
+                        {novelLengthEval.ok
+                          ? 'Longueur du chapitre conforme (minimum 2 pages atteint)'
+                          : 'Exigence roman : au moins 2 pages par chapitre (3 000 car.)'}
+                      </span>
+                      <span className="tabular-nums">
+                        {novelLengthEval.estimatedPages.toFixed(1).replace('.', ',')} / 2,0 pages ·{' '}
+                        {novelLengthEval.chars.toLocaleString('fr-FR')} /{' '}
+                        {novelLengthEval.minChars.toLocaleString('fr-FR')} car.
+                      </span>
+                    </div>
                   </div>
 
                   <div>
@@ -1339,11 +1520,49 @@ export function StoryComposerModal({
                       onChange={(e) => setContent(e.target.value)}
                       placeholder={
                         storyFormat === 'roman'
-                          ? 'Écrivez le premier chapitre de votre roman…'
-                          : 'Écrivez librement votre histoire, votre souvenir ou votre question…'
+                          ? 'Écrivez le premier chapitre de votre roman (minimum 2 pages / 3 000 caractères)…'
+                          : 'Écrivez librement votre histoire, votre souvenir ou votre question (plus de 3 lignes)…'
                       }
                       className="w-full px-4 py-3 bg-white border border-stone-200 rounded-md text-base leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
                     />
+                    {storyFormat === 'roman' ? (
+                      <div
+                        className={`mt-2 px-3 py-2 rounded-md border text-xs flex flex-wrap items-center justify-between gap-2 ${
+                          novelLengthEval.ok
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                            : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                        }`}
+                      >
+                        <span className="font-medium">
+                          {novelLengthEval.ok
+                            ? 'Chapitre 1 conforme : 2 pages minimum atteintes'
+                            : 'Exigence roman : au moins 2 pages par chapitre (3 000 car.)'}
+                        </span>
+                        <span className="tabular-nums">
+                          {novelLengthEval.estimatedPages.toFixed(1).replace('.', ',')} / 2,0 pages ·{' '}
+                          {novelLengthEval.chars.toLocaleString('fr-FR')} /{' '}
+                          {novelLengthEval.minChars.toLocaleString('fr-FR')} car.
+                        </span>
+                      </div>
+                    ) : (
+                      <div
+                        className={`mt-2 px-3 py-2 rounded-md border text-xs flex flex-wrap items-center justify-between gap-2 ${
+                          confessionLengthEval.ok
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                            : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                        }`}
+                      >
+                        <span className="font-medium">
+                          {confessionLengthEval.ok
+                            ? 'Confession recevable (plus de 3 lignes)'
+                            : 'Exigence confession : plus de 3 lignes (4 lignes/phrases et 160 car. min.)'}
+                        </span>
+                        <span className="tabular-nums">
+                          {confessionLengthEval.lines} / {confessionLengthEval.minLines} lignes ·{' '}
+                          {confessionLengthEval.chars} / {confessionLengthEval.minChars} car.
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Collapsible Optional Prompt & Excerpt Drawer */}
@@ -1482,6 +1701,121 @@ export function StoryComposerModal({
                   </button>
                 </div>
               )}
+
+              {/* Age Classification & Mandatory Mature Warning */}
+              {!isAppendMode && (
+                <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span className="text-xs uppercase tracking-widest text-stone-600 font-semibold">
+                        Âge conseillé &amp; contenu mature
+                      </span>
+                    </div>
+                    <MatureContentBadge minAge={minAge} isMature={isMature} />
+                  </div>
+
+                  <p className="text-xs text-stone-600 leading-relaxed">
+                    Permet de ne proposer ce récit qu’aux lecteurs ayant renseigné un âge compatible. Même lorsque l’âge correspond, un avertissement « Contenu mature » s’affiche avant la lecture si vous le signalez.
+                  </p>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {AGE_RATING_OPTIONS.map((opt) => {
+                      const active = minAge === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setMinAge(opt.value);
+                            if (opt.value >= 16) {
+                              setIsMature(true);
+                            }
+                          }}
+                          className={`px-3 py-2 rounded-md border text-left transition-colors ${
+                            active
+                              ? 'bg-[#F3F6FA] border-[#1B365D] ring-1 ring-[#1B365D]'
+                              : 'bg-[#FBF9F5] border-stone-200 hover:border-stone-400'
+                          }`}
+                        >
+                          <p className="text-xs font-semibold text-stone-900">{opt.shortLabel}</p>
+                          <p className="text-[11px] text-stone-500 line-clamp-2 mt-0.5">
+                            {opt.description}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <label className="flex items-start gap-2.5 text-xs text-stone-800 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={isMature || minAge >= 16}
+                      disabled={minAge >= 16}
+                      onChange={(e) => setIsMature(e.target.checked)}
+                      className="mt-0.5 rounded border-stone-300 text-[#1B365D] focus:ring-[#1B365D]"
+                    />
+                    <span className="leading-relaxed">
+                      Afficher un avertissement <strong>« Contenu mature »</strong> avant l’ouverture du texte (thèmes sensibles, deuil, violence psychologique, sexualité ou langage cru).
+                    </span>
+                  </label>
+
+                  {(isMature || minAge >= 16) && (
+                    <div>
+                      <label
+                        htmlFor="story-mature-reason"
+                        className="block text-xs font-medium text-stone-700 mb-1"
+                      >
+                        Précision pour l’avertissement (facultatif)
+                      </label>
+                      <input
+                        id="story-mature-reason"
+                        type="text"
+                        maxLength={FIELD_LIMITS.matureReason.max}
+                        value={matureReason}
+                        onChange={(e) => setMatureReason(e.target.value)}
+                        placeholder="Ex. Aborde la perte d’un proche, la solitude profonde ou des thèmes adultes…"
+                        className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Anti-Hate Charter & Automated Regulation Bot */}
+              <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-[#1B365D] mt-0.5 shrink-0" />
+                  <div className="space-y-1">
+                    <p className="text-xs uppercase tracking-widest text-[#1B365D] font-semibold">
+                      Charte anti-haine &amp; bot de régulation Lisière
+                    </p>
+                    <p className="text-xs text-stone-600 leading-relaxed">
+                      Avant publication, votre texte est vérifié automatiquement par notre bot de régulation afin d’éviter tout propos haineux, offensant ou absurde :
+                    </p>
+                  </div>
+                </div>
+
+                <ul className="space-y-1 pl-6 text-xs text-stone-700 list-disc">
+                  {CONTENT_CHARTER_RULES.map((rule) => (
+                    <li key={rule} className="leading-relaxed">
+                      {rule}
+                    </li>
+                  ))}
+                </ul>
+
+                <label className="flex items-start gap-2.5 text-xs text-stone-800 cursor-pointer pt-1">
+                  <input
+                    type="checkbox"
+                    checked={charterAttested}
+                    onChange={(e) => setCharterAttested(e.target.checked)}
+                    className="mt-0.5 rounded border-stone-300 text-[#1B365D] focus:ring-[#1B365D]"
+                  />
+                  <span className="leading-relaxed">
+                    Je m’engage à respecter la charte de Lisière : aucun propos haineux, discriminatoire ou offensant, et une écriture sincère et construite.
+                  </span>
+                </label>
+              </div>
 
               {/* Anti-Plagiarism Policy (Romans Only) */}
               {storyFormat === 'roman' && (
@@ -1626,7 +1960,9 @@ export function StoryComposerModal({
                 className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 transition-colors whitespace-nowrap"
               >
                 {submitting
-                  ? 'Enregistrement…'
+                  ? botCheckBusy
+                    ? 'Vérification par le bot…'
+                    : 'Enregistrement…'
                   : isAppendMode
                     ? `Publier le chapitre ${(selectedNovel?.chapterCount ?? 1) + 1}`
                     : editingStory

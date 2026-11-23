@@ -2,6 +2,8 @@ import {
   analyzeModerationCaseWithGemini,
   buildRobotsTxt,
   buildSitemapXml,
+  ContentGuardKind,
+  guardContentWithGemini,
   normalizeGoogleSiteVerificationToken,
   normalizeGoogleVerificationFile,
   verifyFirebaseIdToken,
@@ -580,6 +582,51 @@ export default {
         const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
         return jsonResponse(
           { error: e.message || 'Impossible de contacter le service de modération IA.' },
+          status
+        );
+      }
+    }
+
+    if (pathname === '/api/moderation/guard' && request.method === 'POST') {
+      const authHeader = request.headers.get('authorization') || '';
+      const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+      if (!bearerToken) {
+        return jsonResponse(
+          { error: 'Authentification requise pour la vérification du contenu.' },
+          401
+        );
+      }
+      const caller = await verifyFirebaseIdToken(bearerToken);
+      if (!caller) {
+        return jsonResponse({ error: 'Session expirée ou jeton Firebase invalide.' }, 401);
+      }
+
+      let body: Record<string, unknown> = {};
+      try {
+        body = (await request.json()) as Record<string, unknown>;
+      } catch {
+        return jsonResponse({ error: 'Requête JSON invalide.' }, 400);
+      }
+
+      try {
+        const verdict = await guardContentWithGemini({
+          apiKey: env.GEMINI_API_KEY || '',
+          kind:
+            typeof body.kind === 'string'
+              ? (body.kind as ContentGuardKind)
+              : 'story',
+          title: typeof body.title === 'string' ? body.title : '',
+          text: typeof body.text === 'string' ? body.text : '',
+          declaredMinAge:
+            typeof body.declaredMinAge === 'number' ? body.declaredMinAge : 0,
+          declaredMature: Boolean(body.declaredMature),
+        });
+        return jsonResponse({ verdict });
+      } catch (err) {
+        const e = err as Error & { statusCode?: number };
+        const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
+        return jsonResponse(
+          { error: e.message || 'Le bot de régulation IA est momentanément indisponible.' },
           status
         );
       }

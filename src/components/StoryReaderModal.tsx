@@ -21,13 +21,21 @@ import {
   Plus,
   Quote,
   Repeat2,
+  ShieldAlert,
   ShieldCheck,
   Trash2,
   User as UserIcon,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  checkLocalContentHygiene,
+  evaluateNovelChapterLength,
+  getStoryAgeAccessBlockReason,
+  shouldShowMatureWarning,
+} from '../lib/contentRegulation';
 import { checkNovelPlagiarism } from '../lib/plagiarismCheck';
+import { MatureContentBadge } from './MatureContentBadge';
 import { ReadingMusicPanel, useReadingAudioEngine } from './ReadingMusicPanel';
 import type { ReportDraft } from './ReportModal';
 import { NovelCoverArt } from './NovelCoverArt';
@@ -42,6 +50,7 @@ import {
   formatFriendlyFirestoreError,
   formatLocalDateKey,
   recordStoryView,
+  runAutomatedContentBotGuard,
   submitPlagiarismReport,
   subscribeToStoryChapters,
   subscribeToStoryEchoes,
@@ -92,6 +101,7 @@ interface StoryReaderModalProps {
   onEnterCustomSalon?: (customSalonId: string) => void;
   onOpenPeleMele?: () => void;
   onOpenReport?: (draft: ReportDraft) => void;
+  onOpenAgeSettings?: () => void;
 }
 
 export function StoryReaderModal({
@@ -112,8 +122,10 @@ export function StoryReaderModal({
   onEnterCustomSalon,
   onOpenPeleMele,
   onOpenReport,
+  onOpenAgeSettings,
 }: StoryReaderModalProps) {
-  const { user, profile, signInWithGoogle } = useAuth();
+  const { user, profile, viewerAge, signInWithGoogle } = useAuth();
+  const [matureAcknowledged, setMatureAcknowledged] = useState(false);
   const [echoes, setEchoes] = useState<Echo[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeChapterIdx, setActiveChapterIdx] = useState(0); // 0 = Chapitre 1 (story.content), >=1 = chapters[idx - 1]
@@ -240,6 +252,7 @@ export function StoryReaderModal({
 
   useEffect(() => {
     if (!currentStoryId) return;
+    setMatureAcknowledged(false);
     setZenMode(false);
     setShowMusicPanel(false);
     setShowZenAppearance(false);
@@ -512,9 +525,21 @@ export function StoryReaderModal({
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
+  const ageBlockReason = getStoryAgeAccessBlockReason(
+    story,
+    viewerAge,
+    Boolean(user),
+    isAuthor
+  );
+  const storyIsMature = shouldShowMatureWarning(story);
+  const needsMatureGate = Boolean(
+    ageBlockReason === null && !isAuthor && storyIsMature && !matureAcknowledged
+  );
+  const isReadingBlocked = ageBlockReason !== null || needsMatureGate;
   const isAnonymousStory = Boolean(story.isAnonymous);
   const publicAuthorLabel = isAnonymousStory ? 'Auteur anonyme' : story.authorName;
   const isRoman = story.storyFormat === 'roman';
+  const inlineChapterLengthEval = evaluateNovelChapterLength(chapterContent);
   const theme = THEME_MAP[story.theme];
   const hasOriginSalon = Boolean(story.customSalonId || story.storyScope !== 'pelemele');
   const matchedCustomSalon = story.customSalonId
@@ -604,8 +629,32 @@ export function StoryReaderModal({
       setEchoError('Écrivez au moins 2 caractères pour publier votre commentaire.');
       return;
     }
+    const echoHygiene = checkLocalContentHygiene(echoText, {
+      label: 'Votre commentaire',
+      minWords: 1,
+      strictSentenceQuality: false,
+    });
+    if (!echoHygiene.ok) {
+      setEchoError(echoHygiene.reason ?? 'Veuillez vérifier votre commentaire.');
+      return;
+    }
+
     setEchoBusy(true);
     try {
+      const verdict = await runAutomatedContentBotGuard({
+        kind: 'echo',
+        title: story.title,
+        text: echoText,
+      });
+      if (!verdict.allowed) {
+        setEchoError(
+          verdict.blockedReason ||
+            verdict.botNotice ||
+            'Commentaire refusé par le bot de régulation Lisière.'
+        );
+        return;
+      }
+
       const displayName = profile?.displayName || user.displayName || 'Auteur';
       await addStoryEcho(story.storyId, user.uid, displayName, replyType, echoText);
       setEchoText('');
@@ -626,8 +675,17 @@ export function StoryReaderModal({
       setChapterError('Donnez un titre à ce chapitre.');
       return;
     }
-    if (chapterContent.trim().length < FIELD_LIMITS.chapterContent.min) {
-      setChapterError('Le chapitre doit contenir au moins 20 caractères.');
+    if (!inlineChapterLengthEval.ok) {
+      setChapterError(inlineChapterLengthEval.message);
+      return;
+    }
+    const chapHygiene = checkLocalContentHygiene(chapterContent, {
+      label: 'Ce chapitre',
+      minWords: 200,
+      strictSentenceQuality: true,
+    });
+    if (!chapHygiene.ok) {
+      setChapterError(chapHygiene.reason ?? 'Veuillez vérifier la qualité de ce chapitre.');
       return;
     }
     if (!chapterPlagiarismAttested) {
@@ -648,6 +706,22 @@ export function StoryReaderModal({
 
     setChapterBusy(true);
     try {
+      const verdict = await runAutomatedContentBotGuard({
+        kind: 'chapter',
+        title: chapterTitle,
+        text: chapterContent,
+        declaredMinAge: story.minAge ?? 0,
+        isMature: story.isMature,
+      });
+      if (!verdict.allowed) {
+        setChapterError(
+          verdict.blockedReason ||
+            verdict.botNotice ||
+            'Ce chapitre ne respecte pas la charte de Lisière.'
+        );
+        return;
+      }
+
       const nextNum = totalChapters + 1;
       const nextSeriesStatus: SeriesStatus = markCompleted ? 'termine' : 'en-cours';
       await addStoryChapter({
@@ -1415,17 +1489,19 @@ export function StoryReaderModal({
                         : 'Musique'}
                     </span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setZenMode(true)}
-                    aria-label="Activer le Mode lecture zen"
-                    aria-pressed={false}
-                    className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border border-[#1B365D]/35 bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#1B365D] hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    <span className="sm:hidden">Zen</span>
-                    <span className="hidden sm:inline">Mode lecture zen</span>
-                  </button>
+                  {!isReadingBlocked && (
+                    <button
+                      type="button"
+                      onClick={() => setZenMode(true)}
+                      aria-label="Activer le Mode lecture zen"
+                      aria-pressed={false}
+                      className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border border-[#1B365D]/35 bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#1B365D] hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <Maximize2 className="w-3.5 h-3.5" />
+                      <span className="sm:hidden">Zen</span>
+                      <span className="hidden sm:inline">Mode lecture zen</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={onClose}
@@ -1464,6 +1540,7 @@ export function StoryReaderModal({
                     </>
                   )
                 )}
+                <MatureContentBadge minAge={story.minAge} isMature={story.isMature} />
               </div>
             </div>
 
@@ -1618,39 +1695,41 @@ export function StoryReaderModal({
                 )}
 
                 {/* Quick Zen Reading & Ambient Music Invitation Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white border border-stone-200 rounded-md px-3.5 py-2.5">
-                  <div className="flex items-center gap-2 text-xs text-stone-600">
-                    <Maximize2 className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
-                    <span>Lire au calme en plein écran avec musique</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {authorPinnedMusic && !audioController.isPlaying && (
+                {!isReadingBlocked && (
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white border border-stone-200 rounded-md px-3.5 py-2.5">
+                    <div className="flex items-center gap-2 text-xs text-stone-600">
+                      <Maximize2 className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                      <span>Lire au calme en plein écran avec musique</span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {authorPinnedMusic && !audioController.isPlaying && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void audioController.playAuthorMusic(
+                              authorPinnedMusic,
+                              publicAuthorLabel
+                            )
+                          }
+                          className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span className="max-w-[160px] truncate">
+                            Son : {authorPinnedMusic.title}
+                          </span>
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() =>
-                          void audioController.playAuthorMusic(
-                            authorPinnedMusic,
-                            publicAuthorLabel
-                          )
-                        }
-                        className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                        onClick={() => setZenMode(true)}
+                        className="min-h-[32px] px-3 py-1 rounded bg-[#1B365D] text-white hover:bg-[#132744] text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
-                        <Play className="w-3 h-3 fill-current" />
-                        <span className="max-w-[160px] truncate">
-                          Son : {authorPinnedMusic.title}
-                        </span>
+                        <Maximize2 className="w-3 h-3" />
+                        <span>Mode lecture zen</span>
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setZenMode(true)}
-                      className="min-h-[32px] px-3 py-1 rounded bg-[#1B365D] text-white hover:bg-[#132744] text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
-                    >
-                      <Maximize2 className="w-3 h-3" />
-                      <span>Mode lecture zen</span>
-                    </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Highlighting Guide & Saved Quotes Summary for this Story */}
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 px-1">
@@ -1722,6 +1801,94 @@ export function StoryReaderModal({
                 )}
               </div>
             )}
+
+            {ageBlockReason !== null ? (
+              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 sm:p-8 space-y-4">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
+                  <h2 className="font-display text-xl font-medium text-stone-900">
+                    Contenu protégé par limite d’âge
+                  </h2>
+                  <MatureContentBadge minAge={story.minAge} isMature={story.isMature} />
+                </div>
+                <p className="text-sm text-stone-700 leading-relaxed">{ageBlockReason}</p>
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  {!user ? (
+                    <button
+                      type="button"
+                      onClick={() => void signInWithGoogle()}
+                      className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                    >
+                      Se connecter avec Google
+                    </button>
+                  ) : (
+                    onOpenAgeSettings && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenAgeSettings();
+                        }}
+                        className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                      >
+                        Renseigner ou modifier mon âge
+                      </button>
+                    )
+                  )}
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500"
+                  >
+                    Fermer
+                  </button>
+                </div>
+              </div>
+            ) : needsMatureGate ? (
+              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 sm:p-8 space-y-4">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
+                  <h2 className="font-display text-xl font-medium text-stone-900">
+                    Avertissement · Contenu mature
+                  </h2>
+                  <MatureContentBadge minAge={story.minAge} isMature={story.isMature} />
+                </div>
+                <p className="text-sm text-stone-700 leading-relaxed">
+                  Même si ce récit est adapté à votre tranche d’âge, il aborde des thèmes sensibles ou matures. Prenez connaissance de cet avertissement avant de poursuivre la lecture.
+                </p>
+                {story.matureReason && (
+                  <p className="text-xs text-amber-950 bg-amber-50 border border-amber-200 rounded-md px-3.5 py-2.5">
+                    Précision : {story.matureReason}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setMatureAcknowledged(true)}
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                  >
+                    J’ai compris — Afficher le récit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500"
+                  >
+                    Revenir aux récits
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                {!zenMode && storyIsMature && (
+                  <div className="mb-6 px-3.5 py-2.5 rounded-md border border-amber-200 bg-amber-50/75 text-xs text-amber-950 flex flex-wrap items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span className="font-semibold">Contenu mature</span>
+                    {story.matureReason && (
+                      <span>· {story.matureReason}</span>
+                    )}
+                  </div>
+                )}
 
             {/* Chapter Navigation Rail for Serialized Novels */}
             {!zenMode && isRoman && (
@@ -1805,9 +1972,27 @@ export function StoryReaderModal({
                     maxLength={FIELD_LIMITS.chapterContent.max}
                     value={chapterContent}
                     onChange={(e) => setChapterContent(e.target.value)}
-                    placeholder="Poursuivez votre histoire…"
+                    placeholder="Poursuivez votre histoire (minimum 2 pages / 3 000 caractères)…"
                     className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm leading-relaxed text-stone-800 focus:outline-none focus:border-[#1B365D]"
                   />
+                  <div
+                    className={`mt-1.5 px-3 py-1.5 rounded border text-[11px] flex flex-wrap items-center justify-between gap-2 ${
+                      inlineChapterLengthEval.ok
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                    }`}
+                  >
+                    <span>
+                      {inlineChapterLengthEval.ok
+                        ? 'Longueur conforme (2 pages min.)'
+                        : 'Minimum 2 pages (3 000 car.) par chapitre'}
+                    </span>
+                    <span className="tabular-nums">
+                      {inlineChapterLengthEval.estimatedPages.toFixed(1).replace('.', ',')} / 2,0 p. ·{' '}
+                      {inlineChapterLengthEval.chars.toLocaleString('fr-FR')} /{' '}
+                      {inlineChapterLengthEval.minChars.toLocaleString('fr-FR')} car.
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <label htmlFor="chap-note" className="block text-xs font-medium text-stone-700 mb-1">
@@ -2441,14 +2626,14 @@ export function StoryReaderModal({
                       )}
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-xs text-stone-500">
-                          Visible par tous les lecteurs de ce salon.
+                          Visible par les lecteurs · Modéré par le bot anti-haine Lisière.
                         </span>
                         <button
                           type="submit"
                           disabled={echoBusy}
                           className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 whitespace-nowrap shrink-0"
                         >
-                          {echoBusy ? 'Publication…' : 'Publier le commentaire'}
+                          {echoBusy ? 'Vérification…' : 'Publier le commentaire'}
                         </button>
                       </div>
                     </>
@@ -2468,6 +2653,8 @@ export function StoryReaderModal({
                   )}
                 </form>
               </section>
+            )}
+              </>
             )}
           </article>
         </div>

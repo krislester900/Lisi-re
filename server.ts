@@ -9,6 +9,8 @@ import {
   analyzeModerationCaseWithGemini,
   buildRobotsTxt,
   buildSitemapXml,
+  ContentGuardKind,
+  guardContentWithGemini,
   normalizeGoogleSiteVerificationToken,
   normalizeGoogleVerificationFile,
   verifyFirebaseIdToken,
@@ -1197,6 +1199,47 @@ export function createApiApp(): express.Express {
       const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
       res.status(status).json({
         error: e.message || 'Impossible de contacter le service de modération IA.',
+      });
+    }
+  });
+
+  app.post('/api/moderation/guard', async (req: Request, res: Response) => {
+    const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!bearerToken) {
+      res.status(401).json({ error: 'Authentification requise pour la vérification du contenu.' });
+      return;
+    }
+
+    const caller = await verifyFirebaseIdToken(bearerToken);
+    if (!caller) {
+      res.status(401).json({ error: 'Session expirée ou jeton Firebase invalide.' });
+      return;
+    }
+
+    const body = (req.body || {}) as {
+      kind?: ContentGuardKind;
+      title?: string;
+      text?: string;
+      declaredMinAge?: number;
+      declaredMature?: boolean;
+    };
+
+    try {
+      const verdict = await guardContentWithGemini({
+        apiKey: process.env.GEMINI_API_KEY || '',
+        kind: body.kind || 'story',
+        title: typeof body.title === 'string' ? body.title : '',
+        text: typeof body.text === 'string' ? body.text : '',
+        declaredMinAge: typeof body.declaredMinAge === 'number' ? body.declaredMinAge : 0,
+        declaredMature: Boolean(body.declaredMature),
+      });
+      res.json({ verdict });
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
+      res.status(status).json({
+        error: e.message || 'Le bot de régulation IA est momentanément indisponible.',
       });
     }
   });

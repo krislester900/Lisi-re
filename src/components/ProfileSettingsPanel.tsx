@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Camera, Globe, Lock, Music2 } from 'lucide-react';
+import { Camera, Globe, Lock, Music2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { compressAvatarForProfile } from '../lib/storageService';
-import { syncUserRepostsVisibility, updatePublicProfile } from '../lib/storyService';
+import {
+  syncUserRepostsVisibility,
+  updatePublicProfile,
+  updateUserAgeProfile,
+} from '../lib/storyService';
 import { FIELD_LIMITS, StoryRepost } from '../types/story';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 
@@ -15,7 +19,7 @@ export function ProfileSettingsPanel({
   reposts,
   onSavedSuccess,
 }: ProfileSettingsPanelProps) {
-  const { user, profile } = useAuth();
+  const { user, profile, privateInfo } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -31,6 +35,7 @@ export function ProfileSettingsPanel({
   const [interests, setInterests] = useState('');
   const [discoverable, setDiscoverable] = useState(true);
   const [syncRepostsOnSave, setSyncRepostsOnSave] = useState(true);
+  const [declaredAgeInput, setDeclaredAgeInput] = useState('');
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -63,6 +68,14 @@ export function ProfileSettingsPanel({
     }
   }, [profile, user]);
 
+  useEffect(() => {
+    if (typeof privateInfo?.declaredAge === 'number' && Number.isFinite(privateInfo.declaredAge)) {
+      setDeclaredAgeInput(String(privateInfo.declaredAge));
+    } else {
+      setDeclaredAgeInput('');
+    }
+  }, [privateInfo?.declaredAge]);
+
   if (!user) return null;
 
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,6 +102,24 @@ export function ProfileSettingsPanel({
     e.preventDefault();
     setProfileError(null);
     setProfileMessage(null);
+    const trimmedAge = declaredAgeInput.trim();
+    let parsedAge: number | null = null;
+    if (trimmedAge !== '') {
+      const n = Number(trimmedAge);
+      if (
+        !Number.isFinite(n) ||
+        !Number.isInteger(n) ||
+        n < FIELD_LIMITS.userAge.min ||
+        n > FIELD_LIMITS.userAge.max
+      ) {
+        setProfileError(
+          `Indiquez votre âge en nombre entier entre ${FIELD_LIMITS.userAge.min} et ${FIELD_LIMITS.userAge.max} ans.`
+        );
+        return;
+      }
+      parsedAge = n;
+    }
+
     setSavingProfile(true);
     try {
       const wasDiscoverable = profile?.discoverable !== false;
@@ -104,6 +135,10 @@ export function ProfileSettingsPanel({
         interests,
         discoverable,
       });
+
+      if (parsedAge !== null) {
+        await updateUserAgeProfile(user.uid, parsedAge);
+      }
 
       let syncNote = '';
       if (syncRepostsOnSave && (wasDiscoverable !== discoverable || reposts.length > 0)) {
@@ -390,6 +425,36 @@ export function ProfileSettingsPanel({
               placeholder="Ex. Musique, projets créatifs, conseils de lecture…"
               className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
             />
+          </div>
+        </div>
+
+        <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D]" />
+                <span>Votre âge (strictement privé · filtre d’accès)</span>
+              </p>
+              <p className="text-xs text-stone-600 mt-0.5 leading-relaxed">
+                Jamais affiché aux autres membres. Sert à proposer des récits et fils adaptés à votre âge et à activer les alertes « Contenu mature ».
+              </p>
+            </div>
+            <div className="sm:w-36 shrink-0">
+              <label htmlFor="profile-declared-age" className="sr-only">
+                Votre âge (en années)
+              </label>
+              <input
+                id="profile-declared-age"
+                type="number"
+                min={FIELD_LIMITS.userAge.min}
+                max={FIELD_LIMITS.userAge.max}
+                step={1}
+                value={declaredAgeInput}
+                onChange={(e) => setDeclaredAgeInput(e.target.value)}
+                placeholder="Ex. 24"
+                className="w-full px-3 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              />
+            </div>
           </div>
         </div>
 

@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Flag, MessageSquare, Send, Trash2 } from 'lucide-react';
+import { Flag, MessageSquare, Send, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { checkLocalContentHygiene } from '../lib/contentRegulation';
 import {
   deleteSalonMessage,
+  runAutomatedContentBotGuard,
   sendSalonMessage,
   subscribeToSalonMessages,
 } from '../lib/storyService';
@@ -67,8 +69,31 @@ export function SalonChatPanel({
     setError(null);
     if (!draft.trim()) return;
 
+    const hygiene = checkLocalContentHygiene(draft, {
+      label: 'Votre message',
+      minWords: 1,
+      strictSentenceQuality: false,
+    });
+    if (!hygiene.ok) {
+      setError(hygiene.reason ?? 'Message non conforme à la charte.');
+      return;
+    }
+
     setSending(true);
     try {
+      const verdict = await runAutomatedContentBotGuard({
+        kind: 'chat',
+        title: salon.shortSalonName,
+        text: draft,
+      });
+      if (!verdict.allowed) {
+        setError(
+          verdict.blockedReason ||
+            'Le bot de régulation a bloqué ce message (propos offensants, haineux ou incompréhensibles).'
+        );
+        return;
+      }
+
       const senderName = profile?.displayName || user.displayName || 'Auteur';
       await sendSalonMessage({
         salonId,
@@ -236,6 +261,12 @@ export function SalonChatPanel({
             <Send className="w-4 h-4" />
             <span>Envoyer</span>
           </button>
+        </div>
+        <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500">
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+            <span>Échanges régulés : aucun propos haineux, insultant ni spam.</span>
+          </span>
         </div>
         {error && (
           <p role="alert" className="text-xs text-red-700">

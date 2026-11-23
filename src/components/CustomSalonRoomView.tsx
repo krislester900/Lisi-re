@@ -15,6 +15,7 @@ import {
   Lock,
   MessageCircle,
   MessageSquare,
+  MessagesSquare,
   Pencil,
   Repeat2,
   Send,
@@ -27,6 +28,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  checkLocalContentHygiene,
+  isContentAllowedForAge,
+} from '../lib/contentRegulation';
+import {
   createDefaultStoryFilterState,
   filterAndSortStories,
   StoryFilterState,
@@ -37,6 +42,7 @@ import {
   joinOrRequestCustomSalon,
   leaveOrRemoveSalonMember,
   respondToSalonMemberRequest,
+  runAutomatedContentBotGuard,
   sendCustomSalonMessage,
   subscribeToCustomSalonMessages,
   subscribeToCustomSalonStories,
@@ -57,8 +63,10 @@ import {
   SalonMember,
   Story,
 } from '../types/story';
+import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
+import { SalonThreadsPanel } from './SalonThreadsPanel';
 import { StoryFilterBar } from './StoryFilterBar';
 
 interface CustomSalonRoomViewProps {
@@ -74,7 +82,7 @@ interface CustomSalonRoomViewProps {
   onBackToSalons: () => void;
   onEditSalon: (salon: CustomSalon) => void;
   onReadStory: (story: Story) => void;
-  onWriteInCustomSalon: (salon: CustomSalon) => void;
+  onWriteInCustomSalon: (salon: CustomSalon, initialPrompt?: string, starter?: string) => void;
   onOpenMemberWall: (userId: string) => void;
   onOpenReport?: (draft: ReportDraft) => void;
 }
@@ -96,13 +104,13 @@ export function CustomSalonRoomView({
   onOpenMemberWall,
   onOpenReport,
 }: CustomSalonRoomViewProps) {
-  const { user, profile, signInWithGoogle } = useAuth();
+  const { user, profile, viewerAge, signInWithGoogle } = useAuth();
   const [memberRecord, setMemberRecord] = useState<SalonMember | null>(null);
   const [ownerMembers, setOwnerMembers] = useState<SalonMember[]>([]);
   const [privateSalonStories, setPrivateSalonStories] = useState<Story[]>([]);
   const [messages, setMessages] = useState<CustomSalonMessage[]>([]);
 
-  const [roomSection, setRoomSection] = useState<'stories' | 'chat' | 'members'>('stories');
+  const [roomSection, setRoomSection] = useState<'stories' | 'threads' | 'chat' | 'members'>('stories');
   const [filterState, setFilterState] = useState<StoryFilterState>(() =>
     createDefaultStoryFilterState('recent')
   );
@@ -119,6 +127,7 @@ export function CustomSalonRoomView({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deletingSalon, setDeletingSalon] = useState(false);
   const [showRulesPanel, setShowRulesPanel] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
   const salonId = salon?.salonId ?? '';
   const isOwner = Boolean(user && salon && user.uid === salon.ownerId);
@@ -136,6 +145,7 @@ export function CustomSalonRoomView({
     setActionError(null);
     setConfirmDelete(false);
     setShowRulesPanel(false);
+    setAvatarFailed(false);
   }, [salonId]);
 
   useEffect(() => {
@@ -162,8 +172,8 @@ export function CustomSalonRoomView({
     return subscribeToCustomSalonStories(salon.salonId, 'private', setPrivateSalonStories);
   }, [salon?.salonId, salon?.visibility, canViewContent]);
 
-  const stories = useMemo(() => {
-    if (!salon) return [];
+  const { stories, hiddenByAgeCount } = useMemo(() => {
+    if (!salon) return { stories: [] as Story[], hiddenByAgeCount: 0 };
     const byId = new Map<string, Story>();
     const sourceList = salon.visibility === 'private' ? privateSalonStories : publicStories;
     for (const s of sourceList) {
@@ -180,13 +190,23 @@ export function CustomSalonRoomView({
       }
     }
     const merged = Array.from(byId.values());
-    merged.sort((a, b) => {
+    const allowed: Story[] = [];
+    let hidden = 0;
+    for (const item of merged) {
+      const isAuthor = Boolean(user && item.authorId === user.uid);
+      if (isContentAllowedForAge(item, viewerAge, isAuthor)) {
+        allowed.push(item);
+      } else {
+        hidden += 1;
+      }
+    }
+    allowed.sort((a, b) => {
       const aMs = (a.updatedAt || a.createdAt)?.toMillis() ?? 0;
       const bMs = (b.updatedAt || b.createdAt)?.toMillis() ?? 0;
       return bMs - aMs;
     });
-    return merged;
-  }, [salon, privateSalonStories, publicStories, myStories, hiddenUserIds, user?.uid]);
+    return { stories: allowed, hiddenByAgeCount: hidden };
+  }, [salon, privateSalonStories, publicStories, myStories, hiddenUserIds, user, viewerAge]);
 
   useEffect(() => {
     if (!salon || !user || !canViewContent) {
@@ -333,8 +353,33 @@ export function CustomSalonRoomView({
       return;
     }
     setChatError(null);
+    if (!chatInput.trim()) return;
+
+    const hygiene = checkLocalContentHygiene(chatInput, {
+      label: 'Votre message',
+      minWords: 1,
+      strictSentenceQuality: false,
+    });
+    if (!hygiene.ok) {
+      setChatError(hygiene.reason ?? 'Message non conforme.');
+      return;
+    }
+
     setChatBusy(true);
     try {
+      const verdict = await runAutomatedContentBotGuard({
+        kind: 'chat',
+        title: salon.name,
+        text: chatInput,
+      });
+      if (!verdict.allowed) {
+        setChatError(
+          verdict.blockedReason ||
+            'Le bot de régulation a bloqué ce message (propos offensants, haineux ou incohérents).'
+        );
+        return;
+      }
+
       await sendCustomSalonMessage({
         salonId: salon.salonId,
         senderId: user.uid,
@@ -427,48 +472,73 @@ export function CustomSalonRoomView({
         className="border border-t-2 rounded-lg p-5 sm:p-7 space-y-4"
       >
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2.5 text-xs">
-            <span
-              style={{ color: palette.textAccent }}
-              className="uppercase tracking-widest font-semibold inline-flex items-center gap-1.5"
-            >
-              {salon.visibility === 'private' ? (
-                <>
-                  <Lock className="w-3.5 h-3.5" />
-                  <span>Salon privé</span>
-                </>
-              ) : (
-                <>
-                  <Globe className="w-3.5 h-3.5" />
-                  <span>Salon public</span>
-                </>
-              )}
-            </span>
-            <span aria-hidden="true" className="text-stone-400">
-              ·
-            </span>
-            <span className="text-stone-600 tabular-nums inline-flex items-center gap-1">
-              <Users className="w-3.5 h-3.5" />
-              {salon.memberCount} membre{salon.memberCount > 1 ? 's' : ''}
-            </span>
-            <span aria-hidden="true" className="text-stone-400">
-              ·
-            </span>
-            <button
-              type="button"
-              onClick={() => onOpenMemberWall(salon.ownerId)}
-              className="text-stone-700 hover:underline font-medium"
-            >
-              Animé par {salon.ownerName}
-            </button>
-          </div>
+          <div className="flex items-center gap-4">
+            {salon.avatarUrl && !avatarFailed ? (
+              <img
+                src={salon.avatarUrl}
+                alt={`Photo du salon ${salon.name}`}
+                onError={() => setAvatarFailed(true)}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-md object-cover border border-stone-200 bg-white shrink-0"
+              />
+            ) : (
+              <div
+                style={{ borderColor: palette.borderTint, backgroundColor: '#FFFFFF' }}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-md border flex items-center justify-center shrink-0"
+              >
+                {salon.visibility === 'private' ? (
+                  <Lock className="w-6 h-6" style={{ color: palette.textAccent }} />
+                ) : (
+                  <Globe className="w-6 h-6" style={{ color: palette.textAccent }} />
+                )}
+              </div>
+            )}
 
-          <h1
-            className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-tight"
-            style={{ textWrap: 'balance' }}
-          >
-            {salon.name}
-          </h1>
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span
+                  style={{ color: palette.textAccent }}
+                  className="uppercase tracking-widest font-semibold inline-flex items-center gap-1.5"
+                >
+                  {salon.visibility === 'private' ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Salon privé</span>
+                    </>
+                  ) : (
+                    <>
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Salon public</span>
+                    </>
+                  )}
+                </span>
+                <span aria-hidden="true" className="text-stone-400">
+                  ·
+                </span>
+                <span className="text-stone-600 tabular-nums inline-flex items-center gap-1">
+                  <Users className="w-3.5 h-3.5" />
+                  {salon.memberCount} membre{salon.memberCount > 1 ? 's' : ''}
+                </span>
+                <span aria-hidden="true" className="text-stone-400">
+                  ·
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onOpenMemberWall(salon.ownerId)}
+                  className="text-stone-700 hover:underline font-medium"
+                >
+                  Animé par {salon.ownerName}
+                </button>
+                <MatureContentBadge minAge={salon.minAge} compact />
+              </div>
+
+              <h1
+                className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-tight"
+                style={{ textWrap: 'balance' }}
+              >
+                {salon.name}
+              </h1>
+            </div>
+          </div>
 
           {salon.description && (
             <p className="text-sm sm:text-base text-stone-700 leading-relaxed max-w-2xl">
@@ -681,6 +751,18 @@ export function CustomSalonRoomView({
               </button>
               <button
                 type="button"
+                onClick={() => setRoomSection('threads')}
+                className={`min-h-[38px] px-4 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
+                  roomSection === 'threads'
+                    ? 'bg-white text-stone-900 shadow-sm'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <MessagesSquare className="w-3.5 h-3.5" />
+                <span>Fils de discussion</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => setRoomSection('chat')}
                 className={`min-h-[38px] px-4 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                   roomSection === 'chat'
@@ -714,6 +796,12 @@ export function CustomSalonRoomView({
           {/* Section 1: Stories */}
           {roomSection === 'stories' && (
             <section className="space-y-6">
+              {hiddenByAgeCount > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-md px-4 py-2.5 text-xs text-amber-950">
+                  {hiddenByAgeCount} récit{hiddenByAgeCount > 1 ? 's' : ''} classé{hiddenByAgeCount > 1 ? 's' : ''} pour un public plus âgé ou mature {hiddenByAgeCount > 1 ? 'sont masqués' : 'est masqué'} selon votre profil d’âge{viewerAge === null ? ' (renseignez votre âge dans Profils pour adapter le filtre)' : ''}.
+                </div>
+              )}
+
               {stories.length > 0 && (
                 <StoryFilterBar
                   value={filterState}
@@ -799,6 +887,11 @@ export function CustomSalonRoomView({
                           <span>{story.readingMinutes} min</span>
                           <span aria-hidden="true">·</span>
                           <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                          <MatureContentBadge
+                            minAge={story.minAge}
+                            isMature={story.isMature}
+                            compact
+                          />
                         </div>
 
                         {story.storyFormat === 'roman' && story.coverUrl ? (
@@ -904,6 +997,27 @@ export function CustomSalonRoomView({
                 </div>
               )}
             </section>
+          )}
+
+          {/* Section 1b: Discussion Threads / Topics */}
+          {roomSection === 'threads' && (
+            <SalonThreadsPanel
+              scope="custom"
+              salonId={salon.salonId}
+              salonTitle={salon.name}
+              salonOwnerId={salon.ownerId}
+              viewerAge={viewerAge}
+              canPost={canViewContent}
+              onOpenMemberWall={onOpenMemberWall}
+              onWriteFromThread={(tTitle, tBody) =>
+                onWriteInCustomSalon(
+                  salon,
+                  tTitle,
+                  tBody ? `${tBody.slice(0, 140)} ` : ''
+                )
+              }
+              onOpenReport={onOpenReport}
+            />
           )}
 
           {/* Section 2: Custom Salon Chat */}

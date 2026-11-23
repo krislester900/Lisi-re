@@ -20,7 +20,15 @@ import { auth, db } from './firebase';
 import { handleFirestoreError, OperationType } from './firestoreErrors';
 import { estimateReadingMinutes } from './themes';
 import {
+  checkLocalContentHygiene,
+  evaluateConfessionLength,
+  evaluateNovelChapterLength,
+} from './contentRegulation';
+import {
+  AgeRating,
   Chapter,
+  ContentGuardKind,
+  ContentGuardVerdict,
   CustomSalon,
   CustomSalonMessage,
   CustomSalonVisibility,
@@ -40,11 +48,15 @@ import {
   ModerationTargetType,
   NovelGenre,
   PlagiarismReportReason,
+  PrivateUserInfo,
   PublicProfile,
   ReleaseCadence,
   SalonMember,
   SalonMemberStatus,
   SalonMessage,
+  SalonThread,
+  SalonThreadReply,
+  SalonThreadScope,
   SeriesStatus,
   Story,
   StoryBookmark,
@@ -202,6 +214,65 @@ export function subscribeToPublicProfile(
       handleFirestoreError(error, OperationType.GET, path);
     }
   );
+}
+
+export function subscribeToPrivateInfo(
+  userId: string,
+  onData: (info: PrivateUserInfo | null) => void
+): () => void {
+  assertValidId(userId, 'userId');
+  const path = `users/${userId}/private/info`;
+  return onSnapshot(
+    doc(db, 'users', userId, 'private', 'info'),
+    (snap) => {
+      onData(snap.exists() ? (snap.data() as PrivateUserInfo) : null);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  );
+}
+
+export async function updateUserAgeProfile(userId: string, rawAge: number): Promise<number> {
+  assertValidId(userId, 'userId');
+  const parsed = Math.round(Number(rawAge));
+  if (!Number.isFinite(parsed) || parsed < FIELD_LIMITS.userAge.min || parsed > FIELD_LIMITS.userAge.max) {
+    throw new Error(
+      `Veuillez indiquer un âge valide entre ${FIELD_LIMITS.userAge.min} et ${FIELD_LIMITS.userAge.max} ans.`
+    );
+  }
+
+  const currentYear = new Date().getFullYear();
+  const birthYear = Math.max(1900, Math.min(2026, currentYear - parsed));
+  const privatePath = `users/${userId}/private/info`;
+  const privateRef = doc(db, 'users', userId, 'private', 'info');
+
+  try {
+    const snap = await getDoc(privateRef);
+    if (!snap.exists()) {
+      const currentUser = auth.currentUser;
+      const email = clampString(currentUser?.email || 'utilisateur@lisiere.app', 200);
+      await setDoc(privateRef, {
+        userId,
+        email: email.length >= 3 ? email : 'utilisateur@lisiere.app',
+        declaredAge: parsed,
+        birthYear,
+        ageUpdatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(privateRef, {
+        declaredAge: parsed,
+        birthYear,
+        ageUpdatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+    return parsed;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, privatePath);
+  }
 }
 
 export function subscribeToDiscoverableProfiles(
@@ -442,6 +513,15 @@ export interface StoryInput {
   promptQuestion: string;
   visibility: StoryVisibility;
   isAnonymous?: boolean;
+  minAge?: AgeRating;
+  isMature?: boolean;
+  matureReason?: string;
+  charterAttested?: boolean;
+}
+
+function sanitizeAgeRating(raw?: AgeRating): AgeRating {
+  if (raw === 13 || raw === 16 || raw === 18) return raw;
+  return 0;
 }
 
 function buildValidatedStoryFields(input: StoryInput, authorName: string) {
@@ -456,9 +536,43 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     throw new Error('Le titre doit contenir au moins 3 caractères.');
   }
 
+  const titleHygiene = checkLocalContentHygiene(title, {
+    label: 'Le titre',
+    minWords: 1,
+    strictSentenceQuality: false,
+  });
+  if (!titleHygiene.ok) {
+    throw new Error(titleHygiene.reason);
+  }
+
   const content = clampString(input.content, FIELD_LIMITS.content.max);
-  if (content.length < FIELD_LIMITS.content.min) {
-    throw new Error('Votre récit doit contenir au moins 20 caractères.');
+  const storyFormat: StoryFormat = input.storyFormat ?? 'confession';
+
+  if (storyFormat === 'roman') {
+    const lengthEval = evaluateNovelChapterLength(content);
+    if (!lengthEval.ok) {
+      throw new Error(lengthEval.message);
+    }
+  } else {
+    const lengthEval = evaluateConfessionLength(content);
+    if (!lengthEval.ok) {
+      throw new Error(lengthEval.message);
+    }
+  }
+
+  const contentHygiene = checkLocalContentHygiene(content, {
+    label: storyFormat === 'roman' ? 'Ce chapitre' : 'Votre confession',
+    minWords: storyFormat === 'roman' ? 200 : 12,
+    strictSentenceQuality: true,
+  });
+  if (!contentHygiene.ok) {
+    throw new Error(contentHygiene.reason);
+  }
+
+  if (input.charterAttested === false) {
+    throw new Error(
+      'Veuillez confirmer le respect de la charte anti-haine et de bienveillance de Lisière.'
+    );
   }
 
   let excerpt = clampString(input.excerpt, FIELD_LIMITS.excerpt.max);
@@ -469,7 +583,6 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     }
   }
 
-  const storyFormat: StoryFormat = input.storyFormat ?? 'confession';
   const releaseCadence: ReleaseCadence =
     storyFormat === 'confession' ? 'unique' : (input.releaseCadence ?? 'hebdomadaire');
   const seriesStatus: SeriesStatus =
@@ -480,6 +593,10 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
   const effectiveVisibility: StoryVisibility =
     input.customSalon?.visibility === 'private' ? 'private' : input.visibility;
   const storyScope: StoryScope = input.customSalon ? 'salon' : (input.storyScope ?? 'salon');
+
+  const minAge = sanitizeAgeRating(input.minAge);
+  const isMature = Boolean(input.isMature || minAge >= 16);
+  const matureReason = clampString(input.matureReason ?? '', FIELD_LIMITS.matureReason.max);
 
   const result: Record<string, unknown> = {
     authorName: isAnonymous ? 'Auteur anonyme' : cleanAuthorName,
@@ -494,6 +611,10 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
     seriesStatus,
     promptQuestion,
     visibility: effectiveVisibility,
+    minAge,
+    isMature,
+    matureReason,
+    charterAttested: true,
     readingMinutes,
   };
 
@@ -566,6 +687,22 @@ export async function updateStory(
   }
 }
 
+export async function updateStoryVisibility(
+  storyId: string,
+  visibility: StoryVisibility
+): Promise<void> {
+  assertValidId(storyId, 'storyId');
+  const path = `stories/${storyId}`;
+  try {
+    await updateDoc(doc(db, 'stories', storyId), {
+      visibility,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
 export async function deleteStory(storyId: string): Promise<void> {
   assertValidId(storyId, 'storyId');
   const path = `stories/${storyId}`;
@@ -628,10 +765,28 @@ export async function addStoryChapter(params: {
   if (title.length < FIELD_LIMITS.chapterTitle.min) {
     throw new Error('Le titre du chapitre doit contenir au moins 2 caractères.');
   }
+  const titleHygiene = checkLocalContentHygiene(title, {
+    label: 'Le titre du chapitre',
+    minWords: 1,
+    strictSentenceQuality: false,
+  });
+  if (!titleHygiene.ok) {
+    throw new Error(titleHygiene.reason);
+  }
 
   const content = clampString(params.content, FIELD_LIMITS.chapterContent.max);
-  if (content.length < FIELD_LIMITS.chapterContent.min) {
-    throw new Error('Le chapitre doit contenir au moins 20 caractères.');
+  const lengthEval = evaluateNovelChapterLength(content);
+  if (!lengthEval.ok) {
+    throw new Error(lengthEval.message);
+  }
+
+  const contentHygiene = checkLocalContentHygiene(content, {
+    label: 'Ce chapitre',
+    minWords: 200,
+    strictSentenceQuality: true,
+  });
+  if (!contentHygiene.ok) {
+    throw new Error(contentHygiene.reason);
   }
 
   const authorNote = clampString(params.authorNote, FIELD_LIMITS.chapterNote.max);
@@ -1380,6 +1535,8 @@ export interface CustomSalonInput {
   admissionRules: string;
   visibility: CustomSalonVisibility;
   accentTone: WallAccentTone;
+  avatarUrl?: string;
+  minAge?: AgeRating;
 }
 
 export function subscribeToCustomSalons(onData: (salons: CustomSalon[]) => void): () => void {
@@ -1456,10 +1613,22 @@ function buildValidatedSalonFields(input: CustomSalonInput, ownerName: string) {
   if (name.length < FIELD_LIMITS.salonName.min) {
     throw new Error('Le nom du salon doit contenir au moins 3 caractères.');
   }
+  const nameHygiene = checkLocalContentHygiene(name, { label: 'Le nom du salon' });
+  if (!nameHygiene.ok) {
+    throw new Error(nameHygiene.reason);
+  }
 
   const description = clampString(input.description, FIELD_LIMITS.salonDescription.max);
   if (description.length < FIELD_LIMITS.salonDescription.min) {
     throw new Error('La présentation du salon doit contenir au moins 10 caractères.');
+  }
+  const descHygiene = checkLocalContentHygiene(description, {
+    label: 'La présentation du salon',
+    minWords: 2,
+    strictSentenceQuality: true,
+  });
+  if (!descHygiene.ok) {
+    throw new Error(descHygiene.reason);
   }
 
   return {
@@ -1470,6 +1639,8 @@ function buildValidatedSalonFields(input: CustomSalonInput, ownerName: string) {
     visibility: input.visibility,
     ownerName: cleanOwnerName.length >= 2 ? cleanOwnerName : 'Auteur',
     accentTone: input.accentTone,
+    avatarUrl: clampString(input.avatarUrl ?? '', FIELD_LIMITS.avatarUrl.max),
+    minAge: sanitizeAgeRating(input.minAge),
   };
 }
 
@@ -1802,6 +1973,265 @@ export async function deleteCustomSalonMessage(
   const path = `customSalons/${salonId}/messages/${messageId}`;
   try {
     await deleteDoc(doc(db, 'customSalons', salonId, 'messages', messageId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- Salon Discussion Threads & Replies (Predefined & Custom Salons) ---
+
+function getThreadsCollection(scope: SalonThreadScope, salonId: string) {
+  return scope === 'predefined'
+    ? collection(db, 'salons', salonId, 'threads')
+    : collection(db, 'customSalons', salonId, 'threads');
+}
+
+function getThreadDocRef(scope: SalonThreadScope, salonId: string, threadId: string) {
+  return scope === 'predefined'
+    ? doc(db, 'salons', salonId, 'threads', threadId)
+    : doc(db, 'customSalons', salonId, 'threads', threadId);
+}
+
+function getThreadRepliesCollection(scope: SalonThreadScope, salonId: string, threadId: string) {
+  return scope === 'predefined'
+    ? collection(db, 'salons', salonId, 'threads', threadId, 'replies')
+    : collection(db, 'customSalons', salonId, 'threads', threadId, 'replies');
+}
+
+function getThreadReplyDocRef(
+  scope: SalonThreadScope,
+  salonId: string,
+  threadId: string,
+  replyId: string
+) {
+  return scope === 'predefined'
+    ? doc(db, 'salons', salonId, 'threads', threadId, 'replies', replyId)
+    : doc(db, 'customSalons', salonId, 'threads', threadId, 'replies', replyId);
+}
+
+export function subscribeToSalonThreads(
+  scope: SalonThreadScope,
+  salonId: string,
+  onData: (threads: SalonThread[]) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  const path = scope === 'predefined' ? `salons/${salonId}/threads` : `customSalons/${salonId}/threads`;
+  const q = query(
+    getThreadsCollection(scope, salonId),
+    where('salonScope', '==', scope),
+    where('salonId', '==', salonId),
+    limit(100)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as SalonThread);
+      list.sort(
+        (a, b) =>
+          toTimestampMs(b.updatedAt || b.createdAt) - toTimestampMs(a.updatedAt || a.createdAt)
+      );
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function createSalonThread(params: {
+  scope: SalonThreadScope;
+  salonId: string;
+  authorId: string;
+  authorName: string;
+  title: string;
+  body: string;
+  minAge?: AgeRating;
+  isMature?: boolean;
+  matureReason?: string;
+}): Promise<string> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.authorId, 'authorId');
+
+  const title = clampString(params.title, FIELD_LIMITS.threadTitle.max);
+  if (title.length < FIELD_LIMITS.threadTitle.min) {
+    throw new Error('Le titre du fil doit contenir au moins 4 caractères.');
+  }
+  const titleHygiene = checkLocalContentHygiene(title, {
+    label: 'Le titre du fil',
+    minWords: 1,
+    strictSentenceQuality: false,
+  });
+  if (!titleHygiene.ok) {
+    throw new Error(titleHygiene.reason);
+  }
+
+  const body = clampString(params.body, FIELD_LIMITS.threadBody.max);
+  if (body.length > 0) {
+    const bodyHygiene = checkLocalContentHygiene(body, {
+      label: 'Le message d’ouverture',
+      minWords: 2,
+      strictSentenceQuality: true,
+    });
+    if (!bodyHygiene.ok) {
+      throw new Error(bodyHygiene.reason);
+    }
+  }
+
+  const cleanAuthor = clampString(params.authorName, FIELD_LIMITS.displayName.max);
+  const authorName = cleanAuthor.length >= FIELD_LIMITS.displayName.min ? cleanAuthor : 'Auteur';
+  const threadId = generateSafeId('th');
+  const minAge = sanitizeAgeRating(params.minAge);
+  const isMature = Boolean(params.isMature || minAge >= 16);
+  const matureReason = clampString(params.matureReason ?? '', FIELD_LIMITS.matureReason.max);
+  const path =
+    params.scope === 'predefined'
+      ? `salons/${params.salonId}/threads/${threadId}`
+      : `customSalons/${params.salonId}/threads/${threadId}`;
+
+  try {
+    await setDoc(getThreadDocRef(params.scope, params.salonId, threadId), {
+      threadId,
+      salonScope: params.scope,
+      salonId: params.salonId,
+      authorId: params.authorId,
+      authorName,
+      title,
+      body,
+      minAge,
+      isMature,
+      matureReason,
+      replyCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    return threadId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function deleteSalonThread(
+  scope: SalonThreadScope,
+  salonId: string,
+  threadId: string
+): Promise<void> {
+  assertValidId(salonId, 'salonId');
+  assertValidId(threadId, 'threadId');
+  const path =
+    scope === 'predefined'
+      ? `salons/${salonId}/threads/${threadId}`
+      : `customSalons/${salonId}/threads/${threadId}`;
+  try {
+    await deleteDoc(getThreadDocRef(scope, salonId, threadId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export function subscribeToSalonThreadReplies(
+  scope: SalonThreadScope,
+  salonId: string,
+  threadId: string,
+  onData: (replies: SalonThreadReply[]) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  assertValidId(threadId, 'threadId');
+  const path =
+    scope === 'predefined'
+      ? `salons/${salonId}/threads/${threadId}/replies`
+      : `customSalons/${salonId}/threads/${threadId}/replies`;
+  const q = query(
+    getThreadRepliesCollection(scope, salonId, threadId),
+    where('salonId', '==', salonId),
+    where('threadId', '==', threadId),
+    limit(200)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as SalonThreadReply);
+      list.sort((a, b) => toTimestampMs(a.createdAt) - toTimestampMs(b.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function addSalonThreadReply(params: {
+  scope: SalonThreadScope;
+  salonId: string;
+  threadId: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+}): Promise<string> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.threadId, 'threadId');
+  assertValidId(params.authorId, 'authorId');
+
+  const content = clampString(params.content, FIELD_LIMITS.threadReply.max);
+  if (content.length < FIELD_LIMITS.threadReply.min) {
+    throw new Error('Votre réponse doit contenir au moins 2 caractères.');
+  }
+  const hygiene = checkLocalContentHygiene(content, {
+    label: 'Votre réponse',
+    minWords: 1,
+    strictSentenceQuality: true,
+  });
+  if (!hygiene.ok) {
+    throw new Error(hygiene.reason);
+  }
+
+  const cleanAuthor = clampString(params.authorName, FIELD_LIMITS.displayName.max);
+  const authorName = cleanAuthor.length >= FIELD_LIMITS.displayName.min ? cleanAuthor : 'Auteur';
+  const replyId = generateSafeId('rep');
+  const threadRef = getThreadDocRef(params.scope, params.salonId, params.threadId);
+  const replyRef = getThreadReplyDocRef(params.scope, params.salonId, params.threadId, replyId);
+  const path =
+    params.scope === 'predefined'
+      ? `salons/${params.salonId}/threads/${params.threadId}/replies/${replyId}`
+      : `customSalons/${params.salonId}/threads/${params.threadId}/replies/${replyId}`;
+
+  try {
+    const batch = writeBatch(db);
+    batch.set(replyRef, {
+      replyId,
+      threadId: params.threadId,
+      salonId: params.salonId,
+      authorId: params.authorId,
+      authorName,
+      content,
+      createdAt: serverTimestamp(),
+    });
+    batch.update(threadRef, {
+      replyCount: increment(1),
+      lastReplyId: replyId,
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return replyId;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function deleteSalonThreadReply(
+  scope: SalonThreadScope,
+  salonId: string,
+  threadId: string,
+  replyId: string
+): Promise<void> {
+  assertValidId(salonId, 'salonId');
+  assertValidId(threadId, 'threadId');
+  assertValidId(replyId, 'replyId');
+  const path =
+    scope === 'predefined'
+      ? `salons/${salonId}/threads/${threadId}/replies/${replyId}`
+      : `customSalons/${salonId}/threads/${threadId}/replies/${replyId}`;
+  try {
+    await deleteDoc(getThreadReplyDocRef(scope, salonId, threadId, replyId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }
@@ -2462,6 +2892,68 @@ export async function requestModerationAiAnalysis(params: {
   }
 
   return sanitizeModerationAiAnalysis(parsed.analysis);
+}
+
+export async function runAutomatedContentBotGuard(params: {
+  kind: ContentGuardKind;
+  title?: string;
+  text: string;
+  declaredMinAge?: AgeRating;
+  isMature?: boolean;
+}): Promise<ContentGuardVerdict> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Connexion requise pour la vérification automatique avant publication.');
+  }
+
+  const idToken = await currentUser.getIdToken();
+  const resp = await fetch('/api/moderation/guard', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({
+      kind: params.kind,
+      title: params.title ?? '',
+      text: params.text,
+      declaredMinAge: params.declaredMinAge ?? 0,
+      isMature: Boolean(params.isMature),
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const contentType = resp.headers.get('content-type') || '';
+  const rawText = await resp.text();
+  if (!contentType.includes('application/json') && rawText.trimStart().startsWith('<')) {
+    throw new Error(
+      'Le bot de régulation (/api/moderation/guard) n’est pas disponible sur cet hébergement statique.'
+    );
+  }
+
+  let parsed: { verdict?: ContentGuardVerdict; error?: string } = {};
+  try {
+    parsed = JSON.parse(rawText) as { verdict?: ContentGuardVerdict; error?: string };
+  } catch {
+    throw new Error('Réponse invalide reçue du bot de régulation.');
+  }
+
+  if (!resp.ok || !parsed.verdict) {
+    throw new Error(parsed.error || 'Vérification par le bot de régulation indisponible.');
+  }
+
+  const raw = parsed.verdict;
+  const recommendedMinAge = sanitizeAgeRating(raw.recommendedMinAge);
+  return {
+    allowed: Boolean(raw.allowed),
+    blockedReason: clampString(raw.blockedReason || '', 400),
+    botNotice: clampString(raw.botNotice || '', 300),
+    isMature: Boolean(raw.isMature || recommendedMinAge >= 16),
+    recommendedMinAge,
+    matureReason: clampString(raw.matureReason || '', FIELD_LIMITS.matureReason.max),
+    qualityIssue: Boolean(raw.qualityIssue),
+    model: clampString(raw.model || 'gemini-4-hydrogen', 60),
+  };
 }
 
 export async function submitModerationCase(params: {

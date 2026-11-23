@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { doc, getDoc } from 'firebase/firestore';
+import { AgeOnboardingModal } from './components/AgeOnboardingModal';
 import { CustomSalonModal } from './components/CustomSalonModal';
 import { AppSidebar } from './components/AppSidebar';
 import { CustomSalonRoomView } from './components/CustomSalonRoomView';
@@ -30,6 +31,7 @@ import { ExchangesView } from './components/ExchangesView';
 import { JournalSubTab, JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
+import { MatureContentBadge } from './components/MatureContentBadge';
 import { MembersDirectoryView } from './components/MembersDirectoryView';
 import { ModerationCenterView } from './components/ModerationCenterView';
 import { NovelCoverArt } from './components/NovelCoverArt';
@@ -44,6 +46,7 @@ import { StoryFilterBar } from './components/StoryFilterBar';
 import { StoryReaderModal } from './components/StoryReaderModal';
 import { ThemesView } from './components/ThemesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { isContentAllowedForAge } from './lib/contentRegulation';
 import { db } from './lib/firebase';
 import { isModerationAdminEmail, WARNING_SEVERITY_LABELS } from './lib/moderationLabels';
 import {
@@ -192,7 +195,16 @@ function buildLocationPath(
 }
 
 function SalonApp() {
-  const { user, profile, authError, signInWithGoogle, clearAuthError } = useAuth();
+  const {
+    user,
+    profile,
+    viewerAge,
+    needsAgeOnboarding,
+    dismissAgeOnboarding,
+    authError,
+    signInWithGoogle,
+    clearAuthError,
+  } = useAuth();
   const initialRoute = useMemo(() => parseLocationPath(window.location.pathname), []);
   const [activeTab, setActiveTab] = useState<NavTab>(initialRoute.tab);
   const [highlightedTab, setHighlightedTab] = useState<NavTab>(initialRoute.tab);
@@ -255,6 +267,7 @@ function SalonApp() {
   );
   const [heroImgFailed, setHeroImgFailed] = useState(false);
   const [salonImgFailedMap, setSalonImgFailedMap] = useState<Record<string, boolean>>({});
+  const [customSalonImgFailedMap, setCustomSalonImgFailedMap] = useState<Record<string, boolean>>({});
 
   const [readingStory, setReadingStory] = useState<Story | null>(null);
   const [repostingStory, setRepostingStory] = useState<Story | null>(null);
@@ -483,7 +496,7 @@ function SalonApp() {
     [allModerationCases]
   );
 
-  const openFeedStories = useMemo(() => {
+  const openSalonEligibleStories = useMemo(() => {
     const privateCustomIds = new Set(
       customSalons.filter((cs) => cs.visibility === 'private').map((cs) => cs.salonId)
     );
@@ -493,6 +506,23 @@ function SalonApp() {
       return true;
     });
   }, [visiblePublicStories, customSalons]);
+
+  const openFeedStories = useMemo(
+    () =>
+      openSalonEligibleStories.filter((story) =>
+        isContentAllowedForAge(
+          story,
+          viewerAge,
+          Boolean(user && story.authorId === user.uid)
+        )
+      ),
+    [openSalonEligibleStories, viewerAge, user]
+  );
+
+  const hiddenFeedByAgeCount = Math.max(
+    0,
+    openSalonEligibleStories.length - openFeedStories.length
+  );
 
   const deferredFeedFilter = useDeferredValue(feedFilter);
 
@@ -973,10 +1003,11 @@ function SalonApp() {
             onBackToSalons={() => enterSalon(null)}
             onEditSalon={(salonToEdit) => void openCustomSalonModal(salonToEdit)}
             onReadStory={(story) => setReadingStory(story)}
-            onWriteInCustomSalon={(targetSalon) =>
+            onWriteInCustomSalon={(targetSalon, initialPrompt, starter) =>
               void openComposer({
                 theme: 'creation',
-                prompt: targetSalon.promptQuestion || undefined,
+                prompt: initialPrompt || targetSalon.promptQuestion || undefined,
+                starter,
                 customSalonId: targetSalon.salonId,
               })
             }
@@ -1414,48 +1445,67 @@ function SalonApp() {
                       >
                         <div className="p-6 space-y-3.5">
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <span
-                              style={{ color: pal.textAccent }}
-                              className="font-semibold inline-flex items-center gap-1.5"
-                            >
-                              {cs.visibility === 'private' ? (
-                                <>
-                                  <Lock className="w-3.5 h-3.5" />
-                                  <span>Salon privé</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Globe className="w-3.5 h-3.5" />
-                                  <span>Salon public</span>
-                                </>
-                              )}
-                            </span>
-                            <span className="text-stone-500 tabular-nums inline-flex items-center gap-1">
+                            <div className="flex flex-wrap items-center gap-2 min-w-0">
+                              <span
+                                style={{ color: pal.textAccent }}
+                                className="font-semibold inline-flex items-center gap-1.5"
+                              >
+                                {cs.visibility === 'private' ? (
+                                  <>
+                                    <Lock className="w-3.5 h-3.5" />
+                                    <span>Salon privé</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Globe className="w-3.5 h-3.5" />
+                                    <span>Salon public</span>
+                                  </>
+                                )}
+                              </span>
+                              <MatureContentBadge minAge={cs.minAge} compact />
+                            </div>
+                            <span className="text-stone-500 tabular-nums inline-flex items-center gap-1 shrink-0">
                               <Users className="w-3.5 h-3.5" />
                               {cs.memberCount}
                             </span>
                           </div>
 
-                          <div>
-                            <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
-                              <button
-                                type="button"
-                                onClick={() => enterCustomSalon(cs.salonId)}
-                                className="text-left hover:underline focus-visible:outline-none"
-                              >
-                                {cs.name}
-                              </button>
-                            </h3>
-                            <p className="text-xs text-stone-500 mt-1">
-                              Par{' '}
-                              <button
-                                type="button"
-                                onClick={() => openMemberWall(cs.ownerId)}
-                                className="font-medium text-stone-700 hover:underline"
-                              >
-                                {cs.ownerName}
-                              </button>
-                            </p>
+                          <div className="flex items-start gap-3">
+                            {cs.avatarUrl && !customSalonImgFailedMap[cs.salonId] && (
+                              <img
+                                src={cs.avatarUrl}
+                                alt={`Photo du salon ${cs.name}`}
+                                referrerPolicy="no-referrer"
+                                onError={() =>
+                                  setCustomSalonImgFailedMap((prev) => ({
+                                    ...prev,
+                                    [cs.salonId]: true,
+                                  }))
+                                }
+                                className="w-11 h-11 rounded-md object-cover border border-stone-200 shrink-0 mt-0.5"
+                              />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                <button
+                                  type="button"
+                                  onClick={() => enterCustomSalon(cs.salonId)}
+                                  className="text-left hover:underline focus-visible:outline-none"
+                                >
+                                  {cs.name}
+                                </button>
+                              </h3>
+                              <p className="text-xs text-stone-500 mt-1">
+                                Par{' '}
+                                <button
+                                  type="button"
+                                  onClick={() => openMemberWall(cs.ownerId)}
+                                  className="font-medium text-stone-700 hover:underline"
+                                >
+                                  {cs.ownerName}
+                                </button>
+                              </p>
+                            </div>
                           </div>
 
                           <p className="text-sm text-stone-600 leading-relaxed line-clamp-3">
@@ -1520,6 +1570,38 @@ function SalonApp() {
                     Récits récents de la communauté
                   </h2>
                 </div>
+
+                {hiddenFeedByAgeCount > 0 && (
+                  <div className="bg-amber-50/80 border border-amber-200 rounded-md px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950">
+                    <div className="flex items-start gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <span>
+                        {hiddenFeedByAgeCount} récit{hiddenFeedByAgeCount > 1 ? 's' : ''}{' '}
+                        comportant une limite d’âge (13+, 16+ ou 18+) {hiddenFeedByAgeCount > 1 ? 'sont masqués' : 'est masqué'} selon votre profil d’âge.
+                      </span>
+                    </div>
+                    {user && viewerAge === null ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setProfilesSubTab('edit-profile');
+                          navigateTo('membres', null, null);
+                        }}
+                        className="font-medium text-[#1B365D] hover:underline whitespace-nowrap shrink-0 self-start sm:self-center"
+                      >
+                        Renseigner mon âge
+                      </button>
+                    ) : !user ? (
+                      <button
+                        type="button"
+                        onClick={() => void signInWithGoogle()}
+                        className="font-medium text-[#1B365D] hover:underline whitespace-nowrap shrink-0 self-start sm:self-center"
+                      >
+                        Se connecter
+                      </button>
+                    ) : null}
+                  </div>
+                )}
 
                 <StoryFilterBar
                   value={feedFilter}
@@ -1635,6 +1717,11 @@ function SalonApp() {
                             <span>{leadStory.readingMinutes} min de lecture</span>
                             <span aria-hidden="true">·</span>
                             <span>{formatFrenchDate(leadStory.createdAt?.toDate() ?? null)}</span>
+                            <MatureContentBadge
+                              minAge={leadStory.minAge}
+                              isMature={leadStory.isMature}
+                              compact
+                            />
                           </div>
 
                           {leadStory.storyFormat === 'roman' && leadStory.coverUrl ? (
@@ -1844,6 +1931,11 @@ function SalonApp() {
                                   <span>{story.readingMinutes} min</span>
                                   <span aria-hidden="true">·</span>
                                   <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                                  <MatureContentBadge
+                                    minAge={story.minAge}
+                                    isMature={story.isMature}
+                                    compact
+                                  />
                                 </div>
 
                                 {format === 'roman' && story.coverUrl ? (
@@ -2090,6 +2182,11 @@ function SalonApp() {
         onEnterCustomSalon={(customSalonId) => enterCustomSalon(customSalonId)}
         onOpenPeleMele={() => navigateTo('pelemele')}
         onOpenReport={setReportDraft}
+        onOpenAgeSettings={() => {
+          setReadingStory(null);
+          setProfilesSubTab('edit-profile');
+          navigateTo('membres', null, null);
+        }}
       />
 
       {/* Global Reporting Modal */}
@@ -2194,6 +2291,16 @@ function SalonApp() {
           }}
         />
       )}
+
+      <AgeOnboardingModal
+        isOpen={needsAgeOnboarding}
+        onDismiss={dismissAgeOnboarding}
+        onSaved={(age) =>
+          showNotice(
+            `Âge enregistré (${age} ans) : les récits proposés sont désormais adaptés à votre âge.`
+          )
+        }
+      />
     </div>
   );
 }

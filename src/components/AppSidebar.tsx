@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   BookOpen,
   Compass,
@@ -68,6 +68,7 @@ export function AppSidebar({
   onEnterCustomSalon,
   onCreateCustomSalon,
 }: AppSidebarProps) {
+  const [brokenAvatarIds, setBrokenAvatarIds] = useState<Record<string, boolean>>({});
   const navItems: Array<{
     id: SidebarNavTab;
     label: string;
@@ -308,6 +309,7 @@ export function AppSidebar({
                   {customSalons.slice(0, 6).map((cs) => {
                     const isSelected = activeTab === 'recits' && activeCustomSalonId === cs.salonId;
                     const pal = ACCENT_TONE_PALETTES[cs.accentTone] ?? ACCENT_TONE_PALETTES.ink;
+                    const hasAvatar = Boolean(cs.avatarUrl && !brokenAvatarIds[cs.salonId]);
                     return (
                       <button
                         key={cs.salonId}
@@ -322,7 +324,16 @@ export function AppSidebar({
                             : 'text-stone-700 hover:bg-stone-200/60'
                         }`}
                       >
-                        {cs.visibility === 'private' ? (
+                        {hasAvatar ? (
+                          <img
+                            src={cs.avatarUrl}
+                            alt=""
+                            onError={() =>
+                              setBrokenAvatarIds((prev) => ({ ...prev, [cs.salonId]: true }))
+                            }
+                            className="w-5 h-5 rounded-sm object-cover shrink-0 border border-stone-200 bg-white"
+                          />
+                        ) : cs.visibility === 'private' ? (
                           <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: pal.textAccent }} />
                         ) : (
                           <Globe className="w-3.5 h-3.5 shrink-0" style={{ color: pal.textAccent }} />

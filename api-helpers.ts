@@ -301,6 +301,185 @@ export async function analyzeModerationCaseWithGemini(params: {
   };
 }
 
+export type ContentGuardKind =
+  | 'story'
+  | 'chapter'
+  | 'thread'
+  | 'reply'
+  | 'echo'
+  | 'chat'
+  | 'custom_salon';
+
+export interface ContentGuardVerdict {
+  allowed: boolean;
+  blockedReason: string;
+  botNotice: string;
+  isMature: boolean;
+  recommendedMinAge: 0 | 13 | 16 | 18;
+  matureReason: string;
+  qualityIssue: boolean;
+  model: string;
+}
+
+export async function guardContentWithGemini(params: {
+  apiKey: string;
+  kind: ContentGuardKind;
+  title?: string;
+  text: string;
+  declaredMinAge?: number;
+  declaredMature?: boolean;
+}): Promise<ContentGuardVerdict> {
+  const cleanKey = (params.apiKey || '').trim();
+  if (!cleanKey || cleanKey === 'MY_GEMINI_API_KEY') {
+    const err = new Error(
+      'Le bot de régulation IA (GEMINI_API_KEY) n’est pas configuré sur le serveur.'
+    ) as Error & { statusCode?: number };
+    err.statusCode = 503;
+    throw err;
+  }
+
+  const kind: ContentGuardKind =
+    params.kind === 'story' ||
+    params.kind === 'chapter' ||
+    params.kind === 'thread' ||
+    params.kind === 'reply' ||
+    params.kind === 'echo' ||
+    params.kind === 'chat' ||
+    params.kind === 'custom_salon'
+      ? params.kind
+      : 'story';
+
+  const title = clampText(params.title || '', 160);
+  const text = clampText(params.text || '', 8000);
+  const declaredMinAge = Number(params.declaredMinAge ?? 0) || 0;
+  const declaredMature = Boolean(params.declaredMature);
+
+  if (!text && !title) {
+    const err = new Error('Aucun contenu fourni pour la vérification.') as Error & {
+      statusCode?: number;
+    };
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey: cleanKey,
+    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+  });
+
+  const modelName = 'gemini-4-hydrogen';
+
+  const prompt = [
+    `Tu es le Bot de régulation de « Lisière », une plateforme littéraire francophone (confessions, romans à chapitres, fils de discussion et chats de salon).`,
+    `Analyse le texte suivant avant sa mise en ligne et décide s’il respecte le cadre éditorial :`,
+    ``,
+    `- Nature du contenu : ${kind}`,
+    `- Âge minimum déclaré par l’auteur : ${declaredMinAge}+`,
+    `- Indicateur mature déclaré par l’auteur : ${declaredMature ? 'oui' : 'non'}`,
+    title ? `- Titre : ${title}` : `- Titre : (aucun)`,
+    `- Texte à contrôler :`,
+    `« ${text} »`,
+    ``,
+    `Critères stricts de blocage (allowed = false) :`,
+    `1. Incitation à la haine, racisme, xénophobie, sexisme, homophobie, transphobie, antisémitisme, validisme ou discrimination visant une personne ou un groupe.`,
+    `2. Insultes graves, propos offensants/dégradants ciblés, menaces, harcèlement ou incitation à l’automutilation / violence.`,
+    `3. Foutoir / contenu incohérent : charabia de clavier (« azertyuiop », « fghjklm »), répétitions mécaniques sans sens, spam publicitaire ou bruit destiné uniquement à salir le salon (qualityIssue = true).`,
+    ``,
+    `Critères d’évaluation de la maturité (isMature & recommendedMinAge) :`,
+    `- Un texte sincère mais sensible (deuil, détresse émotionnelle profonde, violence évoquée sans apologie, sexualité adulte non haineuse, addiction, traumatisme) peut être AUTORISÉ (allowed = true) s’il reste respectueux, mais DOIT être classé isMature = true et recommendedMinAge = 16 ou 18 avec un matureReason bref en français (ex. « Thèmes psychologiques sensibles », « Scènes réservées aux adultes »).`,
+    `- Ne bloque PAS une confession sincère ou un passage dramatique de roman simplement parce qu’il est triste ou sérieux : distingue clairement l’émotion littéraire (autorisée, éventuellement 16+/18+ mature) de la haine, de l’offense et du charabia (bloqués).`,
+    ``,
+    `Règles de réponse JSON :`,
+    `- allowed: true si acceptable, false si bloqué.`,
+    `- blockedReason: en français, poli et précis si allowed=false (sinon "").`,
+    `- botNotice: bref message de synthèse du Bot de régulation Lisière (ex. « Contenu validé par le bot de régulation. » ou motif clair).`,
+    `- isMature: true si le texte contient des thèmes matures ou sensibles (16+ ou 18+).`,
+    `- recommendedMinAge: 0, 13, 16, ou 18.`,
+    `- matureReason: explication courte en français si isMature=true (sinon "").`,
+    `- qualityIssue: true si refusé pour charabia/spam/bêtises incohérentes.`,
+  ].join('\n');
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: prompt,
+    config: {
+      systemInstruction:
+        'Tu es le bot de régulation automatique de Lisière. Tu protéges le calme et la qualité littéraire des salons contre la haine, l’offense, le harcèlement et le charabia, tout en classant justement la maturité (Tout public, 13+, 16+, 18+).',
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          allowed: { type: Type.BOOLEAN },
+          blockedReason: { type: Type.STRING },
+          botNotice: { type: Type.STRING },
+          isMature: { type: Type.BOOLEAN },
+          recommendedMinAge: { type: Type.INTEGER },
+          matureReason: { type: Type.STRING },
+          qualityIssue: { type: Type.BOOLEAN },
+        },
+        required: [
+          'allowed',
+          'blockedReason',
+          'botNotice',
+          'isMature',
+          'recommendedMinAge',
+          'matureReason',
+          'qualityIssue',
+        ],
+      },
+    },
+  });
+
+  const rawText = response.text?.trim() || '';
+  if (!rawText) {
+    throw new Error('Réponse vide du bot de régulation IA.');
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(rawText) as Record<string, unknown>;
+  } catch {
+    throw new Error('Impossible de lire le verdict du bot de régulation IA.');
+  }
+
+  const allowed = Boolean(parsed.allowed);
+  const qualityIssue = Boolean(parsed.qualityIssue);
+  const rawAge = Number(parsed.recommendedMinAge);
+  const recommendedMinAge: 0 | 13 | 16 | 18 =
+    rawAge >= 18 ? 18 : rawAge >= 16 ? 16 : rawAge >= 13 ? 13 : 0;
+  const isMature = Boolean(parsed.isMature) || recommendedMinAge >= 16;
+
+  const blockedReason = allowed
+    ? ''
+    : clampText(parsed.blockedReason, 320) ||
+      (qualityIssue
+        ? 'Contenu jugé incohérent ou hors cadre par le bot de régulation.'
+        : 'Contenu bloqué par le bot de régulation : propos contraires à la charte de respect et anti-haine de Lisière.');
+
+  const botNotice =
+    clampText(parsed.botNotice, 240) ||
+    (allowed
+      ? isMature
+        ? 'Contenu conforme, signalé comme contenu mature.'
+        : 'Contenu validé par le bot de régulation Lisière.'
+      : blockedReason);
+
+  const matureReason = isMature
+    ? clampText(parsed.matureReason, 160) || 'Thèmes sensibles ou réservés à un public averti.'
+    : '';
+
+  return {
+    allowed,
+    blockedReason,
+    botNotice,
+    isMature,
+    recommendedMinAge,
+    matureReason,
+    qualityIssue,
+    model: modelName,
+  };
+}
+
 export const PUBLIC_INDEXABLE_ROUTES: ReadonlyArray<{
   path: string;
   changefreq: 'daily' | 'weekly' | 'monthly';

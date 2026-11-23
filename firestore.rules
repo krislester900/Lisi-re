@@ -70,6 +70,14 @@ service cloud.firestore {
         );
     }
 
+    function meetsStoryFormatMinLength(data) {
+      return (
+        ('storyFormat' in data && data.storyFormat == 'roman')
+          ? data.content.size() >= 3000
+          : data.content.size() >= 160
+      );
+    }
+
     // --- Validation Blueprints ---
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
@@ -121,9 +129,15 @@ service cloud.firestore {
 
     function isValidPrivateInfo(data) {
       return data.keys().hasAll(['userId', 'email', 'createdAt', 'updatedAt'])
-        && data.keys().hasOnly(['userId', 'email', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'userId', 'email', 'declaredAge', 'birthYear', 'ageUpdatedAt',
+          'createdAt', 'updatedAt'
+        ])
         && isValidId(data.userId)
         && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && (!('declaredAge' in data) || (data.declaredAge is int && data.declaredAge >= 13 && data.declaredAge <= 115))
+        && (!('birthYear' in data) || (data.birthYear is int && data.birthYear >= 1900 && data.birthYear <= 2026))
+        && (!('ageUpdatedAt' in data) || data.ageUpdatedAt is timestamp)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -227,6 +241,7 @@ service cloud.firestore {
           'storyFormat', 'novelGenre', 'coverUrl', 'plagiarismAttested',
           'releaseCadence', 'seriesStatus',
           'chapterCount', 'lastChapterId', 'promptQuestion', 'visibility', 'isAnonymous',
+          'minAge', 'isMature', 'matureReason', 'charterAttested',
           'readingMinutes', 'resonanceCount', 'echoCount', 'lastEchoId',
           'viewCount', 'lastViewId', 'createdAt', 'updatedAt'
         ])
@@ -252,6 +267,10 @@ service cloud.firestore {
         && data.promptQuestion is string && data.promptQuestion.size() <= 240
         && data.visibility in ['public', 'private']
         && (!('isAnonymous' in data) || data.isAnonymous is bool)
+        && (!('minAge' in data) || (data.minAge is int && data.minAge in [0, 13, 16, 18]))
+        && (!('isMature' in data) || data.isMature is bool)
+        && (!('matureReason' in data) || (data.matureReason is string && data.matureReason.size() <= 180))
+        && (!('charterAttested' in data) || data.charterAttested is bool)
         && data.readingMinutes is int && data.readingMinutes >= 1 && data.readingMinutes <= 60
         && data.resonanceCount is int && data.resonanceCount >= 0
         && data.echoCount is int && data.echoCount >= 0
@@ -366,7 +385,7 @@ service cloud.firestore {
         ])
         && data.keys().hasOnly([
           'salonId', 'name', 'description', 'promptQuestion', 'admissionRules',
-          'visibility', 'ownerId', 'ownerName', 'accentTone', 'memberCount',
+          'visibility', 'ownerId', 'ownerName', 'accentTone', 'avatarUrl', 'minAge', 'memberCount',
           'createdAt', 'updatedAt'
         ])
         && isValidId(data.salonId)
@@ -378,9 +397,53 @@ service cloud.firestore {
         && isValidId(data.ownerId)
         && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 60
         && data.accentTone in ['ink', 'ochre', 'terracotta', 'sage', 'sand']
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000))
+        && (!('minAge' in data) || (data.minAge is int && data.minAge in [0, 13, 16, 18]))
         && data.memberCount is int && data.memberCount >= 1
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
+    }
+
+    function isValidSalonThread(data) {
+      return data.keys().hasAll([
+          'threadId', 'salonScope', 'salonId', 'authorId', 'authorName',
+          'title', 'body', 'replyCount', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'threadId', 'salonScope', 'salonId', 'authorId', 'authorName',
+          'title', 'body', 'minAge', 'isMature', 'matureReason',
+          'replyCount', 'lastReplyId', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.threadId)
+        && data.salonScope in ['predefined', 'custom']
+        && isValidId(data.salonId)
+        && isValidId(data.authorId)
+        && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60
+        && data.title is string && data.title.size() >= 4 && data.title.size() <= 140
+        && data.body is string && data.body.size() <= 1500
+        && (!('minAge' in data) || (data.minAge is int && data.minAge in [0, 13, 16, 18]))
+        && (!('isMature' in data) || data.isMature is bool)
+        && (!('matureReason' in data) || (data.matureReason is string && data.matureReason.size() <= 180))
+        && data.replyCount is int && data.replyCount >= 0
+        && (!('lastReplyId' in data) || isValidId(data.lastReplyId))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSalonThreadReply(data) {
+      return data.keys().hasAll([
+          'replyId', 'threadId', 'salonId', 'authorId', 'authorName', 'content', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'replyId', 'threadId', 'salonId', 'authorId', 'authorName', 'content', 'createdAt'
+        ])
+        && isValidId(data.replyId)
+        && isValidId(data.threadId)
+        && isValidId(data.salonId)
+        && isValidId(data.authorId)
+        && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60
+        && data.content is string && data.content.size() >= 2 && data.content.size() <= 1200
+        && data.createdAt is timestamp;
     }
 
     function isValidSalonMember(data) {
@@ -557,7 +620,10 @@ service cloud.firestore {
         && isValidId(data.targetUserId)
         && data.reporterId != data.targetUserId
         && data.targetUserName is string && data.targetUserName.size() >= 2 && data.targetUserName.size() <= 60
-        && data.targetType in ['private_message', 'story', 'echo', 'salon_message', 'profile']
+        && data.targetType in [
+          'private_message', 'story', 'echo', 'salon_message',
+          'salon_thread', 'thread_reply', 'profile'
+        ]
         && isValidId(data.targetId)
         && isValidId(data.targetContextId)
         && data.targetExcerpt is string && data.targetExcerpt.size() <= 1000
@@ -751,7 +817,7 @@ service cloud.firestore {
       }
     }
 
-    // Private PII user info
+    // Private PII user info & private age setting
     match /users/{userId}/private/{docId} {
       allow get: if isValidId(userId) && docId == 'info' && isOwner(userId);
       allow list: if false;
@@ -771,7 +837,9 @@ service cloud.firestore {
         && incoming().userId == existing().userId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'email', 'declaredAge', 'birthYear', 'ageUpdatedAt', 'updatedAt'
+        ]);
       allow delete: if false;
     }
 
@@ -878,6 +946,8 @@ service cloud.firestore {
       allow create: if isVerifiedUser()
         && isValidId(storyId)
         && isValidStory(incoming())
+        && meetsStoryFormatMinLength(incoming())
+        && incoming().charterAttested == true
         && incoming().storyId == storyId
         && incoming().authorId == request.auth.uid
         && incoming().resonanceCount == 0
@@ -919,11 +989,15 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          // Action A: Author edits story content, format, cadence, or visibility
+          // Action A: Author edits story content, format, age metadata, cadence, or visibility
           (
             existing().authorId == request.auth.uid
             && incoming().resonanceCount == existing().resonanceCount
             && incoming().echoCount == existing().echoCount
+            && (
+              (!('content' in incoming().diff(existing()).affectedKeys()) && !('storyFormat' in incoming().diff(existing()).affectedKeys()))
+              || meetsStoryFormatMinLength(incoming())
+            )
             && ((!('customSalonId' in existing()) && !('customSalonId' in incoming()))
               || ('customSalonId' in existing() && 'customSalonId' in incoming() && incoming().customSalonId == existing().customSalonId))
             && ((!('customSalonName' in existing()) && !('customSalonName' in incoming()))
@@ -944,8 +1018,8 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'authorName', 'title', 'excerpt', 'content', 'theme', 'storyScope',
               'storyFormat', 'novelGenre', 'coverUrl', 'plagiarismAttested',
-              'releaseCadence', 'seriesStatus',
-              'promptQuestion', 'visibility', 'isAnonymous', 'readingMinutes', 'updatedAt'
+              'releaseCadence', 'seriesStatus', 'minAge', 'isMature', 'matureReason',
+              'charterAttested', 'promptQuestion', 'visibility', 'isAnonymous', 'readingMinutes', 'updatedAt'
             ])
           )
           ||
@@ -1038,6 +1112,7 @@ service cloud.firestore {
           && isValidId(storyId)
           && isValidId(chapterId)
           && isValidChapter(incoming())
+          && incoming().content.size() >= 3000
           && incoming().chapterId == chapterId
           && incoming().storyId == storyId
           && incoming().authorId == request.auth.uid
@@ -1050,6 +1125,7 @@ service cloud.firestore {
           && isValidId(storyId)
           && isValidId(chapterId)
           && isValidChapter(incoming())
+          && (!('content' in incoming().diff(existing()).affectedKeys()) || incoming().content.size() >= 3000)
           && existing().authorId == request.auth.uid
           && incoming().chapterId == existing().chapterId
           && incoming().storyId == existing().storyId
@@ -1195,7 +1271,88 @@ service cloud.firestore {
         && existing().senderId == request.auth.uid;
     }
 
-    // User-created community salons with custom admission rules
+    // Built-in Salon discussion threads & replies
+    match /salons/{salonId}/threads/{threadId} {
+      allow get: if isValidSalonId(salonId)
+        && isValidId(threadId);
+      allow list: if isValidSalonId(salonId)
+        && resource.data.salonScope == 'predefined'
+        && resource.data.salonId == salonId;
+      allow create: if isVerifiedUser()
+        && isValidSalonId(salonId)
+        && isValidId(threadId)
+        && isValidSalonThread(incoming())
+        && incoming().threadId == threadId
+        && incoming().salonScope == 'predefined'
+        && incoming().salonId == salonId
+        && incoming().authorId == request.auth.uid
+        && incoming().replyCount == 0
+        && !('lastReplyId' in incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidSalonId(salonId)
+        && isValidId(threadId)
+        && isValidSalonThread(incoming())
+        && incoming().threadId == existing().threadId
+        && incoming().salonScope == existing().salonScope
+        && incoming().salonId == existing().salonId
+        && incoming().authorId == existing().authorId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            existing().authorId == request.auth.uid
+            && incoming().replyCount == existing().replyCount
+            && ((!('lastReplyId' in existing()) && !('lastReplyId' in incoming()))
+              || ('lastReplyId' in existing() && 'lastReplyId' in incoming() && incoming().lastReplyId == existing().lastReplyId))
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'body', 'minAge', 'isMature', 'matureReason', 'updatedAt'
+            ])
+          )
+          ||
+          (
+            'lastReplyId' in incoming()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['replyCount', 'lastReplyId', 'updatedAt'])
+            && incoming().replyCount == existing().replyCount + 1
+            && !exists(/databases/$(database)/documents/salons/$(salonId)/threads/$(threadId)/replies/$(incoming().lastReplyId))
+            && existsAfter(/databases/$(database)/documents/salons/$(salonId)/threads/$(threadId)/replies/$(incoming().lastReplyId))
+          )
+        );
+      allow delete: if isVerifiedUser()
+        && isValidSalonId(salonId)
+        && isValidId(threadId)
+        && existing().authorId == request.auth.uid;
+
+      match /replies/{replyId} {
+        allow get: if isValidSalonId(salonId)
+          && isValidId(threadId)
+          && isValidId(replyId);
+        allow list: if isValidSalonId(salonId)
+          && isValidId(threadId)
+          && resource.data.salonId == salonId
+          && resource.data.threadId == threadId;
+        allow create: if isVerifiedUser()
+          && isValidSalonId(salonId)
+          && isValidId(threadId)
+          && isValidId(replyId)
+          && isValidSalonThreadReply(incoming())
+          && incoming().replyId == replyId
+          && incoming().threadId == threadId
+          && incoming().salonId == salonId
+          && incoming().authorId == request.auth.uid
+          && incoming().createdAt == request.time
+          && getAfter(/databases/$(database)/documents/salons/$(salonId)/threads/$(threadId)).data.lastReplyId == replyId;
+        allow update: if false;
+        allow delete: if isVerifiedUser()
+          && isValidSalonId(salonId)
+          && isValidId(threadId)
+          && isValidId(replyId)
+          && existing().authorId == request.auth.uid;
+      }
+    }
+
+    // User-created community salons with custom admission rules & profile avatars
     match /customSalons/{salonId} {
       allow get: if isValidId(salonId);
       allow list: if resource.data.visibility in ['public', 'private'];
@@ -1218,13 +1375,13 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && (
-          // Action A: Owner edits salon info, admission rules, or visibility
+          // Action A: Owner edits salon info, avatar, age setting, admission rules, or visibility
           (
             existing().ownerId == request.auth.uid
             && incoming().memberCount == existing().memberCount
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'name', 'description', 'promptQuestion', 'admissionRules',
-              'visibility', 'ownerName', 'accentTone', 'updatedAt'
+              'visibility', 'ownerName', 'accentTone', 'avatarUrl', 'minAge', 'updatedAt'
             ])
           )
           ||
@@ -1385,6 +1542,126 @@ service cloud.firestore {
             existing().senderId == request.auth.uid
             || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
           );
+      }
+
+      // Discussion threads & replies inside a custom community salon
+      match /threads/{threadId} {
+        allow get: if isValidId(salonId)
+          && isValidId(threadId)
+          && (
+            get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+            || (isSignedIn() && get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid)
+            || isApprovedCustomSalonMember(salonId)
+          );
+        allow list: if resource.data.salonScope == 'custom'
+          && resource.data.salonId == salonId
+          && (
+            get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+            || (isSignedIn() && get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid)
+            || isApprovedCustomSalonMember(salonId)
+          );
+        allow create: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(threadId)
+          && isValidSalonThread(incoming())
+          && incoming().threadId == threadId
+          && incoming().salonScope == 'custom'
+          && incoming().salonId == salonId
+          && incoming().authorId == request.auth.uid
+          && incoming().replyCount == 0
+          && !('lastReplyId' in incoming())
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && (
+            get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isApprovedCustomSalonMember(salonId)
+          );
+        allow update: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(threadId)
+          && isValidSalonThread(incoming())
+          && incoming().threadId == existing().threadId
+          && incoming().salonScope == existing().salonScope
+          && incoming().salonId == existing().salonId
+          && incoming().authorId == existing().authorId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (
+            get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isApprovedCustomSalonMember(salonId)
+          )
+          && (
+            (
+              existing().authorId == request.auth.uid
+              && incoming().replyCount == existing().replyCount
+              && ((!('lastReplyId' in existing()) && !('lastReplyId' in incoming()))
+                || ('lastReplyId' in existing() && 'lastReplyId' in incoming() && incoming().lastReplyId == existing().lastReplyId))
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'title', 'body', 'minAge', 'isMature', 'matureReason', 'updatedAt'
+              ])
+            )
+            ||
+            (
+              'lastReplyId' in incoming()
+              && incoming().diff(existing()).affectedKeys().hasOnly(['replyCount', 'lastReplyId', 'updatedAt'])
+              && incoming().replyCount == existing().replyCount + 1
+              && !exists(/databases/$(database)/documents/customSalons/$(salonId)/threads/$(threadId)/replies/$(incoming().lastReplyId))
+              && existsAfter(/databases/$(database)/documents/customSalons/$(salonId)/threads/$(threadId)/replies/$(incoming().lastReplyId))
+            )
+          );
+        allow delete: if isVerifiedUser()
+          && isValidId(salonId)
+          && isValidId(threadId)
+          && (
+            existing().authorId == request.auth.uid
+            || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+          );
+
+        match /replies/{replyId} {
+          allow get: if isValidId(salonId)
+            && isValidId(threadId)
+            && isValidId(replyId)
+            && (
+              get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+              || (isSignedIn() && get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid)
+              || isApprovedCustomSalonMember(salonId)
+            );
+          allow list: if isValidId(threadId)
+            && resource.data.salonId == salonId
+            && resource.data.threadId == threadId
+            && (
+              get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+              || (isSignedIn() && get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid)
+              || isApprovedCustomSalonMember(salonId)
+            );
+          allow create: if isVerifiedUser()
+            && isValidId(salonId)
+            && isValidId(threadId)
+            && isValidId(replyId)
+            && isValidSalonThreadReply(incoming())
+            && incoming().replyId == replyId
+            && incoming().threadId == threadId
+            && incoming().salonId == salonId
+            && incoming().authorId == request.auth.uid
+            && incoming().createdAt == request.time
+            && (
+              get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+              || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+              || isApprovedCustomSalonMember(salonId)
+            )
+            && getAfter(/databases/$(database)/documents/customSalons/$(salonId)/threads/$(threadId)).data.lastReplyId == replyId;
+          allow update: if false;
+          allow delete: if isVerifiedUser()
+            && isValidId(salonId)
+            && isValidId(threadId)
+            && isValidId(replyId)
+            && (
+              existing().authorId == request.auth.uid
+              || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            );
+        }
       }
     }
 

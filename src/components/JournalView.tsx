@@ -45,7 +45,7 @@ import {
   removeUserRelationship,
   updateNovelSeriesStatus,
   updateRepostVisibility,
-  updateStory,
+  updateStoryVisibility,
 } from '../lib/storyService';
 import {
   formatCumulativeMinutes,
@@ -66,6 +66,7 @@ import {
   StoryRepost,
   UserRelationship,
 } from '../types/story';
+import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import { StoryAnalyticsChart } from './StoryAnalyticsChart';
 
@@ -371,30 +372,7 @@ export function JournalView({
     setBusyStoryId(story.storyId);
     try {
       const nextVis = story.visibility === 'public' ? 'private' : 'public';
-      await updateStory(story.storyId, profile?.displayName || story.authorName, {
-        title: story.title,
-        excerpt: story.excerpt,
-        content: story.content,
-        theme: story.theme,
-        storyScope: story.storyScope,
-        customSalon:
-          story.customSalonId && story.customSalonName && story.customSalonVisibility
-            ? {
-                salonId: story.customSalonId,
-                name: story.customSalonName,
-                visibility: story.customSalonVisibility,
-              }
-            : null,
-        storyFormat: story.storyFormat,
-        novelGenre: story.novelGenre,
-        coverUrl: story.coverUrl,
-        plagiarismAttested: story.plagiarismAttested,
-        releaseCadence: story.releaseCadence,
-        seriesStatus: story.seriesStatus,
-        promptQuestion: story.promptQuestion,
-        visibility: nextVis,
-        isAnonymous: Boolean(story.isAnonymous),
-      });
+      await updateStoryVisibility(story.storyId, nextVis);
     } catch (err) {
       setStoryActionError(
         err instanceof Error ? err.message : 'Impossible de modifier la visibilité de ce récit.'
@@ -898,6 +876,11 @@ export function JournalView({
                                 <span>Anonyme</span>
                               </span>
                             )}
+                            <MatureContentBadge
+                              minAge={story.minAge}
+                              isMature={story.isMature}
+                              compact
+                            />
                           </div>
                         </div>
 

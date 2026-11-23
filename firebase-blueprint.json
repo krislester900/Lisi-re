@@ -136,7 +136,7 @@
     },
     "PrivateUserInfo": {
       "title": "PrivateUserInfo",
-      "description": "Strictly private user account metadata containing PII such as email.",
+      "description": "Strictly private user account metadata containing PII such as email and optional age settings.",
       "type": "object",
       "properties": {
         "userId": {
@@ -147,6 +147,16 @@
         "email": {
           "type": "string",
           "maxLength": 200
+        },
+        "declaredAge": {
+          "type": "integer"
+        },
+        "birthYear": {
+          "type": "integer"
+        },
+        "ageUpdatedAt": {
+          "type": "string",
+          "format": "date-time"
         },
         "createdAt": {
           "type": "string",
@@ -255,6 +265,19 @@
           "enum": ["public", "private"]
         },
         "isAnonymous": {
+          "type": "boolean"
+        },
+        "minAge": {
+          "type": "integer"
+        },
+        "isMature": {
+          "type": "boolean"
+        },
+        "matureReason": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "charterAttested": {
           "type": "boolean"
         },
         "readingMinutes": {
@@ -712,6 +735,13 @@
           "type": "string",
           "enum": ["ink", "ochre", "terracotta", "sage", "sand"]
         },
+        "avatarUrl": {
+          "type": "string",
+          "maxLength": 60000
+        },
+        "minAge": {
+          "type": "integer"
+        },
         "memberCount": {
           "type": "integer"
         },
@@ -737,6 +767,134 @@
         "memberCount",
         "createdAt",
         "updatedAt"
+      ]
+    },
+    "SalonThread": {
+      "title": "SalonThread",
+      "description": "A user-created discussion topic or thread inside a predefined or community salon.",
+      "type": "object",
+      "properties": {
+        "threadId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "salonScope": {
+          "type": "string",
+          "enum": ["predefined", "custom"]
+        },
+        "salonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "title": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 140
+        },
+        "body": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "minAge": {
+          "type": "integer"
+        },
+        "isMature": {
+          "type": "boolean"
+        },
+        "matureReason": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "replyCount": {
+          "type": "integer"
+        },
+        "lastReplyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "threadId",
+        "salonScope",
+        "salonId",
+        "authorId",
+        "authorName",
+        "title",
+        "body",
+        "replyCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SalonThreadReply": {
+      "title": "SalonThreadReply",
+      "description": "A reply posted within a salon discussion thread.",
+      "type": "object",
+      "properties": {
+        "replyId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "threadId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "salonId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "content": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 1200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "replyId",
+        "threadId",
+        "salonId",
+        "authorId",
+        "authorName",
+        "content",
+        "createdAt"
       ]
     },
     "SalonMember": {
@@ -1212,7 +1370,15 @@
         },
         "targetType": {
           "type": "string",
-          "enum": ["private_message", "story", "echo", "salon_message", "profile"]
+          "enum": [
+            "private_message",
+            "story",
+            "echo",
+            "salon_message",
+            "salon_thread",
+            "thread_reply",
+            "profile"
+          ]
         },
         "targetId": {
           "type": "string",
@@ -1538,6 +1704,18 @@
       },
       "description": "Text-only public chat messages inside each salon."
     },
+    "/salons/{salonId}/threads/{threadId}": {
+      "schema": {
+        "$ref": "#/entities/SalonThread"
+      },
+      "description": "Discussion threads and topics opened inside predefined salons."
+    },
+    "/salons/{salonId}/threads/{threadId}/replies/{replyId}": {
+      "schema": {
+        "$ref": "#/entities/SalonThreadReply"
+      },
+      "description": "Replies within a predefined salon discussion thread."
+    },
     "/exchanges/{exchangeId}": {
       "schema": {
         "$ref": "#/entities/Exchange"
@@ -1567,6 +1745,18 @@
         "$ref": "#/entities/CustomSalonMessage"
       },
       "description": "Text-only discussion messages inside a user-created salon."
+    },
+    "/customSalons/{salonId}/threads/{threadId}": {
+      "schema": {
+        "$ref": "#/entities/SalonThread"
+      },
+      "description": "Discussion threads and topics opened inside a community salon."
+    },
+    "/customSalons/{salonId}/threads/{threadId}/replies/{replyId}": {
+      "schema": {
+        "$ref": "#/entities/SalonThreadReply"
+      },
+      "description": "Replies within a community salon discussion thread."
     },
     "/moderationCases/{caseId}": {
       "schema": {

@@ -74,6 +74,8 @@ export const MODERATION_TARGET_LABELS: Record<ModerationTargetType, string> = {
   story: 'Récit ou roman',
   echo: 'Commentaire / écho',
   salon_message: 'Message de salon',
+  salon_thread: 'Fil de discussion',
+  thread_reply: 'Réponse dans un fil',
   profile: 'Profil membre',
 };
 

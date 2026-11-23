@@ -12,6 +12,8 @@ import {
   Repeat2,
   Shuffle,
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { isContentAllowedForAge } from '../lib/contentRegulation';
 import {
   createDefaultStoryFilterState,
   filterAndSortStories,
@@ -26,6 +28,7 @@ import {
   THEME_MAP,
 } from '../lib/themes';
 import { CustomSalon, Story, StoryFormat, StoryThemeId } from '../types/story';
+import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import { StoryFilterBar } from './StoryFilterBar';
 
@@ -60,22 +63,31 @@ export function PeleMeleStoriesView({
   onBackToSalons,
   onWriteStory,
 }: PeleMeleStoriesViewProps) {
+  const { user, viewerAge } = useAuth();
   const [filterState, setFilterState] = useState<StoryFilterState>(() =>
     createDefaultStoryFilterState('shuffled', Date.now() % 100000)
   );
 
-  // Strictly only stories outside private salons (hors salons + public salons)
-  const peleMeleEligibleStories = useMemo(() => {
+  // Strictly only stories outside private salons AND adapted to viewer age
+  const { peleMeleEligibleStories, hiddenByAgeCount } = useMemo(() => {
     const privateCustomIds = new Set(
       customSalons.filter((cs) => cs.visibility === 'private').map((cs) => cs.salonId)
     );
-    return publicStories.filter((story) => {
-      if (story.visibility !== 'public') return false;
-      if (story.customSalonVisibility === 'private') return false;
-      if (story.customSalonId && privateCustomIds.has(story.customSalonId)) return false;
-      return true;
-    });
-  }, [publicStories, customSalons]);
+    const allowed: Story[] = [];
+    let hidden = 0;
+    for (const story of publicStories) {
+      if (story.visibility !== 'public') continue;
+      if (story.customSalonVisibility === 'private') continue;
+      if (story.customSalonId && privateCustomIds.has(story.customSalonId)) continue;
+      const isAuthor = Boolean(user && story.authorId === user.uid);
+      if (isContentAllowedForAge(story, viewerAge, isAuthor)) {
+        allowed.push(story);
+      } else {
+        hidden += 1;
+      }
+    }
+    return { peleMeleEligibleStories: allowed, hiddenByAgeCount: hidden };
+  }, [publicStories, customSalons, user, viewerAge]);
 
   const deferredFilter = useDeferredValue(filterState);
   const displayedStories = useMemo(
@@ -161,6 +173,12 @@ export function PeleMeleStoriesView({
           </div>
         </div>
       </section>
+
+      {hiddenByAgeCount > 0 && (
+        <div className="bg-amber-50/80 border border-amber-200 rounded-md px-4 py-2.5 text-xs text-amber-950">
+          {hiddenByAgeCount} histoire{hiddenByAgeCount > 1 ? 's' : ''} classée{hiddenByAgeCount > 1 ? 's' : ''} pour un public plus âgé ou mature {hiddenByAgeCount > 1 ? 'sont masquées' : 'est masquée'} selon votre profil d’âge{viewerAge === null ? ' (renseignez votre âge dans Profils pour adapter le filtre)' : ''}.
+        </div>
+      )}
 
       {/* Toolbar: Sort mode, Multi-criteria Filters, Search */}
       <StoryFilterBar
@@ -293,6 +311,11 @@ export function PeleMeleStoriesView({
                           }`
                         : ''}
                     </span>
+                    <MatureContentBadge
+                      minAge={story.minAge}
+                      isMature={story.isMature}
+                      compact
+                    />
                   </div>
 
                   {format === 'roman' && story.coverUrl ? (

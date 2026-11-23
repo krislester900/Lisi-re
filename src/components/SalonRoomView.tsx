@@ -12,8 +12,11 @@ import {
   HelpCircle,
   MessageCircle,
   MessageSquare,
+  MessagesSquare,
   Repeat2,
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { isContentAllowedForAge } from '../lib/contentRegulation';
 import {
   createDefaultStoryFilterState,
   filterAndSortStories,
@@ -32,10 +35,12 @@ import {
   THEME_MAP,
 } from '../lib/themes';
 import { Story, StoryThemeId } from '../types/story';
+import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
 import { SalonChatPanel } from './SalonChatPanel';
 import { SalonEmblem } from './SalonEmblem';
+import { SalonThreadsPanel } from './SalonThreadsPanel';
 import { StoryFilterBar } from './StoryFilterBar';
 
 interface SalonRoomViewProps {
@@ -54,7 +59,7 @@ interface SalonRoomViewProps {
   onOpenReport?: (draft: ReportDraft) => void;
 }
 
-type SalonTabId = 'stories' | 'chat' | 'guide';
+type SalonTabId = 'stories' | 'threads' | 'chat' | 'guide';
 
 export function SalonRoomView({
   salonId,
@@ -71,6 +76,7 @@ export function SalonRoomView({
   onOpenMemberWall,
   onOpenReport,
 }: SalonRoomViewProps) {
+  const { user, viewerAge } = useAuth();
   const [filterState, setFilterState] = useState<StoryFilterState>(() =>
     createDefaultStoryFilterState('recent')
   );
@@ -92,17 +98,26 @@ export function SalonRoomView({
     STORY_THEMES[(currentIndex - 1 + STORY_THEMES.length) % STORY_THEMES.length];
   const nextSalon = STORY_THEMES[(currentIndex + 1) % STORY_THEMES.length];
 
-  const allInSalon = useMemo(
-    () =>
-      publicStories.filter(
-        (story) =>
-          story.theme === salonId &&
-          !story.customSalonId &&
-          story.storyScope !== 'pelemele' &&
-          !(hiddenUserIds && hiddenUserIds.has(story.authorId))
-      ),
-    [publicStories, salonId, hiddenUserIds]
-  );
+  const { allInSalon, hiddenByAgeCount } = useMemo(() => {
+    const allowed: Story[] = [];
+    let hiddenCount = 0;
+    for (const story of publicStories) {
+      if (
+        story.theme === salonId &&
+        !story.customSalonId &&
+        story.storyScope !== 'pelemele' &&
+        !(hiddenUserIds && hiddenUserIds.has(story.authorId))
+      ) {
+        const isAuthor = Boolean(user && story.authorId === user.uid);
+        if (isContentAllowedForAge(story, viewerAge, isAuthor)) {
+          allowed.push(story);
+        } else {
+          hiddenCount += 1;
+        }
+      }
+    }
+    return { allInSalon: allowed, hiddenByAgeCount: hiddenCount };
+  }, [publicStories, salonId, hiddenUserIds, user, viewerAge]);
 
   const salonStories = useMemo(
     () => filterAndSortStories(allInSalon, deferredFilter),
@@ -296,6 +311,21 @@ export function SalonRoomView({
         <button
           type="button"
           role="tab"
+          aria-selected={roomSection === 'threads'}
+          onClick={() => setRoomSection('threads')}
+          className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            roomSection === 'threads'
+              ? 'bg-white text-stone-900 shadow-sm'
+              : 'text-stone-600 hover:text-stone-900'
+          }`}
+        >
+          <MessagesSquare className="w-3.5 h-3.5" />
+          <span>Fils de discussion</span>
+        </button>
+
+        <button
+          type="button"
+          role="tab"
           aria-selected={roomSection === 'chat'}
           onClick={() => setRoomSection('chat')}
           className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
@@ -399,6 +429,12 @@ export function SalonRoomView({
           </section>
         ) : (
           <section className="space-y-6" aria-label={`Récits dans ${salon.salonName}`}>
+            {hiddenByAgeCount > 0 && (
+              <div className="bg-amber-50/80 border border-amber-200 rounded-md px-4 py-2.5 text-xs text-amber-950">
+                {hiddenByAgeCount} récit{hiddenByAgeCount > 1 ? 's' : ''} classé{hiddenByAgeCount > 1 ? 's' : ''} pour un public plus âgé ou mature {hiddenByAgeCount > 1 ? 'sont masqués' : 'est masqué'} selon votre profil d’âge{viewerAge === null ? ' (renseignez votre âge dans Profils pour adapter le filtre)' : ''}.
+              </div>
+            )}
+
             <StoryFilterBar
               value={filterState}
               onChange={setFilterState}
@@ -469,6 +505,11 @@ export function SalonRoomView({
                         <span>{leadStory.readingMinutes} min</span>
                         <span aria-hidden="true">·</span>
                         <span>{formatFrenchDate(leadStory.createdAt?.toDate() ?? null)}</span>
+                        <MatureContentBadge
+                          minAge={leadStory.minAge}
+                          isMature={leadStory.isMature}
+                          compact
+                        />
                       </div>
 
                       {leadStory.storyFormat === 'roman' && leadStory.coverUrl ? (
@@ -643,6 +684,11 @@ export function SalonRoomView({
                             <span>{story.readingMinutes} min</span>
                             <span aria-hidden="true">·</span>
                             <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
+                            <MatureContentBadge
+                              minAge={story.minAge}
+                              isMature={story.isMature}
+                              compact
+                            />
                           </div>
 
                           {story.storyFormat === 'roman' && story.coverUrl ? (
@@ -755,7 +801,23 @@ export function SalonRoomView({
         )
       )}
 
-      {/* TAB 2: Public Text-Only Salon Chat */}
+      {/* TAB 2: Discussion Threads / Topics */}
+      {roomSection === 'threads' && (
+        <SalonThreadsPanel
+          scope="predefined"
+          salonId={salonId}
+          salonTitle={salon.salonName}
+          viewerAge={viewerAge}
+          canPost={true}
+          onOpenMemberWall={onOpenMemberWall}
+          onWriteFromThread={(tTitle, tBody) =>
+            onWriteInSalon(salon.id, tTitle, tBody ? `${tBody.slice(0, 140)} ` : '')
+          }
+          onOpenReport={onOpenReport}
+        />
+      )}
+
+      {/* TAB 3: Public Text-Only Salon Chat */}
       {roomSection === 'chat' && (
         <SalonChatPanel
           salonId={salonId}
