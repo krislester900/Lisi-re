@@ -1,12 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import {
   ensureUserProfiles,
+  subscribeToFavoriteAuthors,
   subscribeToPrivateInfo,
   subscribeToPublicProfile,
 } from '../lib/storyService';
-import { PrivateUserInfo, PublicProfile } from '../types/story';
+import { FavoriteAuthor, PrivateUserInfo, PublicProfile, StoryThemeId } from '../types/story';
 
 interface AuthContextValue {
   user: User | null;
@@ -14,6 +15,8 @@ interface AuthContextValue {
   privateInfo: PrivateUserInfo | null;
   privateInfoLoaded: boolean;
   viewerAge: number | null;
+  favoriteThemes: StoryThemeId[];
+  favoriteAuthors: FavoriteAuthor[];
   needsAgeOnboarding: boolean;
   dismissAgeOnboarding: () => void;
   authReady: boolean;
@@ -30,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [privateInfo, setPrivateInfo] = useState<PrivateUserInfo | null>(null);
   const [privateInfoLoaded, setPrivateInfoLoaded] = useState(false);
+  const [favoriteAuthors, setFavoriteAuthors] = useState<FavoriteAuthor[]>([]);
   const [ageOnboardingDismissed, setAgeOnboardingDismissed] = useState(false);
   const [authReady, setAuthReady] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -37,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let unsubProfile: (() => void) | null = null;
     let unsubPrivate: (() => void) | null = null;
+    let unsubFavoriteAuthors: (() => void) | null = null;
 
     const unsubAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (unsubProfile) {
@@ -47,10 +52,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsubPrivate();
         unsubPrivate = null;
       }
+      if (unsubFavoriteAuthors) {
+        unsubFavoriteAuthors();
+        unsubFavoriteAuthors = null;
+      }
 
       setUser(currentUser);
       setPrivateInfo(null);
       setPrivateInfoLoaded(false);
+      setFavoriteAuthors([]);
 
       if (currentUser) {
         try {
@@ -69,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setPrivateInfo(loadedPrivate);
             setPrivateInfoLoaded(true);
           });
+          unsubFavoriteAuthors = subscribeToFavoriteAuthors(currentUser.uid, setFavoriteAuthors);
         } catch (err) {
           console.error('Erreur initialisation profil:', err);
           setPrivateInfoLoaded(true);
@@ -77,6 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setProfile(null);
         setPrivateInfo(null);
         setPrivateInfoLoaded(true);
+        setFavoriteAuthors([]);
         setAgeOnboardingDismissed(false);
       }
 
@@ -87,6 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       unsubAuth();
       if (unsubProfile) unsubProfile();
       if (unsubPrivate) unsubPrivate();
+      if (unsubFavoriteAuthors) unsubFavoriteAuthors();
     };
   }, []);
 
@@ -126,6 +139,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ? privateInfo.declaredAge
       : null;
 
+  const favoriteThemes = useMemo<StoryThemeId[]>(
+    () => (Array.isArray(privateInfo?.favoriteThemes) ? privateInfo.favoriteThemes : []),
+    [privateInfo?.favoriteThemes]
+  );
+
   const needsAgeOnboarding = Boolean(
     user && privateInfoLoaded && viewerAge === null && !ageOnboardingDismissed
   );
@@ -138,6 +156,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         privateInfo,
         privateInfoLoaded,
         viewerAge,
+        favoriteThemes,
+        favoriteAuthors,
         needsAgeOnboarding,
         dismissAgeOnboarding,
         authReady,

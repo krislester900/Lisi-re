@@ -6,10 +6,12 @@ import {
   Music2,
   Search,
   Settings,
+  Star,
   User as UserIcon,
   Users,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { toggleFavoriteAuthor } from '../lib/storyService';
 import {
   Exchange,
   PublicProfile,
@@ -58,10 +60,32 @@ export function MembersDirectoryView({
   onStartDirectChat,
   onOpenReport,
 }: MembersDirectoryViewProps) {
-  const { user, signInWithGoogle } = useAuth();
+  const { user, favoriteAuthors, signInWithGoogle } = useAuth();
   const [subTab, setSubTab] = useState<ProfilesPageTab>(initialSubTab);
   const [searchQuery, setSearchQuery] = useState('');
   const [failedAvatars, setFailedAvatars] = useState<Record<string, boolean>>({});
+  const [favBusyId, setFavBusyId] = useState<string | null>(null);
+
+  const favoriteAuthorIdSet = useMemo(
+    () => new Set(favoriteAuthors.map((a) => a.authorId)),
+    [favoriteAuthors]
+  );
+
+  const handleToggleFavorite = async (member: PublicProfile) => {
+    if (!user) {
+      await signInWithGoogle();
+      return;
+    }
+    if (user.uid === member.userId || favBusyId) return;
+    setFavBusyId(member.userId);
+    try {
+      await toggleFavoriteAuthor(user.uid, member.userId, member.displayName);
+    } catch (err) {
+      console.error('Erreur auteur favori:', err);
+    } finally {
+      setFavBusyId(null);
+    }
+  };
 
   useEffect(() => {
     setSubTab(initialSubTab);
@@ -342,14 +366,42 @@ export function MembersDirectoryView({
                       </button>
 
                       {!isMe && (
-                        <button
-                          type="button"
-                          onClick={() => onStartDirectChat(member)}
-                          className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                          <span>Écrire</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={favBusyId === member.userId}
+                            onClick={() => void handleToggleFavorite(member)}
+                            aria-pressed={favoriteAuthorIdSet.has(member.userId)}
+                            title={
+                              favoriteAuthorIdSet.has(member.userId)
+                                ? 'Retirer des auteurs favoris'
+                                : 'Suivre dans Pour vous'
+                            }
+                            className={`min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border inline-flex items-center gap-1 whitespace-nowrap transition-colors ${
+                              favoriteAuthorIdSet.has(member.userId)
+                                ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
+                            } disabled:opacity-50`}
+                          >
+                            <Star
+                              className={`w-3.5 h-3.5 ${
+                                favoriteAuthorIdSet.has(member.userId) ? 'fill-current' : ''
+                              }`}
+                            />
+                            <span>
+                              {favoriteAuthorIdSet.has(member.userId) ? 'Suivi' : 'Suivre'}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => onStartDirectChat(member)}
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            <span>Écrire</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </article>

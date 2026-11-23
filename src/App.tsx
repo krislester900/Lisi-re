@@ -11,6 +11,7 @@ import {
   Feather,
   Globe,
   Heart,
+  Home,
   Lock,
   Menu,
   MessageCircle,
@@ -18,6 +19,7 @@ import {
   Repeat2,
   ShieldAlert,
   ShieldCheck,
+  Star,
   Users,
   X,
 } from 'lucide-react';
@@ -28,6 +30,7 @@ import { AppSidebar } from './components/AppSidebar';
 import { CustomSalonRoomView } from './components/CustomSalonRoomView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExchangesView } from './components/ExchangesView';
+import { ForYouView } from './components/ForYouView';
 import { JournalSubTab, JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
@@ -87,6 +90,7 @@ import {
   Exchange,
   MemberWarning,
   ModerationCase,
+  NovelGenre,
   PublicProfile,
   Story,
   StoryBookmark,
@@ -99,6 +103,7 @@ import {
 
 type NavTab =
   | 'recits'
+  | 'pour-vous'
   | 'pelemele'
   | 'membres'
   | 'themes'
@@ -114,6 +119,7 @@ function parseLocationPath(pathname: string): {
   salonId: StoryThemeId | null;
   customSalonId: string | null;
   memberId: string | null;
+  storyId: string | null;
 } {
   const clean = pathname.replace(/\/+$/, '') || '/';
   if (clean.startsWith('/salons/')) {
@@ -124,6 +130,7 @@ function parseLocationPath(pathname: string): {
         salonId: slug as StoryThemeId,
         customSalonId: null,
         memberId: null,
+        storyId: null,
       };
     }
   }
@@ -135,56 +142,111 @@ function parseLocationPath(pathname: string): {
         salonId: null,
         customSalonId: customSlug,
         memberId: null,
+        storyId: null,
+      };
+    }
+  }
+  if (clean === '/pour-vous') {
+    return {
+      tab: 'pour-vous',
+      salonId: null,
+      customSalonId: null,
+      memberId: null,
+      storyId: null,
+    };
+  }
+  if (clean.startsWith('/histoires/')) {
+    const storySlug = decodeURIComponent(clean.slice('/histoires/'.length));
+    if (storySlug) {
+      return {
+        tab: 'pelemele',
+        salonId: null,
+        customSalonId: null,
+        memberId: null,
+        storyId: storySlug,
       };
     }
   }
   if (clean === '/histoires') {
-    return { tab: 'pelemele', salonId: null, customSalonId: null, memberId: null };
+    return { tab: 'pelemele', salonId: null, customSalonId: null, memberId: null, storyId: null };
   }
   if (clean === '/membres' || clean === '/profils') {
-    return { tab: 'membres', salonId: null, customSalonId: null, memberId: null };
+    return { tab: 'membres', salonId: null, customSalonId: null, memberId: null, storyId: null };
   }
   if (clean.startsWith('/membres/')) {
     const memberSlug = decodeURIComponent(clean.slice('/membres/'.length));
     if (memberSlug) {
-      return { tab: 'membres', salonId: null, customSalonId: null, memberId: memberSlug };
+      return {
+        tab: 'membres',
+        salonId: null,
+        customSalonId: null,
+        memberId: memberSlug,
+        storyId: null,
+      };
     }
   }
   if (clean.startsWith('/profils/')) {
     const memberSlug = decodeURIComponent(clean.slice('/profils/'.length));
     if (memberSlug) {
-      return { tab: 'membres', salonId: null, customSalonId: null, memberId: memberSlug };
+      return {
+        tab: 'membres',
+        salonId: null,
+        customSalonId: null,
+        memberId: memberSlug,
+        storyId: null,
+      };
     }
   }
-  if (clean === '/themes') {
-    return { tab: 'themes', salonId: null, customSalonId: null, memberId: null };
+  if (clean === '/themes' || clean === '/palmares') {
+    return { tab: 'themes', salonId: null, customSalonId: null, memberId: null, storyId: null };
   }
   if (clean === '/passerelles') {
-    return { tab: 'passerelles', salonId: null, customSalonId: null, memberId: null };
+    return {
+      tab: 'passerelles',
+      salonId: null,
+      customSalonId: null,
+      memberId: null,
+      storyId: null,
+    };
   }
   if (clean === '/carnet') {
-    return { tab: 'carnet', salonId: null, customSalonId: null, memberId: null };
+    return { tab: 'carnet', salonId: null, customSalonId: null, memberId: null, storyId: null };
   }
   if (clean === '/moderation') {
-    return { tab: 'moderation', salonId: null, customSalonId: null, memberId: null };
+    return {
+      tab: 'moderation',
+      salonId: null,
+      customSalonId: null,
+      memberId: null,
+      storyId: null,
+    };
   }
   if (clean === '/confidentialite') {
-    return { tab: 'confidentialite', salonId: null, customSalonId: null, memberId: null };
+    return {
+      tab: 'confidentialite',
+      salonId: null,
+      customSalonId: null,
+      memberId: null,
+      storyId: null,
+    };
   }
-  return { tab: 'recits', salonId: null, customSalonId: null, memberId: null };
+  return { tab: 'recits', salonId: null, customSalonId: null, memberId: null, storyId: null };
 }
 
 function buildLocationPath(
   tab: NavTab,
   salonId: StoryThemeId | null,
   memberId: string | null = null,
-  customSalonId: string | null = null
+  customSalonId: string | null = null,
+  storyId: string | null = null
 ): string {
+  if (storyId) return `/histoires/${encodeURIComponent(storyId)}`;
+  if (tab === 'pour-vous') return '/pour-vous';
   if (tab === 'pelemele') return '/histoires';
   if (tab === 'membres') {
     return memberId ? `/profils/${encodeURIComponent(memberId)}` : '/profils';
   }
-  if (tab === 'themes') return '/themes';
+  if (tab === 'themes') return '/palmares';
   if (tab === 'passerelles') return '/passerelles';
   if (tab === 'carnet') return '/carnet';
   if (tab === 'moderation') return '/moderation';
@@ -199,6 +261,8 @@ function SalonApp() {
     user,
     profile,
     viewerAge,
+    favoriteThemes,
+    favoriteAuthors,
     needsAgeOnboarding,
     dismissAgeOnboarding,
     authError,
@@ -237,6 +301,7 @@ function SalonApp() {
   };
   const [isViewFading, setIsViewFading] = useState(false);
   const navTimerRef = useRef<number | null>(null);
+  const storyRouteReturnPathRef = useRef<string | null>(null);
   const [publicStories, setPublicStories] = useState<Story[]>([]);
   const [myStories, setMyStories] = useState<Story[]>([]);
   const [customSalons, setCustomSalons] = useState<CustomSalon[]>([]);
@@ -285,6 +350,7 @@ function SalonApp() {
     format?: StoryFormat;
     romanMode?: 'new' | 'append';
     novelId?: string | null;
+    novelGenre?: NovelGenre;
   }>({ theme: 'creation', scope: 'salon', customSalonId: null });
 
   const [customSalonModalOpen, setCustomSalonModalOpen] = useState(false);
@@ -424,6 +490,7 @@ function SalonApp() {
     format?: StoryFormat;
     romanMode?: 'new' | 'append';
     novelId?: string | null;
+    novelGenre?: NovelGenre;
     edit?: Story | null;
   }) => {
     if (!user) {
@@ -440,6 +507,7 @@ function SalonApp() {
       format: options?.format ?? 'confession',
       romanMode: options?.romanMode ?? 'new',
       novelId: options?.novelId ?? null,
+      novelGenre: options?.novelGenre,
     });
     setComposerOpen(true);
   };
@@ -453,23 +521,78 @@ function SalonApp() {
     setCustomSalonModalOpen(true);
   };
 
-  const handleOpenStoryById = async (storyId: string) => {
+  const openStoryReader = (story: Story, skipHistoryPush = false) => {
+    setReadingStory(story);
+    if (
+      !skipHistoryPush &&
+      story.visibility === 'public' &&
+      story.customSalonVisibility !== 'private'
+    ) {
+      const targetPath = `/histoires/${encodeURIComponent(story.storyId)}`;
+      if (window.location.pathname !== targetPath) {
+        if (!window.location.pathname.startsWith('/histoires/')) {
+          storyRouteReturnPathRef.current = window.location.pathname;
+        }
+        window.history.pushState(
+          {
+            tab: activeTab,
+            salonId: activeSalonId,
+            memberId: selectedMemberId,
+            customSalonId: activeCustomSalonId,
+            storyId: story.storyId,
+          },
+          '',
+          targetPath
+        );
+      }
+    }
+  };
+
+  const closeStoryReader = () => {
+    setReadingStory(null);
+    if (window.location.pathname.startsWith('/histoires/')) {
+      const backPath =
+        storyRouteReturnPathRef.current &&
+        !storyRouteReturnPathRef.current.startsWith('/histoires/')
+          ? storyRouteReturnPathRef.current
+          : buildLocationPath(activeTab, activeSalonId, selectedMemberId, activeCustomSalonId);
+      storyRouteReturnPathRef.current = null;
+      window.history.replaceState(
+        {
+          tab: activeTab,
+          salonId: activeSalonId,
+          memberId: selectedMemberId,
+          customSalonId: activeCustomSalonId,
+        },
+        '',
+        backPath
+      );
+    }
+  };
+
+  const handleOpenStoryById = async (storyId: string, skipHistoryPush = false) => {
     const localMatch =
       publicStories.find((s) => s.storyId === storyId) ??
       myStories.find((s) => s.storyId === storyId);
     if (localMatch) {
-      setReadingStory(localMatch);
+      openStoryReader(localMatch, skipHistoryPush);
       return;
     }
     try {
       const snap = await getDoc(doc(db, 'stories', storyId));
       if (snap.exists()) {
-        setReadingStory(snap.data() as Story);
+        openStoryReader(snap.data() as Story, skipHistoryPush);
       } else {
         showNotice('Ce récit n’est plus accessible dans le salon.');
+        if (window.location.pathname.startsWith('/histoires/')) {
+          window.history.replaceState({}, '', '/histoires');
+        }
       }
     } catch {
       showNotice('Ce récit n’est plus accessible.');
+      if (window.location.pathname.startsWith('/histoires/')) {
+        window.history.replaceState({}, '', '/histoires');
+      }
     }
   };
 
@@ -639,8 +762,20 @@ function SalonApp() {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
+    if (initialRoute.storyId) {
+      void handleOpenStoryById(initialRoute.storyId, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     const onPopState = () => {
       const parsed = parseLocationPath(window.location.pathname);
+      if (parsed.storyId) {
+        void handleOpenStoryById(parsed.storyId, true);
+        return;
+      }
+      setReadingStory(null);
       applyRouteChangeWithFade(
         parsed.tab,
         parsed.salonId,
@@ -659,19 +794,23 @@ function SalonApp() {
 
   useEffect(() => {
     let nextTitle = 'Lisière — Récits personnels et échanges humains';
-    if (activeTab === 'recits' && activeCustomSalonId) {
+    if (readingStory) {
+      nextTitle = `${readingStory.title} — Lisière`;
+    } else if (activeTab === 'recits' && activeCustomSalonId) {
       nextTitle = activeCustomSalon
         ? `${activeCustomSalon.name} — Lisière`
         : 'Salon communautaire — Lisière';
     } else if (activeTab === 'recits' && activeSalonId) {
       const salon = THEME_MAP[activeSalonId];
       nextTitle = `${salon.salonName} — Lisière`;
+    } else if (activeTab === 'pour-vous') {
+      nextTitle = 'Pour vous — Lisière';
     } else if (activeTab === 'pelemele') {
       nextTitle = 'Histoires pêle-mêle — Lisière';
     } else if (activeTab === 'membres') {
       nextTitle = selectedMemberId ? 'Profil du membre — Lisière' : 'Profils — Lisière';
     } else if (activeTab === 'themes') {
-      nextTitle = 'Thèmes et fils d’écriture — Lisière';
+      nextTitle = 'Romans & palmarès — Lisière';
     } else if (activeTab === 'passerelles') {
       nextTitle = 'Passerelles privées — Lisière';
     } else if (activeTab === 'carnet') {
@@ -717,7 +856,14 @@ function SalonApp() {
     if (robotsEl) {
       robotsEl.content = isPrivateRoute ? 'noindex, nofollow' : 'index, follow';
     }
-  }, [activeTab, activeSalonId, activeCustomSalonId, activeCustomSalon, selectedMemberId]);
+  }, [
+    activeTab,
+    activeSalonId,
+    activeCustomSalonId,
+    activeCustomSalon,
+    selectedMemberId,
+    readingStory,
+  ]);
 
   const enterSalon = (salonId: StoryThemeId | null) => {
     navigateTo('recits', salonId, null, null);
@@ -980,7 +1126,7 @@ function SalonApp() {
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
             onSelectSalon={(id) => enterSalon(id)}
-            onReadStory={(story) => setReadingStory(story)}
+            onReadStory={(story) => openStoryReader(story)}
             onWriteInSalon={(theme, prompt, starter) =>
               void openComposer({ theme, prompt, starter })
             }
@@ -1002,7 +1148,7 @@ function SalonApp() {
             onOpenRepost={(story) => void handleOpenRepost(story)}
             onBackToSalons={() => enterSalon(null)}
             onEditSalon={(salonToEdit) => void openCustomSalonModal(salonToEdit)}
-            onReadStory={(story) => setReadingStory(story)}
+            onReadStory={(story) => openStoryReader(story)}
             onWriteInCustomSalon={(targetSalon, initialPrompt, starter) =>
               void openComposer({
                 theme: 'creation',
@@ -1025,7 +1171,7 @@ function SalonApp() {
             repostedStoryIds={repostedStoryIds}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
-            onReadStory={(story) => setReadingStory(story)}
+            onReadStory={(story) => openStoryReader(story)}
             onEnterSalon={(id) => enterSalon(id)}
             onEnterCustomSalon={(id) => enterCustomSalon(id)}
             onOpenMemberWall={openMemberWall}
@@ -1050,7 +1196,7 @@ function SalonApp() {
             existingExchanges={exchanges}
             relationships={userRelationships}
             onSelectMember={(memberId) => navigateTo('membres', null, memberId)}
-            onReadStory={(story) => setReadingStory(story)}
+            onReadStory={(story) => openStoryReader(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onOpenExchange={(exchangeId) => {
               setSelectedExchangeId(exchangeId);
@@ -1061,8 +1207,86 @@ function SalonApp() {
           />
         )}
 
+        {((activeTab === 'recits' && activeSalonId === null && activeCustomSalonId === null) ||
+          activeTab === 'pour-vous') && (
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 sm:pt-7">
+            <nav
+              aria-label="Vues principales"
+              className="flex items-center gap-1 sm:gap-2 border-b border-stone-200 overflow-x-auto"
+            >
+              <button
+                type="button"
+                onClick={() => enterSalon(null)}
+                aria-current={activeTab === 'recits' ? 'page' : undefined}
+                className={`min-h-[42px] px-3 sm:px-4 py-2 text-sm font-medium inline-flex items-center gap-2 whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                  activeTab === 'recits'
+                    ? 'border-[#1B365D] text-[#1B365D]'
+                    : 'border-transparent text-stone-600 hover:text-stone-900 hover:border-stone-300'
+                }`}
+              >
+                <Home className="w-4 h-4 shrink-0" />
+                <span>Salons & à la une</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigateTo('pour-vous')}
+                aria-current={activeTab === 'pour-vous' ? 'page' : undefined}
+                className={`min-h-[42px] px-3 sm:px-4 py-2 text-sm font-medium inline-flex items-center gap-2 whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                  activeTab === 'pour-vous'
+                    ? 'border-[#1B365D] text-[#1B365D]'
+                    : 'border-transparent text-stone-600 hover:text-stone-900 hover:border-stone-300'
+                }`}
+              >
+                <Star
+                  className={`w-4 h-4 shrink-0 ${
+                    activeTab === 'pour-vous' ? 'fill-[#1B365D]/15' : ''
+                  }`}
+                />
+                <span>Pour vous</span>
+                {user && favoriteThemes.length + favoriteAuthors.length > 0 && (
+                  <span
+                    className={`px-1.5 py-0.5 text-[11px] rounded tabular-nums ${
+                      activeTab === 'pour-vous'
+                        ? 'bg-[#1B365D]/10 text-[#1B365D]'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}
+                  >
+                    {favoriteThemes.length + favoriteAuthors.length}
+                  </span>
+                )}
+              </button>
+            </nav>
+          </div>
+        )}
+
+        {activeTab === 'pour-vous' && (
+          <ForYouView
+            stories={openFeedStories}
+            storiesLoaded={storiesLoaded}
+            customSalons={customSalons}
+            discoverableProfiles={discoverableProfiles}
+            hiddenUserIds={hiddenUserIds}
+            bookmarkedStoryIds={bookmarkedStoryIds}
+            repostedStoryIds={repostedStoryIds}
+            onToggleBookmark={(story) => void handleToggleBookmark(story)}
+            onOpenRepost={(story) => void handleOpenRepost(story)}
+            onReadStory={(story) => openStoryReader(story)}
+            onEnterSalon={(salonId) => enterSalon(salonId)}
+            onEnterCustomSalon={(customSalonId) => enterCustomSalon(customSalonId)}
+            onOpenPeleMele={() => navigateTo('pelemele')}
+            onOpenMemberWall={openMemberWall}
+            onOpenDirectory={() => {
+              setProfilesSubTab('directory');
+              navigateTo('membres');
+            }}
+            onWriteStory={() => void openComposer()}
+            onShowNotice={showNotice}
+          />
+        )}
+
         {activeTab === 'recits' && activeSalonId === null && activeCustomSalonId === null && (
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-14 space-y-12 sm:space-y-16">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-10 space-y-12 sm:space-y-16">
             {/* Hero 2-column Editorial Split */}
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
               <div className="lg:col-span-7 flex flex-col justify-between space-y-7 sm:space-y-8">
@@ -1794,7 +2018,7 @@ function SalonApp() {
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => setReadingStory(leadStory)}
+                                onClick={() => openStoryReader(leadStory)}
                                 className="flex-1 min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
                               >
                                 <span>Lire et commenter</span>
@@ -2027,7 +2251,7 @@ function SalonApp() {
 
                                   <button
                                     type="button"
-                                    onClick={() => setReadingStory(story)}
+                                    onClick={() => openStoryReader(story)}
                                     className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
                                   >
                                     <span>Lire et commenter</span>
@@ -2049,10 +2273,23 @@ function SalonApp() {
 
         {activeTab === 'themes' && (
           <ThemesView
-            onStartFromTheme={(theme, promptQuestion, starter) => {
-              void openComposer({ theme, prompt: promptQuestion, starter });
-            }}
-            onVisitSalon={(theme) => enterSalon(theme)}
+            stories={openFeedStories}
+            storiesLoaded={storiesLoaded}
+            customSalons={customSalons}
+            discoverableProfiles={discoverableProfiles}
+            bookmarkedStoryIds={bookmarkedStoryIds}
+            repostedStoryIds={repostedStoryIds}
+            onToggleBookmark={(story) => void handleToggleBookmark(story)}
+            onOpenRepost={(story) => void handleOpenRepost(story)}
+            onReadStory={(story) => openStoryReader(story)}
+            onOpenMemberWall={openMemberWall}
+            onEnterSalon={(salonId) => enterSalon(salonId)}
+            onEnterCustomSalon={(customSalonId) => enterCustomSalon(customSalonId)}
+            onOpenPeleMele={() => navigateTo('pelemele')}
+            onWriteNovel={(genre) =>
+              void openComposer({ format: 'roman', romanMode: 'new', novelGenre: genre })
+            }
+            onShowNotice={showNotice}
           />
         )}
 
@@ -2083,7 +2320,7 @@ function SalonApp() {
             myModerationCases={myModerationCases}
             relationships={userRelationships}
             requestedSubTab={journalSubTabRequest}
-            onReadStory={(story) => setReadingStory(story)}
+            onReadStory={(story) => openStoryReader(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onEditStory={(story) => void openComposer({ edit: story })}
             onAddChapterToNovel={(story) =>
@@ -2135,6 +2372,13 @@ function SalonApp() {
             </button>
             <button
               type="button"
+              onClick={() => navigateTo('pour-vous')}
+              className="hover:text-stone-900 transition-colors"
+            >
+              Pour vous
+            </button>
+            <button
+              type="button"
               onClick={() => navigateTo('pelemele')}
               className="hover:text-stone-900 transition-colors"
             >
@@ -2145,7 +2389,7 @@ function SalonApp() {
               onClick={() => navigateTo('themes')}
               className="hover:text-stone-900 transition-colors"
             >
-              Thèmes
+              Romans & palmarès
             </button>
             <button
               type="button"
@@ -2163,7 +2407,7 @@ function SalonApp() {
       {/* Reader Modal */}
       <StoryReaderModal
         story={readingStory}
-        onClose={() => setReadingStory(null)}
+        onClose={closeStoryReader}
         existingExchanges={exchanges}
         existingStories={[...publicStories, ...myStories]}
         customSalons={customSalons}
@@ -2186,6 +2430,9 @@ function SalonApp() {
           setReadingStory(null);
           setProfilesSubTab('edit-profile');
           navigateTo('membres', null, null);
+        }}
+        onStoryClaimed={(claimedName) => {
+          showNotice(`Cet écrit est désormais publié sous votre nom (${claimedName}).`);
         }}
       />
 
@@ -2242,6 +2489,7 @@ function SalonApp() {
           initialFormat={composerDefaults.format ?? 'confession'}
           initialRomanMode={composerDefaults.romanMode ?? 'new'}
           initialNovelId={composerDefaults.novelId ?? null}
+          initialNovelGenre={composerDefaults.novelGenre}
           customSalons={customSalons}
           initialCustomSalonId={composerDefaults.customSalonId ?? null}
           myStories={myStories}

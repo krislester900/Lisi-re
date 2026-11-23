@@ -37,6 +37,7 @@ import {
   Exchange,
   ExchangeMessage,
   ExchangeStatus,
+  FavoriteAuthor,
   FIELD_LIMITS,
   ID_PATTERN,
   MemberWarning,
@@ -270,6 +271,51 @@ export async function updateUserAgeProfile(userId: string, rawAge: number): Prom
       });
     }
     return parsed;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, privatePath);
+  }
+}
+
+const VALID_SALON_THEME_SET = new Set<StoryThemeId>([
+  'creation',
+  'rencontres',
+  'solitudes',
+  'premiers-elans',
+  'quotidien',
+  'faq',
+]);
+
+export async function updateUserFavoriteThemes(
+  userId: string,
+  rawThemes: StoryThemeId[]
+): Promise<StoryThemeId[]> {
+  assertValidId(userId, 'userId');
+  const sanitized = Array.from(
+    new Set(rawThemes.filter((t): t is StoryThemeId => VALID_SALON_THEME_SET.has(t)))
+  ).slice(0, 6);
+
+  const privatePath = `users/${userId}/private/info`;
+  const privateRef = doc(db, 'users', userId, 'private', 'info');
+
+  try {
+    const snap = await getDoc(privateRef);
+    if (!snap.exists()) {
+      const currentUser = auth.currentUser;
+      const email = clampString(currentUser?.email || 'utilisateur@lisiere.app', 200);
+      await setDoc(privateRef, {
+        userId,
+        email: email.length >= 3 ? email : 'utilisateur@lisiere.app',
+        favoriteThemes: sanitized,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await updateDoc(privateRef, {
+        favoriteThemes: sanitized,
+        updatedAt: serverTimestamp(),
+      });
+    }
+    return sanitized;
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, privatePath);
   }
@@ -698,6 +744,28 @@ export async function updateStoryVisibility(
       visibility,
       updatedAt: serverTimestamp(),
     });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function claimAnonymousStory(
+  storyId: string,
+  authorName: string
+): Promise<string> {
+  assertValidId(storyId, 'storyId');
+  const cleanName = clampString(authorName, FIELD_LIMITS.displayName.max);
+  if (cleanName.length < FIELD_LIMITS.displayName.min) {
+    throw new Error('Votre nom d’auteur doit contenir au moins 2 caractères pour revendiquer cet écrit.');
+  }
+  const path = `stories/${storyId}`;
+  try {
+    await updateDoc(doc(db, 'stories', storyId), {
+      isAnonymous: false,
+      authorName: cleanName,
+      updatedAt: serverTimestamp(),
+    });
+    return cleanName;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -2743,6 +2811,79 @@ export async function removeUserRelationship(
   const path = `users/${ownerId}/relationships/${targetUserId}`;
   try {
     await deleteDoc(doc(db, 'users', ownerId, 'relationships', targetUserId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// --- Favorite Authors ("Auteurs favoris" for the personalized "Pour vous" feed) ---
+
+export function subscribeToFavoriteAuthors(
+  userId: string,
+  onData: (authors: FavoriteAuthor[]) => void
+): () => void {
+  assertValidId(userId, 'userId');
+  const path = `users/${userId}/favoriteAuthors`;
+  const q = query(
+    collection(db, 'users', userId, 'favoriteAuthors'),
+    where('ownerId', '==', userId),
+    limit(200)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as FavoriteAuthor);
+      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function toggleFavoriteAuthor(
+  ownerId: string,
+  authorId: string,
+  authorName: string
+): Promise<boolean> {
+  assertValidId(ownerId, 'ownerId');
+  assertValidId(authorId, 'authorId');
+  if (ownerId === authorId) {
+    throw new Error('Vous ne pouvez pas vous ajouter vous-même en auteur favori.');
+  }
+  const path = `users/${ownerId}/favoriteAuthors/${authorId}`;
+  const favRef = doc(db, 'users', ownerId, 'favoriteAuthors', authorId);
+
+  try {
+    const existing = await getDoc(favRef);
+    if (existing.exists()) {
+      await deleteDoc(favRef);
+      return false;
+    }
+    const rawName = clampString(authorName, FIELD_LIMITS.displayName.max);
+    const cleanName = rawName.length >= FIELD_LIMITS.displayName.min ? rawName : 'Auteur';
+    await setDoc(favRef, {
+      ownerId,
+      authorId,
+      authorName: cleanName,
+      createdAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function removeFavoriteAuthor(
+  ownerId: string,
+  authorId: string
+): Promise<void> {
+  assertValidId(ownerId, 'ownerId');
+  assertValidId(authorId, 'authorId');
+  const path = `users/${ownerId}/favoriteAuthors/${authorId}`;
+  try {
+    await deleteDoc(doc(db, 'users', ownerId, 'favoriteAuthors', authorId));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
   }

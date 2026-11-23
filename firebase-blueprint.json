@@ -158,6 +158,10 @@
           "type": "string",
           "format": "date-time"
         },
+        "favoriteThemes": {
+          "type": "array",
+          "description": "User favorite salon theme IDs for the personalized For You feed."
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -168,6 +172,33 @@
         }
       },
       "required": ["userId", "email", "createdAt", "updatedAt"]
+    },
+    "FavoriteAuthor": {
+      "title": "FavoriteAuthor",
+      "description": "A public author followed as a favorite for the personalized For You feed.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["ownerId", "authorId", "authorName", "createdAt"]
     },
     "Story": {
       "title": "Story",
@@ -1661,6 +1692,12 @@
         "$ref": "#/entities/UserRelationship"
       },
       "description": "Per-user member block and not-interested preferences."
+    },
+    "/users/{userId}/favoriteAuthors/{authorId}": {
+      "schema": {
+        "$ref": "#/entities/FavoriteAuthor"
+      },
+      "description": "Per-user favorite authors followed for the personalized For You feed."
     },
     "/stories/{storyId}": {
       "schema": {

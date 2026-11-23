@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Award,
   BookOpen,
   Compass,
   Feather,
@@ -11,7 +12,7 @@ import {
   PanelLeftOpen,
   Plus,
   ShieldAlert,
-  Sparkles,
+  Star,
   Users,
   X,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import { SalonEmblem } from './SalonEmblem';
 
 export type SidebarNavTab =
   | 'recits'
+  | 'pour-vous'
   | 'pelemele'
   | 'membres'
   | 'themes'
@@ -77,9 +79,10 @@ export function AppSidebar({
     tone?: 'danger';
   }> = [
     { id: 'recits', label: 'Accueil & salons', icon: Home },
+    { id: 'pour-vous', label: 'Pour vous', icon: Star },
     { id: 'pelemele', label: 'Pêle-mêle', icon: Compass },
     { id: 'membres', label: 'Profils', icon: Users },
-    { id: 'themes', label: 'Fils & thèmes', icon: Sparkles },
+    { id: 'themes', label: 'Romans & palmarès', icon: Award },
     { id: 'passerelles', label: 'Passerelles', icon: MessageSquareHeart, badge: exchangesCount },
     { id: 'carnet', label: 'Mon carnet', icon: BookOpen, badge: warningsCount },
     ...(isModerationAdmin

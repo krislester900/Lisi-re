@@ -85,7 +85,15 @@ export interface PrivateUserInfo {
   declaredAge?: number;
   birthYear?: number;
   ageUpdatedAt?: Timestamp | null;
+  favoriteThemes?: StoryThemeId[];
   updatedAt: Timestamp | null;
+}
+
+export interface FavoriteAuthor {
+  ownerId: string;
+  authorId: string;
+  authorName: string;
+  createdAt: Timestamp | null;
 }
 
 export interface Story {

@@ -131,13 +131,23 @@ service cloud.firestore {
       return data.keys().hasAll(['userId', 'email', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly([
           'userId', 'email', 'declaredAge', 'birthYear', 'ageUpdatedAt',
-          'createdAt', 'updatedAt'
+          'favoriteThemes', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.userId)
         && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
         && (!('declaredAge' in data) || (data.declaredAge is int && data.declaredAge >= 13 && data.declaredAge <= 115))
         && (!('birthYear' in data) || (data.birthYear is int && data.birthYear >= 1900 && data.birthYear <= 2026))
         && (!('ageUpdatedAt' in data) || data.ageUpdatedAt is timestamp)
+        && (!('favoriteThemes' in data) || (
+          data.favoriteThemes is list
+          && data.favoriteThemes.size() <= 6
+          && (data.favoriteThemes.size() < 1 || isValidSalonId(data.favoriteThemes[0]))
+          && (data.favoriteThemes.size() < 2 || isValidSalonId(data.favoriteThemes[1]))
+          && (data.favoriteThemes.size() < 3 || isValidSalonId(data.favoriteThemes[2]))
+          && (data.favoriteThemes.size() < 4 || isValidSalonId(data.favoriteThemes[3]))
+          && (data.favoriteThemes.size() < 5 || isValidSalonId(data.favoriteThemes[4]))
+          && (data.favoriteThemes.size() < 6 || isValidSalonId(data.favoriteThemes[5]))
+        ))
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -565,6 +575,16 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidFavoriteAuthor(data) {
+      return data.keys().hasAll(['ownerId', 'authorId', 'authorName', 'createdAt'])
+        && data.keys().hasOnly(['ownerId', 'authorId', 'authorName', 'createdAt'])
+        && isValidId(data.ownerId)
+        && isValidId(data.authorId)
+        && data.ownerId != data.authorId
+        && data.authorName is string && data.authorName.size() >= 2 && data.authorName.size() <= 60
+        && data.createdAt is timestamp;
+    }
+
     function isValidModerationAiAnalysis(ai) {
       return ai is map
         && ai.keys().hasAll([
@@ -838,7 +858,7 @@ service cloud.firestore {
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
         && incoming().diff(existing()).affectedKeys().hasOnly([
-          'email', 'declaredAge', 'birthYear', 'ageUpdatedAt', 'updatedAt'
+          'email', 'declaredAge', 'birthYear', 'ageUpdatedAt', 'favoriteThemes', 'updatedAt'
         ]);
       allow delete: if false;
     }
@@ -917,6 +937,28 @@ service cloud.firestore {
       allow delete: if isVerifiedUser()
         && isValidId(userId)
         && isValidId(targetUserId)
+        && isOwner(userId)
+        && existing().ownerId == request.auth.uid;
+    }
+
+    // Per-user favorite authors for the personalized "Pour vous" feed
+    match /users/{userId}/favoriteAuthors/{authorId} {
+      allow get: if isValidId(userId) && isValidId(authorId) && isOwner(userId);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(authorId)
+        && isOwner(userId)
+        && userId != authorId
+        && isValidFavoriteAuthor(incoming())
+        && incoming().ownerId == request.auth.uid
+        && incoming().authorId == authorId
+        && incoming().createdAt == request.time
+        && exists(/databases/$(database)/documents/publicProfiles/$(authorId));
+      allow update: if false;
+      allow delete: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidId(authorId)
         && isOwner(userId)
         && existing().ownerId == request.auth.uid;
     }

@@ -16,13 +16,16 @@ import {
   Plus,
   Repeat2,
   Send,
+  Star,
   Trash2,
   User as UserIcon,
+  UserCheck,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { compressAvatarForProfile, compressPhotoForWall } from '../lib/storageService';
 import {
+  claimAnonymousStory,
   createDirectExchangeWithFirstMessage,
   createWallItem,
   deleteStoryRepost,
@@ -33,6 +36,7 @@ import {
   subscribeToProfileReposts,
   subscribeToPublicProfile,
   subscribeToWallItems,
+  toggleFavoriteAuthor,
   updatePublicProfile,
   updateRepostVisibility,
   upsertUserRelationship,
@@ -143,7 +147,7 @@ export function ProfileWallView({
   onOpenReport,
   embedded = false,
 }: ProfileWallViewProps) {
-  const { user, profile: myProfile, signInWithGoogle } = useAuth();
+  const { user, profile: myProfile, favoriteAuthors, signInWithGoogle } = useAuth();
   const [memberProfile, setMemberProfile] = useState<PublicProfile | null>(null);
   const [wallItems, setWallItems] = useState<WallItem[]>([]);
   const [reposts, setReposts] = useState<StoryRepost[]>([]);
@@ -169,8 +173,10 @@ export function ProfileWallView({
   const [dmBusy, setDmBusy] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
   const [relBusy, setRelBusy] = useState(false);
+  const [favBusy, setFavBusy] = useState(false);
   const [confirmBlock, setConfirmBlock] = useState(false);
 
+  const isFavoriteAuthor = favoriteAuthors.some((a) => a.authorId === memberId);
   const memberRelationship = relationships.find((r) => r.targetUserId === memberId);
   const isBlockedMember = memberRelationship?.relation === 'blocked';
   const isNotInterestedMember = memberRelationship?.relation === 'not_interested';
@@ -196,6 +202,10 @@ export function ProfileWallView({
   const [avatarError, setAvatarError] = useState<string | null>(null);
   const [avatarDraftFailed, setAvatarDraftFailed] = useState(false);
 
+  const [confirmClaimStoryId, setConfirmClaimStoryId] = useState<string | null>(null);
+  const [claimingStoryId, setClaimingStoryId] = useState<string | null>(null);
+  const [claimStoryError, setClaimStoryError] = useState<string | null>(null);
+
   const isOwner = Boolean(user && user.uid === memberId);
 
   useEffect(() => {
@@ -207,6 +217,9 @@ export function ProfileWallView({
     setDmError(null);
     setLightboxItem(null);
     setWallActionError(null);
+    setConfirmClaimStoryId(null);
+    setClaimingStoryId(null);
+    setClaimStoryError(null);
 
     const unsubProfile = subscribeToPublicProfile(memberId, (p) => {
       setMemberProfile(p);
@@ -515,6 +528,25 @@ export function ProfileWallView({
       );
     } finally {
       setRelBusy(false);
+    }
+  };
+
+  const handleToggleFavoriteMember = async () => {
+    if (!user) {
+      await signInWithGoogle();
+      return;
+    }
+    if (isOwner || !memberProfile || favBusy) return;
+    setWallActionError(null);
+    setFavBusy(true);
+    try {
+      await toggleFavoriteAuthor(user.uid, memberProfile.userId, memberProfile.displayName);
+    } catch (err) {
+      setWallActionError(
+        formatFriendlyFirestoreError(err, 'Impossible de modifier cet auteur favori.')
+      );
+    } finally {
+      setFavBusy(false);
     }
   };
 
@@ -863,6 +895,21 @@ export function ProfileWallView({
 
                 {user && (
                   <>
+                    <button
+                      type="button"
+                      disabled={favBusy}
+                      aria-pressed={isFavoriteAuthor}
+                      onClick={() => void handleToggleFavoriteMember()}
+                      className={`min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                        isFavoriteAuthor
+                          ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                          : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
+                      } disabled:opacity-50`}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${isFavoriteAuthor ? 'fill-current' : ''}`} />
+                      <span>{isFavoriteAuthor ? 'Auteur favori' : 'Suivre l’auteur'}</span>
+                    </button>
+
                     <button
                       type="button"
                       disabled={relBusy}
@@ -1650,17 +1697,92 @@ export function ProfileWallView({
                       )}
                     </div>
 
-                    <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
-                      <span className="text-xs text-stone-500 tabular-nums">
-                        {story.echoCount} commentaire{story.echoCount > 1 ? 's' : ''}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => onReadStory(story)}
-                        className="min-h-[36px] px-3 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
-                      >
-                        Lire et commenter
-                      </button>
+                    <div className="pt-3 border-t border-stone-100 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs text-stone-500 tabular-nums">
+                          {story.echoCount} commentaire{story.echoCount > 1 ? 's' : ''}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isOwner && story.isAnonymous && confirmClaimStoryId !== story.storyId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setClaimStoryError(null);
+                                setConfirmClaimStoryId(story.storyId);
+                              }}
+                              className="min-h-[34px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>Revendiquer</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => onReadStory(story)}
+                            className="min-h-[36px] px-3 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
+                          >
+                            Lire et commenter
+                          </button>
+                        </div>
+                      </div>
+
+                      {isOwner && story.isAnonymous && confirmClaimStoryId === story.storyId && (
+                        <div className="rounded border border-[#CBD6E6] bg-[#F3F6FA] p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="text-stone-800">
+                            Publier ce récit sous votre nom ({memberProfile.displayName}) ?
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              disabled={claimingStoryId === story.storyId}
+                              onClick={async () => {
+                                if (!user) return;
+                                setClaimStoryError(null);
+                                setClaimingStoryId(story.storyId);
+                                try {
+                                  await claimAnonymousStory(
+                                    story.storyId,
+                                    memberProfile?.displayName ||
+                                      myProfile?.displayName ||
+                                      user.displayName ||
+                                      'Auteur'
+                                  );
+                                  setConfirmClaimStoryId(null);
+                                } catch (err) {
+                                  setClaimStoryError(
+                                    formatFriendlyFirestoreError(
+                                      err,
+                                      'Impossible de revendiquer cet écrit.'
+                                    )
+                                  );
+                                } finally {
+                                  setClaimingStoryId(null);
+                                }
+                              }}
+                              className="min-h-[32px] px-2.5 py-1 rounded bg-[#1B365D] text-white font-medium hover:bg-[#132744] disabled:opacity-50 whitespace-nowrap"
+                            >
+                              {claimingStoryId === story.storyId ? 'En cours…' : 'Confirmer'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={claimingStoryId === story.storyId}
+                              onClick={() => {
+                                setConfirmClaimStoryId(null);
+                                setClaimStoryError(null);
+                              }}
+                              className="min-h-[32px] px-2.5 py-1 rounded border border-stone-300 bg-white text-stone-700 hover:border-stone-500 whitespace-nowrap"
+                            >
+                              Annuler
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {claimStoryError && confirmClaimStoryId === story.storyId && (
+                        <p role="alert" className="text-xs text-red-700">
+                          {claimStoryError}
+                        </p>
+                      )}
                     </div>
                   </article>
                 );

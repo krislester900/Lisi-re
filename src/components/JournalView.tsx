@@ -37,6 +37,7 @@ import {
 import { sortStories, StorySortMode } from '../lib/storyFilter';
 import {
   acknowledgeUserWarning,
+  claimAnonymousStory,
   deleteStory,
   deleteStoryQuote,
   deleteStoryRepost,
@@ -100,6 +101,7 @@ type StoryFilter =
   | 'all'
   | 'public'
   | 'private'
+  | 'anonymous'
   | 'roman'
   | 'roman-en-cours'
   | 'roman-termine';
@@ -132,6 +134,7 @@ export function JournalView({
   const [repostSearch, setRepostSearch] = useState('');
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmClaimId, setConfirmClaimId] = useState<string | null>(null);
   const [busyStoryId, setBusyStoryId] = useState<string | null>(null);
   const [storyActionError, setStoryActionError] = useState<string | null>(null);
   const [busyBookmarkId, setBusyBookmarkId] = useState<string | null>(null);
@@ -157,6 +160,10 @@ export function JournalView({
   );
   const draftCount = useMemo(
     () => myStories.filter((s) => s.visibility === 'private').length,
+    [myStories]
+  );
+  const anonymousCount = useMemo(
+    () => myStories.filter((s) => Boolean(s.isAnonymous)).length,
     [myStories]
   );
   const romanCount = useMemo(
@@ -193,6 +200,7 @@ export function JournalView({
     const list = myStories.filter((story) => {
       if (storyFilter === 'public' && story.visibility !== 'public') return false;
       if (storyFilter === 'private' && story.visibility !== 'private') return false;
+      if (storyFilter === 'anonymous' && !story.isAnonymous) return false;
       if (storyFilter === 'roman' && story.storyFormat !== 'roman') return false;
       if (
         storyFilter === 'roman-en-cours' &&
@@ -392,6 +400,23 @@ export function JournalView({
     } catch (err) {
       setStoryActionError(
         err instanceof Error ? err.message : 'Impossible de mettre à jour le statut du roman.'
+      );
+    } finally {
+      setBusyStoryId(null);
+    }
+  };
+
+  const handleClaimAnonymous = async (storyId: string) => {
+    if (!user || busyStoryId) return;
+    setStoryActionError(null);
+    setBusyStoryId(storyId);
+    try {
+      const displayName = profile?.displayName || user.displayName || 'Auteur';
+      await claimAnonymousStory(storyId, displayName);
+      setConfirmClaimId(null);
+    } catch (err) {
+      setStoryActionError(
+        err instanceof Error ? err.message : 'Impossible de revendiquer cet écrit.'
       );
     } finally {
       setBusyStoryId(null);
@@ -683,6 +708,9 @@ export function JournalView({
                         { id: 'all', label: `Tous (${myStories.length})` },
                         { id: 'public', label: `Publiés (${publicCount})` },
                         { id: 'private', label: `Brouillons (${draftCount})` },
+                        ...(anonymousCount > 0
+                          ? [{ id: 'anonymous' as const, label: `Anonymes (${anonymousCount})` }]
+                          : []),
                         ...(romanCount > 0
                           ? [
                               { id: 'roman' as const, label: `Romans (${romanCount})` },
@@ -803,6 +831,7 @@ export function JournalView({
                 <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
                   {filteredStories.map((story) => {
                     const isConfirming = confirmDeleteId === story.storyId;
+                    const isConfirmingClaim = confirmClaimId === story.storyId;
                     const isBusy = busyStoryId === story.storyId;
                     const formatLabel =
                       STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label ?? 'Confession';
@@ -979,6 +1008,43 @@ export function JournalView({
                                 )}
                               </button>
                             )}
+
+                            {story.isAnonymous &&
+                              (isConfirmingClaim ? (
+                                <div className="flex flex-wrap items-center gap-1.5 bg-[#F3F6FA] border border-[#CBD6E6] rounded-md px-2.5 py-1">
+                                  <span className="text-[11px] text-[#1B365D] font-medium">
+                                    Signer « {profile?.displayName || user.displayName || 'Auteur'} » ?
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => void handleClaimAnonymous(story.storyId)}
+                                    className="min-h-[28px] px-2.5 py-0.5 text-[11px] font-medium text-white bg-[#1B365D] rounded hover:bg-[#132744] disabled:opacity-60 whitespace-nowrap"
+                                  >
+                                    {isBusy ? 'En cours…' : 'Confirmer'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmClaimId(null)}
+                                    className="min-h-[28px] px-2 py-0.5 text-[11px] font-medium text-stone-600 hover:text-stone-900"
+                                  >
+                                    Annuler
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => {
+                                    setConfirmDeleteId(null);
+                                    setConfirmClaimId(story.storyId);
+                                  }}
+                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                                >
+                                  <UserCheck className="w-3.5 h-3.5" />
+                                  <span>Revendiquer cet écrit</span>
+                                </button>
+                              ))}
                           </div>
 
                           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 ml-auto">

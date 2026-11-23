@@ -21,10 +21,13 @@ import {
   Plus,
   Quote,
   Repeat2,
+  Share2,
   ShieldAlert,
   ShieldCheck,
+  Star,
   Trash2,
   User as UserIcon,
+  UserCheck,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -43,6 +46,7 @@ import {
   addStoryChapter,
   addStoryEcho,
   buildExchangeId,
+  claimAnonymousStory,
   createExchangeWithFirstMessage,
   createStoryQuote,
   deleteStoryQuote,
@@ -55,6 +59,7 @@ import {
   subscribeToStoryChapters,
   subscribeToStoryEchoes,
   subscribeToUserResonance,
+  toggleFavoriteAuthor,
   toggleStoryResonance,
   updateNovelSeriesStatus,
 } from '../lib/storyService';
@@ -102,6 +107,7 @@ interface StoryReaderModalProps {
   onOpenPeleMele?: () => void;
   onOpenReport?: (draft: ReportDraft) => void;
   onOpenAgeSettings?: () => void;
+  onStoryClaimed?: (authorName: string) => void;
 }
 
 export function StoryReaderModal({
@@ -123,9 +129,16 @@ export function StoryReaderModal({
   onOpenPeleMele,
   onOpenReport,
   onOpenAgeSettings,
+  onStoryClaimed,
 }: StoryReaderModalProps) {
-  const { user, profile, viewerAge, signInWithGoogle } = useAuth();
+  const { user, profile, viewerAge, favoriteAuthors, signInWithGoogle } = useAuth();
   const [matureAcknowledged, setMatureAcknowledged] = useState(false);
+  const [favAuthorBusy, setFavAuthorBusy] = useState(false);
+  const [showSharePanel, setShowSharePanel] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [confirmClaimAnon, setConfirmClaimAnon] = useState(false);
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
   const [echoes, setEchoes] = useState<Echo[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeChapterIdx, setActiveChapterIdx] = useState(0); // 0 = Chapitre 1 (story.content), >=1 = chapters[idx - 1]
@@ -283,6 +296,11 @@ export function StoryReaderModal({
     setActiveQuotePopover(null);
     setQuoteFeedback(null);
     setShowStoryQuotesDrawer(false);
+    setShowSharePanel(false);
+    setShareLinkCopied(false);
+    setConfirmClaimAnon(false);
+    setClaimBusy(false);
+    setClaimError(null);
   }, [currentStoryId]);
 
   useEffect(() => {
@@ -476,7 +494,9 @@ export function StoryReaderModal({
     if (!story) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (pendingSelection) {
+        if (showSharePanel) {
+          setShowSharePanel(false);
+        } else if (pendingSelection) {
           window.getSelection()?.removeAllRanges();
           setPendingSelection(null);
         } else if (activeQuotePopover) {
@@ -496,6 +516,7 @@ export function StoryReaderModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     story,
+    showSharePanel,
     zenMode,
     showMusicPanel,
     showZenAppearance,
@@ -538,6 +559,62 @@ export function StoryReaderModal({
   const isReadingBlocked = ageBlockReason !== null || needsMatureGate;
   const isAnonymousStory = Boolean(story.isAnonymous);
   const publicAuthorLabel = isAnonymousStory ? 'Auteur anonyme' : story.authorName;
+  const canSharePublicLink =
+    story.visibility === 'public' && story.customSalonVisibility !== 'private';
+  const directStoryUrl =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/histoires/${encodeURIComponent(story.storyId)}`
+      : '';
+  const shareSummaryText = isAnonymousStory
+    ? `« ${story.title} » — un récit anonyme sur Lisière`
+    : `« ${story.title} » de ${story.authorName} sur Lisière`;
+  const canUseNativeShare =
+    typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  const handleCopyDirectLink = async () => {
+    if (!directStoryUrl) return;
+    try {
+      await navigator.clipboard.writeText(directStoryUrl);
+      setShareLinkCopied(true);
+      window.setTimeout(() => {
+        setShareLinkCopied(false);
+      }, 2400);
+    } catch {
+      // Fallback kept via readOnly input selection
+    }
+  };
+
+  const handleNativeShare = async () => {
+    if (!canUseNativeShare || !directStoryUrl) return;
+    try {
+      await navigator.share({
+        title: `${story.title} — Lisière`,
+        text: shareSummaryText,
+        url: directStoryUrl,
+      });
+    } catch {
+      // User cancelled or native share unavailable
+    }
+  };
+
+  const handleClaimAnonymousInReader = async () => {
+    if (!user || !isAuthor || !isAnonymousStory || claimBusy) return;
+    setClaimError(null);
+    setClaimBusy(true);
+    try {
+      const nextAuthorName = profile?.displayName || user.displayName || 'Auteur';
+      const claimedName = await claimAnonymousStory(story.storyId, nextAuthorName);
+      setConfirmClaimAnon(false);
+      onStoryClaimed?.(claimedName);
+    } catch (err) {
+      setClaimError(
+        formatFriendlyFirestoreError(err, 'Impossible de revendiquer cet écrit pour le moment.')
+      );
+    } finally {
+      setClaimBusy(false);
+    }
+  };
+
   const isRoman = story.storyFormat === 'roman';
   const inlineChapterLengthEval = evaluateNovelChapterLength(chapterContent);
   const theme = THEME_MAP[story.theme];
@@ -1489,6 +1566,22 @@ export function StoryReaderModal({
                         : 'Musique'}
                     </span>
                   </button>
+                  {canSharePublicLink && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSharePanel((prev) => !prev)}
+                      aria-label="Partager ce récit"
+                      aria-expanded={showSharePanel}
+                      className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                        showSharePanel
+                          ? 'border-[#1B365D] bg-[#1B365D] text-white'
+                          : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:text-stone-900 hover:border-stone-400'
+                      }`}
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Partager</span>
+                    </button>
+                  )}
                   {!isReadingBlocked && (
                     <button
                       type="button"
@@ -1622,24 +1715,89 @@ export function StoryReaderModal({
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-600">
                   <div className="flex flex-wrap items-center gap-2">
                     {isAnonymousStory ? (
-                      <span className="font-medium text-stone-700 inline-flex items-center gap-1.5">
-                        <EyeOff className="w-3.5 h-3.5 text-stone-500" />
-                        <span>
-                          Auteur anonyme{isAuthor ? ' (votre texte)' : ''}
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-stone-700 inline-flex items-center gap-1.5">
+                          <EyeOff className="w-3.5 h-3.5 text-stone-500" />
+                          <span>
+                            Auteur anonyme{isAuthor ? ' (votre texte)' : ''}
+                          </span>
                         </span>
+                        {isAuthor && !confirmClaimAnon && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setClaimError(null);
+                              setConfirmClaimAnon(true);
+                            }}
+                            className="px-2.5 py-0.5 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D] text-xs font-medium hover:bg-[#E7EEF7] inline-flex items-center gap-1 whitespace-nowrap"
+                          >
+                            <UserCheck className="w-3 h-3" />
+                            <span>Revendiquer cet écrit</span>
+                          </button>
+                        )}
                       </span>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onOpenMemberWall(story.authorId);
-                        }}
-                        className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
-                      >
-                        <UserIcon className="w-3.5 h-3.5 text-stone-500" />
-                        <span>{story.authorName}</span>
-                      </button>
+                      <span className="inline-flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onClose();
+                            onOpenMemberWall(story.authorId);
+                          }}
+                          className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
+                        >
+                          <UserIcon className="w-3.5 h-3.5 text-stone-500" />
+                          <span>{story.authorName}</span>
+                        </button>
+                        {!isAuthor && (
+                          <button
+                            type="button"
+                            disabled={favAuthorBusy}
+                            onClick={async () => {
+                              if (!user) {
+                                await signInWithGoogle();
+                                return;
+                              }
+                              setFavAuthorBusy(true);
+                              try {
+                                await toggleFavoriteAuthor(
+                                  user.uid,
+                                  story.authorId,
+                                  story.authorName
+                                );
+                              } catch (err) {
+                                console.error('Erreur auteur favori:', err);
+                              } finally {
+                                setFavAuthorBusy(false);
+                              }
+                            }}
+                            aria-pressed={favoriteAuthors.some((a) => a.authorId === story.authorId)}
+                            title={
+                              favoriteAuthors.some((a) => a.authorId === story.authorId)
+                                ? 'Retirer des auteurs favoris'
+                                : 'Suivre cet auteur dans Pour vous'
+                            }
+                            className={`px-2 py-0.5 rounded border text-[11px] font-medium inline-flex items-center gap-1 transition-colors ${
+                              favoriteAuthors.some((a) => a.authorId === story.authorId)
+                                ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                : 'border-stone-200 bg-white text-stone-600 hover:border-[#1B365D] hover:text-[#1B365D]'
+                            } disabled:opacity-50`}
+                          >
+                            <Star
+                              className={`w-3 h-3 ${
+                                favoriteAuthors.some((a) => a.authorId === story.authorId)
+                                  ? 'fill-current'
+                                  : ''
+                              }`}
+                            />
+                            <span>
+                              {favoriteAuthors.some((a) => a.authorId === story.authorId)
+                                ? 'Suivi'
+                                : 'Suivre'}
+                            </span>
+                          </button>
+                        )}
+                      </span>
                     )}
                     <span aria-hidden="true">·</span>
                     <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
@@ -1692,6 +1850,45 @@ export function StoryReaderModal({
                   <p role="alert" className="text-xs text-red-700">
                     {statusToggleError}
                   </p>
+                )}
+
+                {isAuthor && isAnonymousStory && confirmClaimAnon && (
+                  <div className="rounded-md border border-[#CBD6E6] bg-[#F3F6FA] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5 text-stone-800">
+                      <p className="font-medium text-stone-900">
+                        Revendiquer la paternité de cet écrit ?
+                      </p>
+                      <p className="text-stone-600">
+                        Votre nom ({profile?.displayName || user?.displayName || 'Auteur'}) remplace « Auteur anonyme » sur ce récit et le relie à votre profil.
+                      </p>
+                      {claimError && (
+                        <p role="alert" className="text-red-700 pt-1">
+                          {claimError}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={claimBusy}
+                        onClick={() => void handleClaimAnonymousInReader()}
+                        className="min-h-[34px] px-3 py-1 rounded bg-[#1B365D] text-white font-medium hover:bg-[#132744] disabled:opacity-50 whitespace-nowrap"
+                      >
+                        {claimBusy ? 'Publication…' : 'Confirmer'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={claimBusy}
+                        onClick={() => {
+                          setConfirmClaimAnon(false);
+                          setClaimError(null);
+                        }}
+                        className="min-h-[34px] px-3 py-1 rounded border border-stone-300 bg-white text-stone-700 hover:border-stone-500 whitespace-nowrap"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </div>
                 )}
 
                 {/* Quick Zen Reading & Ambient Music Invitation Bar */}
@@ -2248,6 +2445,17 @@ export function StoryReaderModal({
                     <span>{isReposted ? 'Repartagé' : 'Repartager'}</span>
                   </button>
 
+                  {canSharePublicLink && (
+                    <button
+                      type="button"
+                      onClick={() => setShowSharePanel(true)}
+                      className="min-h-[40px] px-3.5 py-2 text-sm font-medium rounded-md border border-stone-300 bg-white text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span>Partager</span>
+                    </button>
+                  )}
+
                   {!isAuthor && !isAnonymousStory && story.visibility === 'public' && (
                     existingExchange ? (
                       <button
@@ -2793,6 +3001,143 @@ export function StoryReaderModal({
           </div>
         )}
         </div>
+        {showSharePanel && canSharePublicLink && (
+          <div
+            className="absolute inset-0 z-40 bg-stone-900/45 flex items-center justify-center p-4"
+            onClick={() => setShowSharePanel(false)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="share-story-dialog-title"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md rounded-lg border border-stone-300 bg-[#FBF9F5] p-5 sm:p-6 shadow-xl space-y-5 text-stone-900"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1 min-w-0">
+                  <p className="text-[11px] uppercase tracking-widest text-stone-500">
+                    Lien direct & réseaux
+                  </p>
+                  <h2
+                    id="share-story-dialog-title"
+                    className="font-display text-xl font-medium text-stone-900 leading-snug"
+                  >
+                    Partager « {story.title} »
+                  </h2>
+                  <p className="text-xs text-stone-500">
+                    {isAnonymousStory
+                      ? 'Auteur anonyme — le lien préserve strictement l’anonymat.'
+                      : `Par ${story.authorName}`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSharePanel(false)}
+                  aria-label="Fermer la fenêtre de partage"
+                  className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 hover:bg-stone-100 shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="direct-story-share-url"
+                  className="block text-xs font-medium text-stone-700"
+                >
+                  Lien direct vers le récit
+                </label>
+                <div className="flex items-stretch gap-2">
+                  <input
+                    id="direct-story-share-url"
+                    type="text"
+                    readOnly
+                    value={directStoryUrl}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="flex-1 min-w-0 px-3 py-2 text-xs bg-white border border-stone-300 rounded-md text-stone-800 select-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyDirectLink()}
+                    className="min-h-[38px] px-3.5 py-2 rounded-md bg-[#1B365D] text-white text-xs font-medium hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  >
+                    {shareLinkCopied ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Copié</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copier</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {canUseNativeShare && (
+                <button
+                  type="button"
+                  onClick={() => void handleNativeShare()}
+                  className="w-full min-h-[40px] px-4 py-2 rounded-md border border-[#1B365D] bg-[#F3F6FA] text-[#1B365D] text-xs font-medium hover:bg-[#E7EEF7] inline-flex items-center justify-center gap-2"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Partager via les applications de l’appareil…</span>
+                </button>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-stone-700">Partager sur un réseau</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <a
+                    href={`https://wa.me/?text=${encodeURIComponent(`${shareSummaryText} ${directStoryUrl}`)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                  >
+                    <span>WhatsApp</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
+                  </a>
+                  <a
+                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareSummaryText)}&url=${encodeURIComponent(directStoryUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                  >
+                    <span>X / Twitter</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
+                  </a>
+                  <a
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(directStoryUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                  >
+                    <span>Facebook</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
+                  </a>
+                  <a
+                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(directStoryUrl)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                  >
+                    <span>LinkedIn</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
+                  </a>
+                  <a
+                    href={`mailto:?subject=${encodeURIComponent(shareSummaryText)}&body=${encodeURIComponent(`${shareSummaryText}\n\nLire ce récit sur Lisière :\n${directStoryUrl}`)}`}
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5 col-span-2 sm:col-span-1"
+                  >
+                    <span>E-mail</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

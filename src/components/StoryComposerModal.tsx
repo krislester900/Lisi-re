@@ -75,6 +75,7 @@ interface StoryComposerModalProps {
   initialFormat?: StoryFormat;
   initialRomanMode?: 'new' | 'append';
   initialNovelId?: string | null;
+  initialNovelGenre?: NovelGenre;
   customSalons?: CustomSalon[];
   initialCustomSalonId?: string | null;
   myStories?: Story[];
@@ -102,6 +103,7 @@ export function StoryComposerModal({
   initialFormat = 'confession',
   initialRomanMode = 'new',
   initialNovelId = null,
+  initialNovelGenre,
   customSalons = [],
   initialCustomSalonId = null,
   myStories = [],
@@ -248,7 +250,7 @@ export function StoryComposerModal({
       setAppendSeriesStatus(
         pickedNovel?.seriesStatus === 'termine' ? 'termine' : 'en-cours'
       );
-      setNovelGenre('contemporain');
+      setNovelGenre(initialNovelGenre ?? 'contemporain');
       setCoverUrl('');
       setPlagiarismAttested(false);
       setReleaseCadence('hebdomadaire');
@@ -279,9 +281,9 @@ export function StoryComposerModal({
       setMatureReason('');
       setCharterAttested(false);
 
-      // Jump straight to writing when opened directly from a salon prompt/starter or append chapter
+      // Jump straight to writing when opened directly from a salon prompt/starter, genre leaderboard, or append chapter
       const openedWithDirectContext =
-        Boolean(initialPrompt || initialStarter || initialCustomSalonId) ||
+        Boolean(initialPrompt || initialStarter || initialCustomSalonId || initialNovelGenre) ||
         nextRomanMode === 'append';
       setStep(openedWithDirectContext ? 2 : 1);
     }
@@ -295,6 +297,7 @@ export function StoryComposerModal({
     initialFormat,
     initialRomanMode,
     initialNovelId,
+    initialNovelGenre,
     initialCustomSalonId,
   ]);
 
@@ -1679,7 +1682,7 @@ export function StoryComposerModal({
                     </div>
                     <p className="text-xs text-stone-600 leading-relaxed">
                       {isAnonymous
-                        ? `Votre nom (${authorName}) est masqué sur la fiche et dans le salon : le récit s’affiche sous « Auteur anonyme ».`
+                        ? `Votre nom (${authorName}) est masqué sur la fiche et dans le salon : le récit s’affiche sous « Auteur anonyme ». Vous pourrez le revendiquer à tout moment depuis Mon carnet ou la lecture.`
                         : `Votre nom (${authorName}) sera affiché avec un lien vers votre mur personnel.`}
                     </p>
                   </div>

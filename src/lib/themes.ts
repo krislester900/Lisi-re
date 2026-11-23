@@ -383,7 +383,7 @@ export const SALON_FAQ_ITEMS: SalonFaqItem[] = [
     category: 'ecriture',
     question: 'Comment publier une confession ou un roman en mode anonyme ?',
     answer:
-      'Dans la fenêtre de rédaction (« Partager une histoire »), activez l’option Publication anonyme : votre nom est masqué sur les cartes et dans la lecture tout en restant rattaché à votre compte pour vous permettre d’éditer ou de supprimer votre texte.',
+      'Dans la fenêtre de rédaction (« Partager une histoire »), activez l’option Publication anonyme : votre nom est masqué sur les cartes et dans la lecture tout en restant rattaché à votre compte. Vous pouvez à tout moment éditer, supprimer ou revendiquer votre écrit sous votre nom depuis Mon carnet ou la page de lecture.',
   },
   {
     id: 'faq-novels',
