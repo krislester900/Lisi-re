@@ -25,12 +25,9 @@ import {
 import {
   formatCumulativeMinutes,
   formatFrenchDate,
-  NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
   SALON_FAQ_ITEMS,
   SalonFaqItem,
-  SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
   STORY_THEMES,
   THEME_MAP,
 } from '../lib/themes';
@@ -42,6 +39,7 @@ import { SalonChatPanel } from './SalonChatPanel';
 import { SalonEmblem } from './SalonEmblem';
 import { SalonThreadsPanel } from './SalonThreadsPanel';
 import { StoryFilterBar } from './StoryFilterBar';
+import { StoryFormatKicker } from './StoryFormatKicker';
 
 interface SalonRoomViewProps {
   salonId: StoryThemeId;
@@ -464,28 +462,12 @@ export function SalonRoomView({
                   <article className="bg-white border border-stone-200 rounded-lg p-5 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
                     <div className="lg:col-span-8 space-y-3.5">
                       <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                        <span
-                          style={{ color: salon.palette.textAccent }}
-                          className="uppercase tracking-widest font-medium"
-                        >
-                          {STORY_FORMAT_LABELS[leadStory.storyFormat ?? 'confession']?.label}
-                        </span>
-                        {leadStory.storyFormat === 'roman' && leadStory.novelGenre && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span>{NOVEL_GENRE_LABELS[leadStory.novelGenre]}</span>
-                          </>
-                        )}
+                        <StoryFormatKicker story={leadStory} showDetails={true} uppercase={true} />
                         {leadStory.storyFormat === 'roman' && (
                           <>
                             <span aria-hidden="true">·</span>
-                            <span className="tabular-nums">
-                              {leadStory.chapterCount ?? 1} chap. ·{' '}
-                              {RELEASE_CADENCE_LABELS[leadStory.releaseCadence ?? 'hebdomadaire']}
-                            </span>
-                            <span aria-hidden="true">·</span>
                             <span>
-                              {SERIES_STATUS_LABELS[leadStory.seriesStatus ?? 'en-cours']}
+                              {RELEASE_CADENCE_LABELS[leadStory.releaseCadence ?? 'hebdomadaire']}
                             </span>
                           </>
                         )}
@@ -647,27 +629,7 @@ export function SalonRoomView({
                       >
                         <div className="space-y-2.5">
                           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                            <span
-                              style={{ color: salon.palette.textAccent }}
-                              className="font-medium"
-                            >
-                              {STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}
-                            </span>
-                            {story.storyFormat === 'roman' && story.novelGenre && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
-                              </>
-                            )}
-                            {story.storyFormat === 'roman' && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span className="tabular-nums">
-                                  {story.chapterCount ?? 1} chap. ·{' '}
-                                  {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}
-                                </span>
-                              </>
-                            )}
+                            <StoryFormatKicker story={story} showDetails={true} />
                             <span aria-hidden="true">·</span>
                             {story.isAnonymous ? (
                               <span className="font-medium text-stone-600">Auteur anonyme</span>

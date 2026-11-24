@@ -3,6 +3,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   Bookmark,
+  BookOpen,
   Check,
   Eye,
   Feather,
@@ -28,9 +29,6 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
-  NOVEL_GENRE_LABELS,
-  SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
   STORY_THEMES,
   THEME_MAP,
 } from '../lib/themes';
@@ -44,6 +42,7 @@ import {
 import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import { SalonEmblem } from './SalonEmblem';
+import { StoryFormatKicker } from './StoryFormatKicker';
 
 interface ForYouViewProps {
   stories: Story[];
@@ -764,16 +763,42 @@ export function ForYouView({
                 />
               </div>
 
-              <select
-                aria-label="Format des récits"
-                value={formatFilter}
-                onChange={(e) => setFormatFilter(e.target.value as 'all' | StoryFormat)}
-                className="min-h-[36px] px-2.5 py-1 bg-white border border-stone-200 rounded-md text-xs font-medium text-stone-800 focus:outline-none focus:border-[#1B365D]"
+              <div
+                role="group"
+                aria-label="Filtrer par catégorie : confessions ou romans"
+                className="inline-flex items-center rounded-md border border-stone-200 bg-[#FBF9F5] p-0.5 shrink-0"
               >
-                <option value="all">Tous formats</option>
-                <option value="confession">Confessions</option>
-                <option value="roman">Romans</option>
-              </select>
+                {(
+                  [
+                    { id: 'all', label: 'Tout' },
+                    { id: 'confession', label: 'Confessions' },
+                    { id: 'roman', label: 'Romans' },
+                  ] as Array<{ id: 'all' | StoryFormat; label: string }>
+                ).map((cat) => {
+                  const active = formatFilter === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setFormatFilter(cat.id)}
+                      className={`min-h-[30px] px-2.5 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 whitespace-nowrap ${
+                        active
+                          ? cat.id === 'confession'
+                            ? 'bg-[#9A3B29] text-white'
+                            : cat.id === 'roman'
+                              ? 'bg-[#1B365D] text-white'
+                              : 'bg-stone-900 text-white'
+                          : 'text-stone-700 hover:text-stone-950'
+                      }`}
+                    >
+                      {cat.id === 'confession' && <Feather className="w-3 h-3 shrink-0" />}
+                      {cat.id === 'roman' && <BookOpen className="w-3 h-3 shrink-0" />}
+                      <span>{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
 
               <select
                 aria-label="Trier le flux Pour vous"
@@ -902,17 +927,7 @@ export function ForYouView({
                           <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80" />
                         </button>
                         <span aria-hidden="true">·</span>
-                        <span className="font-medium text-stone-700">
-                          {STORY_FORMAT_LABELS[format].label}
-                          {format === 'roman' && story.novelGenre
-                            ? ` · ${NOVEL_GENRE_LABELS[story.novelGenre]}`
-                            : ''}
-                          {format === 'roman'
-                            ? ` · ${story.chapterCount ?? 1} ch. · ${
-                                SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']
-                              }`
-                            : ''}
-                        </span>
+                        <StoryFormatKicker story={story} showDetails={true} />
                         <span aria-hidden="true">·</span>
                         {story.isAnonymous ? (
                           <span className="text-stone-600">Auteur anonyme</span>

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import {
   ArrowRight,
   Award,
+  BookOpen,
   Calendar,
   ChevronDown,
   ChevronUp,
@@ -23,12 +24,14 @@ import {
   formatFrenchDate,
   NOVEL_GENRE_LABELS,
   STORY_FORMAT_LABELS,
+  THEME_MAP,
 } from '../lib/themes';
 import { PublicProfile, Story } from '../types/story';
 import { NovelCoverArt } from './NovelCoverArt';
 
 export type AuthorSpotlightCriteria = 'most-read' | 'best-rated' | 'combined';
 export type SpotlightPeriod = 'week' | 'month' | 'all';
+export type SpotlightFormatFilter = 'all' | 'roman' | 'confession';
 
 const PERIOD_OPTIONS: ReadonlyArray<{
   id: SpotlightPeriod;
@@ -63,6 +66,7 @@ interface SpotlightAuthorEntry {
   averageResonance: number;
   totalEchoes: number;
   novelCount: number;
+  confessionCount: number;
   storyCount: number;
   combinedScore: number;
   topReadStory: Story;
@@ -137,6 +141,7 @@ export function AuthorsSpotlight({
   const { user, profile, favoriteAuthors, signInWithGoogle } = useAuth();
   const [criteria, setCriteria] = useState<AuthorSpotlightCriteria>('most-read');
   const [period, setPeriod] = useState<SpotlightPeriod>('all');
+  const [formatFilter, setFormatFilter] = useState<SpotlightFormatFilter>('all');
   const [busyFollowId, setBusyFollowId] = useState<string | null>(null);
   const [identityBusyId, setIdentityBusyId] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
@@ -190,9 +195,14 @@ export function AuthorsSpotlight({
     [period]
   );
 
-  // Filter signed public stories according to the selected time window
+  // Filter signed public stories according to the selected time window and category (all / roman / confession)
   const periodStories = useMemo(() => {
-    const signed = stories.filter((story) => !story.isAnonymous && Boolean(story.authorId));
+    const signed = stories.filter((story) => {
+      if (story.isAnonymous || !story.authorId) return false;
+      const fmt = story.storyFormat === 'roman' ? 'roman' : 'confession';
+      if (formatFilter !== 'all' && fmt !== formatFilter) return false;
+      return true;
+    });
     if (activePeriodMeta.days === null) return signed;
     const cutoffMs = Date.now() - activePeriodMeta.days * 86_400_000;
     return signed.filter((story) => {
@@ -200,7 +210,7 @@ export function AuthorsSpotlight({
         story.updatedAt?.toMillis() ?? story.createdAt?.toMillis() ?? Date.now();
       return activityMs >= cutoffMs;
     });
-  }, [stories, activePeriodMeta.days]);
+  }, [stories, activePeriodMeta.days, formatFilter]);
 
   // Aggregate ONLY signed public stories within the period so anonymous writings stay strictly confidential
   const rankedAuthors = useMemo<SpotlightAuthorEntry[]>(() => {
@@ -214,6 +224,7 @@ export function AuthorsSpotlight({
         totalResonances: number;
         totalEchoes: number;
         novelCount: number;
+        confessionCount: number;
         storyCount: number;
         stories: Story[];
       }
@@ -234,6 +245,8 @@ export function AuthorsSpotlight({
         if (isNovel) {
           existing.novelCount += 1;
           existing.novelViews += views;
+        } else {
+          existing.confessionCount += 1;
         }
         existing.stories.push(story);
       } else {
@@ -245,6 +258,7 @@ export function AuthorsSpotlight({
           totalResonances: resonances,
           totalEchoes: echoes,
           novelCount: isNovel ? 1 : 0,
+          confessionCount: isNovel ? 0 : 1,
           storyCount: 1,
           stories: [story],
         });
@@ -283,6 +297,7 @@ export function AuthorsSpotlight({
         averageResonance,
         totalEchoes: item.totalEchoes,
         novelCount: item.novelCount,
+        confessionCount: item.confessionCount,
         storyCount: item.storyCount,
         combinedScore: item.totalViews + item.totalResonances * 3,
         topReadStory: byRead[0],
@@ -498,9 +513,16 @@ export function AuthorsSpotlight({
                     {author.authorName}
                   </button>
                   <p className="text-xs text-stone-500 mt-0.5 tabular-nums">
-                    {author.novelCount > 0
-                      ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
-                      : `${author.storyCount} texte${author.storyCount > 1 ? 's' : ''} signé${author.storyCount > 1 ? 's' : ''}`}
+                    {[
+                      author.novelCount > 0
+                        ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
+                        : null,
+                      author.confessionCount > 0
+                        ? `${author.confessionCount} confession${author.confessionCount > 1 ? 's' : ''}`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                     {author.bio ? '' : ` · ${activePeriodMeta.label}`}
                   </p>
                 </div>
@@ -568,8 +590,32 @@ export function AuthorsSpotlight({
                     />
                   )}
                   <div className="min-w-0 space-y-0.5">
-                    <p className="text-[10px] uppercase tracking-widest text-stone-500">
-                      {criteria === 'best-rated' ? 'Œuvre la mieux notée' : 'Œuvre phare'}
+                    <p className="text-[10px] uppercase tracking-widest flex items-center gap-1.5">
+                      <span
+                        className={`inline-flex items-center gap-1 font-semibold ${
+                          featuredStory.storyFormat === 'roman'
+                            ? 'text-[#1B365D]'
+                            : 'text-[#9A3B29]'
+                        }`}
+                      >
+                        {featuredStory.storyFormat === 'roman' ? (
+                          <BookOpen className="w-3 h-3 shrink-0" />
+                        ) : (
+                          <Feather className="w-3 h-3 shrink-0" />
+                        )}
+                        <span>
+                          {featuredStory.storyFormat === 'roman'
+                            ? featuredStory.novelGenre
+                              ? `Roman · ${NOVEL_GENRE_LABELS[featuredStory.novelGenre]}`
+                              : 'Roman à chapitres'
+                            : `Confession · ${
+                                featuredStory.customSalonName ||
+                                (featuredStory.storyScope === 'pelemele'
+                                  ? 'Pêle-mêle'
+                                  : THEME_MAP[featuredStory.theme]?.shortSalonName || 'Salon')
+                              }`}
+                        </span>
+                      </span>
                     </p>
                     <button
                       type="button"
@@ -631,7 +677,41 @@ export function AuthorsSpotlight({
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Format Category Selector (All / Romans / Confessions) */}
+            <div
+              role="group"
+              aria-label="Catégorie d’œuvres pour le classement des auteurs"
+              className="inline-flex items-center gap-1 p-1 bg-white rounded-lg border border-stone-200"
+            >
+              {(
+                [
+                  { id: 'all', label: 'Toutes catégories' },
+                  { id: 'roman', label: 'Romans' },
+                  { id: 'confession', label: 'Confessions' },
+                ] as const
+              ).map((fmt) => {
+                const active = formatFilter === fmt.id;
+                return (
+                  <button
+                    key={fmt.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setFormatFilter(fmt.id)}
+                    className={`min-h-[32px] px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                      active
+                        ? fmt.id === 'confession'
+                          ? 'bg-[#9A3B29] text-white'
+                          : 'bg-[#1B365D] text-white'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+                    }`}
+                  >
+                    {fmt.label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Period Selector */}
             <div
               role="group"
@@ -906,23 +986,42 @@ export function AuthorsSpotlight({
       ) : podiumAuthors.length === 0 ? (
         <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
           <p className="font-display text-xl text-stone-900">
-            {period === 'all'
+            {period === 'all' && formatFilter === 'all'
               ? 'Aucun auteur signé n’apparaît encore sur le podium'
-              : `Aucun écrit signé enregistré sur la période « ${activePeriodMeta.label.toLowerCase()} »`}
+              : `Aucun auteur signé trouvé pour « ${
+                  formatFilter === 'roman'
+                    ? 'Romans'
+                    : formatFilter === 'confession'
+                      ? 'Confessions'
+                      : 'Toutes catégories'
+                } » (${activePeriodMeta.label.toLowerCase()})`}
           </p>
           <p className="text-sm text-stone-600 max-w-lg mx-auto">
-            {period === 'all'
+            {period === 'all' && formatFilter === 'all'
               ? 'Publiez un texte ou basculez l’un de vos écrits anonymes vers votre identité réelle ci-dessus pour entrer sur le podium.'
-              : 'Essayez une période plus large ou publiez un nouveau chapitre pour prendre place sur le podium.'}
+              : 'Essayez une période plus large, affichez toutes les catégories ou publiez un nouveau texte.'}
           </p>
-          {period !== 'all' && (
-            <button
-              type="button"
-              onClick={() => setPeriod('all')}
-              className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D]"
-            >
-              Afficher tout le temps
-            </button>
+          {(period !== 'all' || formatFilter !== 'all') && (
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {formatFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setFormatFilter('all')}
+                  className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D]"
+                >
+                  Toutes catégories
+                </button>
+              )}
+              {period !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setPeriod('all')}
+                  className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D]"
+                >
+                  Afficher tout le temps
+                </button>
+              )}
+            </div>
           )}
         </div>
       ) : (
@@ -983,7 +1082,17 @@ export function AuthorsSpotlight({
                             {author.authorName}
                           </button>
                           <p className="text-xs text-stone-500 tabular-nums">
-                            {author.totalViews} lecture{author.totalViews > 1 ? 's' : ''} ·{' '}
+                            {[
+                              author.novelCount > 0
+                                ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
+                                : null,
+                              author.confessionCount > 0
+                                ? `${author.confessionCount} confession${author.confessionCount > 1 ? 's' : ''}`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}{' '}
+                            · {author.totalViews} lecture{author.totalViews > 1 ? 's' : ''} ·{' '}
                             <span className="inline-flex items-center gap-0.5 text-stone-700 font-medium">
                               <Heart className="w-3 h-3 text-stone-400 inline" />{' '}
                               {author.totalResonances}
@@ -1027,9 +1136,19 @@ export function AuthorsSpotlight({
                           <button
                             type="button"
                             onClick={() => onReadStory(featuredStory)}
-                            className="min-h-[32px] px-3 py-1 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#E7EEF7] whitespace-nowrap"
+                            className="min-h-[32px] px-3 py-1 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
-                            Lire « {featuredStory.title} »
+                            <span
+                              className={
+                                featuredStory.storyFormat === 'roman'
+                                  ? 'text-[#1B365D] font-semibold'
+                                  : 'text-[#9A3B29] font-semibold'
+                              }
+                            >
+                              {featuredStory.storyFormat === 'roman' ? 'Roman' : 'Confession'}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span className="max-w-[180px] truncate">{featuredStory.title}</span>
                           </button>
                         )}
                       </div>

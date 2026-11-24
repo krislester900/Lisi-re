@@ -22,15 +22,13 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
-  NOVEL_GENRE_LABELS,
-  SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
 import { CustomSalon, Story, StoryFormat, StoryThemeId } from '../types/story';
 import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import { StoryFilterBar } from './StoryFilterBar';
+import { StoryFormatKicker } from './StoryFormatKicker';
 
 interface PeleMeleStoriesViewProps {
   publicStories: Story[];
@@ -300,17 +298,7 @@ export function PeleMeleStoriesView({
                       </button>
                     )}
                     <span aria-hidden="true">·</span>
-                    <span className="font-medium text-stone-700">
-                      {STORY_FORMAT_LABELS[format].label}
-                      {format === 'roman' && story.novelGenre
-                        ? ` · ${NOVEL_GENRE_LABELS[story.novelGenre]}`
-                        : ''}
-                      {format === 'roman'
-                        ? ` · ${story.chapterCount ?? 1} ch. · ${
-                            SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']
-                          }`
-                        : ''}
-                    </span>
+                    <StoryFormatKicker story={story} showDetails={true} />
                     <MatureContentBadge
                       minAge={story.minAge}
                       isMature={story.isMature}

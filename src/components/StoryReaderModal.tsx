@@ -10,6 +10,7 @@ import {
   Edit3,
   Eye,
   EyeOff,
+  Feather,
   Flag,
   Heart,
   Highlighter,
@@ -45,6 +46,7 @@ import { MatureContentBadge } from './MatureContentBadge';
 import { ReadingMusicPanel, useReadingAudioEngine } from './ReadingMusicPanel';
 import type { ReportDraft } from './ReportModal';
 import { NovelCoverArt } from './NovelCoverArt';
+import { StoryFormatKicker } from './StoryFormatKicker';
 import {
   addStoryChapter,
   addStoryEcho,
@@ -74,7 +76,6 @@ import {
   NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
   SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
 import {
@@ -584,9 +585,10 @@ export function StoryReaderModal({
     typeof window !== 'undefined'
       ? `${window.location.origin}/histoires/${encodeURIComponent(story.storyId)}`
       : '';
+  const formatShareNoun = story.storyFormat === 'roman' ? 'un roman' : 'une confession';
   const shareSummaryText = isAnonymousStory
-    ? `« ${story.title} » — un récit anonyme sur Lisière`
-    : `« ${story.title} » de ${story.authorName} sur Lisière`;
+    ? `« ${story.title} » — ${formatShareNoun} anonyme sur Lisière`
+    : `« ${story.title} » — ${formatShareNoun} de ${story.authorName} sur Lisière`;
   const canUseNativeShare =
     typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
@@ -1222,6 +1224,23 @@ export function StoryReaderModal({
                 <span className="text-[11px] uppercase tracking-widest opacity-65 whitespace-nowrap">
                   Mode lecture zen
                 </span>
+                <span className="opacity-35" aria-hidden="true">·</span>
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap ${
+                    zenTheme === 'night'
+                      ? 'text-amber-200/90'
+                      : isRoman
+                        ? 'text-[#1B365D]'
+                        : 'text-[#9A3B29]'
+                  }`}
+                >
+                  {isRoman ? (
+                    <BookOpen className="w-3 h-3 shrink-0" />
+                  ) : (
+                    <Feather className="w-3 h-3 shrink-0" />
+                  )}
+                  <span>{isRoman ? 'Roman à chapitres' : 'Confession'}</span>
+                </span>
                 {isRoman && totalChapters > 1 && (
                   <>
                     <span className="opacity-35" aria-hidden="true">·</span>
@@ -1629,11 +1648,13 @@ export function StoryReaderModal({
               </div>
 
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
-                <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
-                {isRoman && story.novelGenre && (
+                <StoryFormatKicker story={story} showDetails={true} />
+                {isRoman && totalChapters > 1 && (
                   <>
                     <span aria-hidden="true">·</span>
-                    <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
+                    <span className="tabular-nums text-stone-700 font-medium">
+                      Chap. {activeChapterIdx + 1}/{totalChapters}
+                    </span>
                   </>
                 )}
                 <span aria-hidden="true">·</span>
@@ -1682,55 +1703,124 @@ export function StoryReaderModal({
           }
         >
           <article className={zenMode ? 'max-w-[62ch] mx-auto' : 'max-w-prose mx-auto'}>
-            {!zenMode && isRoman && story.coverUrl ? (
-              <div className="flex flex-col sm:flex-row items-start gap-5 mb-5">
-                <NovelCoverArt
-                  coverUrl={story.coverUrl}
-                  title={story.title}
-                  genre={story.novelGenre}
-                  size="lg"
-                />
-                <div className="min-w-0 flex-1 space-y-2">
-                  {story.promptQuestion && (
+            {(() => {
+              const readingOriginLabel =
+                story.customSalonName ||
+                (story.storyScope === 'pelemele' && !story.customSalonId
+                  ? 'Hors salon · Pêle-mêle'
+                  : THEME_MAP[story.theme]?.salonName);
+
+              const categoryBanner = (
+                <div
+                  className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-widest font-semibold ${
+                    zenMode && zenTheme === 'night'
+                      ? 'text-amber-300/90'
+                      : isRoman
+                        ? 'text-[#1B365D]'
+                        : 'text-[#9A3B29]'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    {isRoman ? (
+                      <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                    ) : (
+                      <Feather className="w-3.5 h-3.5 shrink-0" />
+                    )}
+                    <span>
+                      Catégorie · {isRoman ? 'Roman à chapitres' : 'Confession'}
+                    </span>
+                  </span>
+                  {isRoman && story.novelGenre && (
+                    <>
+                      <span aria-hidden="true" className="opacity-45">
+                        ·
+                      </span>
+                      <span className={zenMode && zenTheme === 'night' ? 'text-stone-300' : 'text-stone-700'}>
+                        {NOVEL_GENRE_LABELS[story.novelGenre]}
+                      </span>
+                    </>
+                  )}
+                  {isRoman ? (
+                    <>
+                      <span aria-hidden="true" className="opacity-45">
+                        ·
+                      </span>
+                      <span className={`tabular-nums ${zenMode && zenTheme === 'night' ? 'text-stone-300' : 'text-stone-600'}`}>
+                        Chapitre {activeChapterIdx + 1} sur {totalChapters}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span aria-hidden="true" className="opacity-45">
+                        ·
+                      </span>
+                      <span className={zenMode && zenTheme === 'night' ? 'text-stone-300' : 'text-stone-600'}>
+                        Texte unique
+                        {readingOriginLabel ? ` · ${readingOriginLabel}` : ''}
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+
+              if (!zenMode && isRoman) {
+                return (
+                  <div className="flex flex-col sm:flex-row items-start gap-5 mb-5">
+                    <NovelCoverArt
+                      coverUrl={story.coverUrl}
+                      title={story.title}
+                      genre={story.novelGenre}
+                      size="lg"
+                      showFallbackWhenMissing={true}
+                    />
+                    <div className="min-w-0 flex-1 space-y-2">
+                      {categoryBanner}
+                      {story.promptQuestion && (
+                        <p className="text-xs text-stone-500 italic">
+                          En réponse au fil : « {story.promptQuestion} »
+                        </p>
+                      )}
+                      <h1
+                        id="reader-story-title"
+                        className="font-display text-3xl sm:text-4xl font-medium leading-tight text-stone-900"
+                        style={{ textWrap: 'balance' }}
+                      >
+                        {story.title}
+                      </h1>
+                      <p className="text-xs text-stone-500 tabular-nums">
+                        {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']} ·{' '}
+                        {RELEASE_CADENCE_LABELS[story.releaseCadence ?? 'hebdomadaire']}
+                      </p>
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div className={zenMode ? 'mb-8 sm:mb-10 space-y-3' : 'mb-4 space-y-2.5'}>
+                  {categoryBanner}
+                  {!zenMode && story.promptQuestion && (
                     <p className="text-xs text-stone-500 italic">
                       En réponse au fil : « {story.promptQuestion} »
                     </p>
                   )}
+
                   <h1
                     id="reader-story-title"
-                    className="font-display text-3xl sm:text-4xl font-medium leading-tight text-stone-900"
+                    className={`font-display text-3xl sm:text-4xl font-medium leading-tight ${
+                      zenMode
+                        ? zenTheme === 'night'
+                          ? 'text-[#F5F0E6]'
+                          : 'text-stone-900'
+                        : 'text-stone-900'
+                    }`}
                     style={{ textWrap: 'balance' }}
                   >
                     {story.title}
                   </h1>
-                  {story.novelGenre && (
-                    <p className="text-xs uppercase tracking-widest text-stone-500">
-                      Roman · {NOVEL_GENRE_LABELS[story.novelGenre]}
-                    </p>
-                  )}
                 </div>
-              </div>
-            ) : (
-              <>
-                {!zenMode && story.promptQuestion && (
-                  <p className="text-xs text-stone-500 mb-3 italic">
-                    En réponse au fil : « {story.promptQuestion} »
-                  </p>
-                )}
-
-                <h1
-                  id="reader-story-title"
-                  className={`font-display text-3xl sm:text-4xl font-medium leading-tight ${
-                    zenMode
-                      ? `mb-8 sm:mb-10 ${zenTheme === 'night' ? 'text-[#F5F0E6]' : 'text-stone-900'}`
-                      : 'mb-4 text-stone-900'
-                  }`}
-                  style={{ textWrap: 'balance' }}
-                >
-                  {story.title}
-                </h1>
-              </>
-            )}
+              );
+            })()}
 
             {!zenMode && (
               <div className="pb-5 border-b border-stone-200 mb-6 space-y-4">
@@ -2453,6 +2543,26 @@ export function StoryReaderModal({
               <div className="mt-8 p-4 bg-white border border-stone-200 rounded-md text-sm text-stone-700 italic">
                 {isAnonymousStory ? 'Note de l’auteur' : `Note de ${story.authorName}`} : «{' '}
                 {activeFollowupChapter.authorNote} »
+              </div>
+            )}
+
+            {!isRoman && !isReadingBlocked && (
+              <div
+                className={`mt-8 pt-4 border-t flex items-center justify-between gap-3 text-xs ${
+                  zenMode && zenTheme === 'night'
+                    ? 'border-stone-800 text-stone-400'
+                    : 'border-stone-200 text-stone-500'
+                }`}
+              >
+                <span className="inline-flex items-center gap-1.5 font-medium">
+                  <Feather
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      zenMode && zenTheme === 'night' ? 'text-amber-300/90' : 'text-[#9A3B29]'
+                    }`}
+                  />
+                  <span>Confession · Texte complet en un seul souffle</span>
+                </span>
+                <span className="tabular-nums opacity-75">Sans chapitres</span>
               </div>
             )}
 

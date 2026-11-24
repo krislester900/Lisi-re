@@ -82,7 +82,7 @@ export function AppSidebar({
     { id: 'pour-vous', label: 'Pour vous', icon: Star },
     { id: 'pelemele', label: 'Pêle-mêle', icon: Compass },
     { id: 'membres', label: 'Profils', icon: Users },
-    { id: 'themes', label: 'Romans & palmarès', icon: Award },
+    { id: 'themes', label: 'Romans & confessions', icon: Award },
     { id: 'passerelles', label: 'Passerelles', icon: MessageSquareHeart, badge: exchangesCount },
     { id: 'carnet', label: 'Mon carnet', icon: BookOpen, badge: warningsCount },
     ...(isModerationAdmin

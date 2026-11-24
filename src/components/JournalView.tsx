@@ -55,8 +55,6 @@ import {
   formatFrenchDate,
   NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
-  SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
 import {
@@ -72,6 +70,7 @@ import {
 import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import { StoryAnalyticsChart } from './StoryAnalyticsChart';
+import { StoryFormatKicker } from './StoryFormatKicker';
 
 export type JournalSubTab =
   | 'stories'
@@ -101,13 +100,14 @@ interface JournalViewProps {
 }
 type StoryFilter =
   | 'all'
+  | 'confession'
+  | 'roman'
+  | 'roman-en-cours'
+  | 'roman-termine'
   | 'public'
   | 'private'
   | 'non-compliant'
-  | 'anonymous'
-  | 'roman'
-  | 'roman-en-cours'
-  | 'roman-termine';
+  | 'anonymous';
 type RepostFilter = 'all' | 'public' | 'private';
 
 export function JournalView({
@@ -179,6 +179,10 @@ export function JournalView({
     () => myStories.filter((s) => Boolean(s.isAnonymous)).length,
     [myStories]
   );
+  const confessionCount = useMemo(
+    () => myStories.filter((s) => s.storyFormat !== 'roman').length,
+    [myStories]
+  );
   const romanCount = useMemo(
     () => myStories.filter((s) => s.storyFormat === 'roman').length,
     [myStories]
@@ -217,6 +221,7 @@ export function JournalView({
         return false;
       }
       if (storyFilter === 'anonymous' && !story.isAnonymous) return false;
+      if (storyFilter === 'confession' && story.storyFormat === 'roman') return false;
       if (storyFilter === 'roman' && story.storyFormat !== 'roman') return false;
       if (
         storyFilter === 'roman-en-cours' &&
@@ -722,18 +727,8 @@ export function JournalView({
                     {(
                       [
                         { id: 'all', label: `Tous (${myStories.length})` },
-                        { id: 'public', label: `Publiés (${publicCount})` },
-                        { id: 'private', label: `Brouillons (${draftCount})` },
-                        ...(nonCompliantCount > 0
-                          ? [
-                              {
-                                id: 'non-compliant' as const,
-                                label: `À régulariser (${nonCompliantCount})`,
-                              },
-                            ]
-                          : []),
-                        ...(anonymousCount > 0
-                          ? [{ id: 'anonymous' as const, label: `Anonymes (${anonymousCount})` }]
+                        ...(confessionCount > 0
+                          ? [{ id: 'confession' as const, label: `Confessions (${confessionCount})` }]
                           : []),
                         ...(romanCount > 0
                           ? [
@@ -756,6 +751,19 @@ export function JournalView({
                                 : []),
                             ]
                           : []),
+                        { id: 'public', label: `Publiés (${publicCount})` },
+                        { id: 'private', label: `Brouillons (${draftCount})` },
+                        ...(nonCompliantCount > 0
+                          ? [
+                              {
+                                id: 'non-compliant' as const,
+                                label: `À régulariser (${nonCompliantCount})`,
+                              },
+                            ]
+                          : []),
+                        ...(anonymousCount > 0
+                          ? [{ id: 'anonymous' as const, label: `Anonymes (${anonymousCount})` }]
+                          : []),
                       ] as const
                     ).map((opt) => (
                       <button
@@ -764,7 +772,9 @@ export function JournalView({
                         onClick={() => setStoryFilter(opt.id)}
                         className={`min-h-[32px] px-3 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap ${
                           storyFilter === opt.id
-                            ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                            ? opt.id === 'confession'
+                              ? 'bg-[#9A3B29] text-white border-[#9A3B29]'
+                              : 'bg-[#1B365D] text-white border-[#1B365D]'
                             : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
                         }`}
                       >
@@ -913,8 +923,6 @@ export function JournalView({
                     const isConfirming = confirmDeleteId === story.storyId;
                     const isConfirmingClaim = confirmClaimId === story.storyId;
                     const isBusy = busyStoryId === story.storyId;
-                    const formatLabel =
-                      STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label ?? 'Confession';
                     const isDraft = story.visibility === 'private';
                     const compliance = evaluateStoryFormatCompliance(story);
 
@@ -922,6 +930,8 @@ export function JournalView({
                       <article key={story.storyId} className="p-5 sm:p-6 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
                           <div className="flex flex-wrap items-center gap-2">
+                            <StoryFormatKicker story={story} showDetails={true} />
+                            <span aria-hidden="true">·</span>
                             <span className="font-medium text-stone-800">
                               {story.customSalonName
                                 ? story.customSalonName
@@ -929,20 +939,10 @@ export function JournalView({
                                   ? 'Hors salon · Pêle-mêle'
                                   : THEME_MAP[story.theme]?.salonName}
                             </span>
-                            <span aria-hidden="true">·</span>
-                            <span>{formatLabel}</span>
-                            {story.storyFormat === 'roman' && story.novelGenre && (
-                              <>
-                                <span aria-hidden="true">·</span>
-                                <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
-                              </>
-                            )}
                             {story.storyFormat === 'roman' && (
                               <>
                                 <span aria-hidden="true">·</span>
                                 <span className="tabular-nums">
-                                  {story.chapterCount ?? 1} chap. ·{' '}
-                                  {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']} ·{' '}
                                   {RELEASE_CADENCE_LABELS[story.releaseCadence ?? 'hebdomadaire']}
                                 </span>
                               </>
@@ -1259,14 +1259,14 @@ export function JournalView({
                     return (
                       <div key={bm.storyId} className="p-5 sm:p-6 space-y-3">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                          <StoryFormatKicker story={{ storyFormat: bm.storyFormat }} showDetails={false} />
+                          <span aria-hidden="true">·</span>
                           <span className="font-medium text-stone-800">
                             {bm.customSalonName ||
                               (bm.storyScope === 'pelemele' && !bm.customSalonId
                                 ? 'Hors salon · Pêle-mêle'
                                 : salonInfo?.salonName)}
                           </span>
-                          <span aria-hidden="true">·</span>
-                          <span>{STORY_FORMAT_LABELS[bm.storyFormat ?? 'confession']?.label}</span>
                           <span aria-hidden="true">·</span>
                           <span>Par {bm.storyAuthorName}</span>
                           <span aria-hidden="true">·</span>

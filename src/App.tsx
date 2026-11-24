@@ -46,6 +46,7 @@ import { SalonEmblem } from './components/SalonEmblem';
 import { SalonRoomView } from './components/SalonRoomView';
 import { StoryComposerModal } from './components/StoryComposerModal';
 import { StoryFilterBar } from './components/StoryFilterBar';
+import { StoryFormatKicker } from './components/StoryFormatKicker';
 import { StoryReaderModal } from './components/StoryReaderModal';
 import { ThemesView } from './components/ThemesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -84,9 +85,6 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
-  NOVEL_GENRE_LABELS,
-  SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
   STORY_THEMES,
   THEME_MAP,
 } from './lib/themes';
@@ -1995,18 +1993,7 @@ function SalonApp() {
                               );
                             })()}
                             <span aria-hidden="true">·</span>
-                            <span className="font-medium text-stone-700">
-                              {STORY_FORMAT_LABELS[leadStory.storyFormat ?? 'confession'].label}
-                              {(leadStory.storyFormat ?? 'confession') === 'roman' &&
-                              leadStory.novelGenre
-                                ? ` · ${NOVEL_GENRE_LABELS[leadStory.novelGenre]}`
-                                : ''}
-                              {(leadStory.storyFormat ?? 'confession') === 'roman'
-                                ? ` · ${leadStory.chapterCount ?? 1} chap. · ${
-                                    SERIES_STATUS_LABELS[leadStory.seriesStatus ?? 'en-cours']
-                                  }`
-                                : ''}
-                            </span>
+                            <StoryFormatKicker story={leadStory} showDetails={true} />
                             <span aria-hidden="true">·</span>
                             {leadStory.isAnonymous ? (
                               <span className="text-stone-600">Par Auteur anonyme</span>
@@ -2210,17 +2197,7 @@ function SalonApp() {
                                     </span>
                                   </button>
                                   <span aria-hidden="true">·</span>
-                                  <span className="font-medium text-stone-700">
-                                    {STORY_FORMAT_LABELS[format].label}
-                                    {format === 'roman' && story.novelGenre
-                                      ? ` · ${NOVEL_GENRE_LABELS[story.novelGenre]}`
-                                      : ''}
-                                    {format === 'roman'
-                                      ? ` · ${story.chapterCount ?? 1} ch. · ${
-                                          SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']
-                                        }`
-                                      : ''}
-                                  </span>
+                                  <StoryFormatKicker story={story} showDetails={true} />
                                   <span aria-hidden="true">·</span>
                                   {story.isAnonymous ? (
                                     <span className="text-stone-600">Auteur anonyme</span>
@@ -2372,6 +2349,9 @@ function SalonApp() {
             onWriteNovel={(genre) =>
               void openComposer({ format: 'roman', romanMode: 'new', novelGenre: genre })
             }
+            onWriteConfession={(theme) =>
+              void openComposer({ theme, format: 'confession' })
+            }
             onShowNotice={showNotice}
           />
         )}
@@ -2473,7 +2453,7 @@ function SalonApp() {
               onClick={() => navigateTo('themes')}
               className="hover:text-stone-900 transition-colors"
             >
-              Romans & palmarès
+              Romans &amp; confessions
             </button>
             <button
               type="button"

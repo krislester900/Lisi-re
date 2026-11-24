@@ -47,9 +47,6 @@ import {
 } from '../lib/storyService';
 import {
   formatFrenchDate,
-  NOVEL_GENRE_LABELS,
-  SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
 import {
@@ -67,6 +64,7 @@ import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
+import { StoryFormatKicker } from './StoryFormatKicker';
 
 import { Settings } from 'lucide-react';
 
@@ -158,6 +156,7 @@ export function ProfileWallView({
   const [repostBusyId, setRepostBusyId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [profileSection, setProfileSection] = useState<'wall' | 'stories' | 'reposts'>('wall');
+  const [storyFormatFilter, setStoryFormatFilter] = useState<'all' | 'confession' | 'roman'>('all');
 
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -216,6 +215,7 @@ export function ProfileWallView({
     setLoaded(false);
     setActiveTrackId(null);
     setProfileSection('wall');
+    setStoryFormatFilter('all');
     setShowDmBox(false);
     setDmText('');
     setDmError(null);
@@ -728,6 +728,15 @@ export function ProfileWallView({
       s.visibility === 'public' &&
       (isOwner || (!s.isAnonymous && isStoryCompliantForPublicFeed(s)))
   );
+  const confessionStoriesCount = publicStories.filter(
+    (s) => (s.storyFormat ?? 'confession') !== 'roman'
+  ).length;
+  const romanStoriesCount = publicStories.filter((s) => s.storyFormat === 'roman').length;
+  const displayedPublicStories = publicStories.filter((s) => {
+    if (storyFormatFilter === 'confession') return (s.storyFormat ?? 'confession') !== 'roman';
+    if (storyFormatFilter === 'roman') return s.storyFormat === 'roman';
+    return true;
+  });
   const isAnyMusicPlaying = Boolean(activeTrackId);
 
   return (
@@ -1613,21 +1622,74 @@ export function ProfileWallView({
           aria-label="Textes publiés par ce membre"
           className="space-y-5"
         >
-          <h2 className="font-display text-2xl font-medium text-stone-900">
-            Récits et romans de {memberProfile.displayName}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-2xl font-medium text-stone-900">
+              Confessions &amp; romans de {memberProfile.displayName}
+            </h2>
+            {publicStories.length > 0 && (
+              <div
+                role="group"
+                aria-label="Filtrer les écrits par catégorie"
+                className="inline-flex items-center rounded-md border border-stone-200 bg-[#FBF9F5] p-0.5 shrink-0"
+              >
+                {(
+                  [
+                    { id: 'all', label: `Tout (${publicStories.length})` },
+                    { id: 'confession', label: `Confessions (${confessionStoriesCount})` },
+                    { id: 'roman', label: `Romans (${romanStoriesCount})` },
+                  ] as Array<{ id: 'all' | 'confession' | 'roman'; label: string }>
+                ).map((cat) => {
+                  const active = storyFormatFilter === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => setStoryFormatFilter(cat.id)}
+                      className={`min-h-[32px] px-2.5 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 whitespace-nowrap ${
+                        active
+                          ? cat.id === 'confession'
+                            ? 'bg-[#9A3B29] text-white'
+                            : cat.id === 'roman'
+                              ? 'bg-[#1B365D] text-white'
+                              : 'bg-stone-900 text-white'
+                          : 'text-stone-700 hover:text-stone-950'
+                      }`}
+                    >
+                      {cat.id === 'confession' && <Feather className="w-3 h-3 shrink-0" />}
+                      {cat.id === 'roman' && <BookOpen className="w-3 h-3 shrink-0" />}
+                      <span>{cat.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           {publicStories.length === 0 ? (
             <div className="bg-white border border-stone-200 rounded-lg p-8 text-center text-sm text-stone-600">
               {isOwner
                 ? 'Vous n’avez pas encore publié de récit public.'
                 : `${memberProfile.displayName} n’a pas encore publié de récit public.`}
             </div>
+          ) : displayedPublicStories.length === 0 ? (
+            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
+              <p className="text-sm text-stone-600">
+                {storyFormatFilter === 'roman'
+                  ? 'Aucun roman publié dans cette section.'
+                  : 'Aucune confession publiée dans cette section.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setStoryFormatFilter('all')}
+                className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+              >
+                Tout afficher
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {publicStories.map((story) => {
+              {displayedPublicStories.map((story) => {
                 const salonInfo = THEME_MAP[story.theme];
-                const formatLabel =
-                  STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label ?? 'Confession';
                 const compliance = evaluateStoryFormatCompliance(story);
                 return (
                   <article
@@ -1636,6 +1698,8 @@ export function ProfileWallView({
                   >
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                        <StoryFormatKicker story={story} showDetails={true} />
+                        <span aria-hidden="true">·</span>
                         <span
                           style={{
                             color:
@@ -1650,23 +1714,6 @@ export function ProfileWallView({
                               ? 'Hors salon · Pêle-mêle'
                               : salonInfo?.salonName)}
                         </span>
-                        <span aria-hidden="true">·</span>
-                        <span>{formatLabel}</span>
-                        {story.storyFormat === 'roman' && story.novelGenre && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
-                          </>
-                        )}
-                        {story.storyFormat === 'roman' && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="tabular-nums">
-                              {story.chapterCount ?? 1} chap. ·{' '}
-                              {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}
-                            </span>
-                          </>
-                        )}
                         {isOwner && story.isAnonymous && (
                           <>
                             <span aria-hidden="true">·</span>
@@ -1840,8 +1887,6 @@ export function ProfileWallView({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {reposts.map((repost) => {
               const salonInfo = THEME_MAP[repost.storyTheme];
-              const formatLabel =
-                STORY_FORMAT_LABELS[repost.storyFormat ?? 'confession']?.label ?? 'Confession';
               const isPrivate = repost.visibility === 'private';
               const isBusy = repostBusyId === repost.storyId;
 
@@ -1853,6 +1898,11 @@ export function ProfileWallView({
                   <div className="space-y-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <StoryFormatKicker
+                          story={{ storyFormat: repost.storyFormat }}
+                          showDetails={false}
+                        />
+                        <span aria-hidden="true">·</span>
                         <span
                           style={{
                             color:
@@ -1867,8 +1917,6 @@ export function ProfileWallView({
                               ? 'Hors salon · Pêle-mêle'
                               : salonInfo?.salonName)}
                         </span>
-                        <span aria-hidden="true">·</span>
-                        <span>{formatLabel}</span>
                         <span aria-hidden="true">·</span>
                         <span>Par {repost.storyAuthorName}</span>
                       </div>

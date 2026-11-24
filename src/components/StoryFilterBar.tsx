@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown,
+  BookOpen,
+  Feather,
   RotateCcw,
   Search,
   SlidersHorizontal,
@@ -188,6 +190,52 @@ export function StoryFilterBar({
         </div>
 
         <div className="flex flex-wrap items-center justify-between md:justify-end gap-2 shrink-0">
+          {/* Always-visible Category Segmented Filter: Tout / Confessions / Romans */}
+          <div
+            role="group"
+            aria-label="Filtrer par catégorie : confessions ou romans"
+            className="inline-flex items-center rounded-md border border-stone-200 bg-[#FBF9F5] p-0.5 shrink-0"
+          >
+            {(
+              [
+                { id: 'all', label: 'Tout' },
+                { id: 'confession', label: 'Confessions' },
+                { id: 'roman', label: 'Romans' },
+              ] as Array<{ id: StoryFormatFilter; label: string }>
+            ).map((cat) => {
+              const active = value.format === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() =>
+                    onChange({
+                      ...value,
+                      format: cat.id,
+                      ...(cat.id === 'confession'
+                        ? { novelGenre: 'all', seriesStatus: 'all' }
+                        : {}),
+                    })
+                  }
+                  className={`min-h-[34px] px-2.5 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 whitespace-nowrap ${
+                    active
+                      ? cat.id === 'confession'
+                        ? 'bg-[#9A3B29] text-white'
+                        : cat.id === 'roman'
+                          ? 'bg-[#1B365D] text-white'
+                          : 'bg-stone-900 text-white'
+                      : 'text-stone-700 hover:text-stone-950'
+                  }`}
+                >
+                  {cat.id === 'confession' && <Feather className="w-3 h-3 shrink-0" />}
+                  {cat.id === 'roman' && <BookOpen className="w-3 h-3 shrink-0" />}
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="flex items-center gap-2">
             <div className="relative flex items-center">
               <ArrowUpDown className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 pointer-events-none" />

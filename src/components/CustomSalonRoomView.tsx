@@ -52,9 +52,6 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
-  NOVEL_GENRE_LABELS,
-  SERIES_STATUS_LABELS,
-  STORY_FORMAT_LABELS,
 } from '../lib/themes';
 import {
   CustomSalon,
@@ -68,6 +65,7 @@ import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
 import { SalonThreadsPanel } from './SalonThreadsPanel';
 import { StoryFilterBar } from './StoryFilterBar';
+import { StoryFormatKicker } from './StoryFormatKicker';
 
 interface CustomSalonRoomViewProps {
   salon: CustomSalon | null;
@@ -853,24 +851,7 @@ export function CustomSalonRoomView({
                     >
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                          <span style={{ color: palette.textAccent }} className="font-medium">
-                            {STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}
-                          </span>
-                          {story.storyFormat === 'roman' && story.novelGenre && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <span>{NOVEL_GENRE_LABELS[story.novelGenre]}</span>
-                            </>
-                          )}
-                          {story.storyFormat === 'roman' && (
-                            <>
-                              <span aria-hidden="true">·</span>
-                              <span className="tabular-nums">
-                                {story.chapterCount ?? 1} chap. ·{' '}
-                                {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}
-                              </span>
-                            </>
-                          )}
+                          <StoryFormatKicker story={story} showDetails={true} />
                           <span aria-hidden="true">·</span>
                           {story.isAnonymous ? (
                             <span className="font-medium text-stone-600">Auteur anonyme</span>
