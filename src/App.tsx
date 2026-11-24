@@ -49,7 +49,11 @@ import { StoryFilterBar } from './components/StoryFilterBar';
 import { StoryReaderModal } from './components/StoryReaderModal';
 import { ThemesView } from './components/ThemesView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { isContentAllowedForAge } from './lib/contentRegulation';
+import {
+  evaluateStoryFormatCompliance,
+  isContentAllowedForAge,
+  isStoryCompliantForPublicFeed,
+} from './lib/contentRegulation';
 import { db } from './lib/firebase';
 import { isModerationAdminEmail, WARNING_SEVERITY_LABELS } from './lib/moderationLabels';
 import {
@@ -61,6 +65,7 @@ import {
   acknowledgeUserWarning,
   buildDirectExchangeId,
   formatFriendlyFirestoreError,
+  privatizeStoriesBatch,
   subscribeToAllModerationCases,
   subscribeToAllWarnings,
   subscribeToCustomSalons,
@@ -355,6 +360,7 @@ function SalonApp() {
 
   const [customSalonModalOpen, setCustomSalonModalOpen] = useState(false);
   const [editingCustomSalon, setEditingCustomSalon] = useState<CustomSalon | null>(null);
+  const [batchPrivatizeBusy, setBatchPrivatizeBusy] = useState(false);
 
   const [toastNotice, setToastNotice] = useState<string | null>(null);
 
@@ -608,6 +614,21 @@ function SalonApp() {
     );
   }, [publicStories, hiddenUserIds, user?.uid]);
 
+  // Retroactive format enforcement: confessions (> 3 lines) & novels (>= 2 pages ch.1)
+  const regulatedPublicStories = useMemo(
+    () => visiblePublicStories.filter((story) => isStoryCompliantForPublicFeed(story)),
+    [visiblePublicStories]
+  );
+
+  const nonCompliantMyPublicStories = useMemo(
+    () =>
+      myStories.filter(
+        (story) =>
+          story.visibility === 'public' && !evaluateStoryFormatCompliance(story).compliant
+      ),
+    [myStories]
+  );
+
   const unacknowledgedWarnings = useMemo(
     () => userWarnings.filter((w) => !w.acknowledged),
     [userWarnings]
@@ -623,12 +644,12 @@ function SalonApp() {
     const privateCustomIds = new Set(
       customSalons.filter((cs) => cs.visibility === 'private').map((cs) => cs.salonId)
     );
-    return visiblePublicStories.filter((story) => {
+    return regulatedPublicStories.filter((story) => {
       if (story.customSalonVisibility === 'private') return false;
       if (story.customSalonId && privateCustomIds.has(story.customSalonId)) return false;
       return true;
     });
-  }, [visiblePublicStories, customSalons]);
+  }, [regulatedPublicStories, customSalons]);
 
   const openFeedStories = useMemo(
     () =>
@@ -1110,6 +1131,67 @@ function SalonApp() {
         );
       })()}
 
+      {user && nonCompliantMyPublicStories.length > 0 && activeTab !== 'carnet' && (
+        <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
+          <div className="bg-amber-50/90 border border-amber-300 rounded-md p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <p className="text-xs font-semibold text-amber-950 inline-flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                <span>
+                  Régulation rétroactive : {nonCompliantMyPublicStories.length} de vos récits publics{' '}
+                  {nonCompliantMyPublicStories.length > 1
+                    ? 'sont sous le seuil minimal'
+                    : 'est sous le seuil minimal'}
+                </span>
+              </p>
+              <p className="text-xs text-amber-900 leading-relaxed">
+                Les histoires de 3 lignes ou moins et les chapitres de roman de moins de 2 pages publiés avant la mise à jour sont masqués des salons publics jusqu’à régularisation.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setJournalSubTabRequest({ tab: 'stories', nonce: Date.now() });
+                  navigateTo('carnet');
+                }}
+                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] bg-white border border-[#CBD6E6] rounded-md hover:border-[#1B365D] whitespace-nowrap"
+              >
+                Régulariser dans Mon carnet
+              </button>
+              <button
+                type="button"
+                disabled={batchPrivatizeBusy}
+                onClick={async () => {
+                  setBatchPrivatizeBusy(true);
+                  try {
+                    const count = await privatizeStoriesBatch(
+                      nonCompliantMyPublicStories.map((s) => s.storyId)
+                    );
+                    showNotice(
+                      `${count} récit${count > 1 ? 's' : ''} passé${count > 1 ? 's' : ''} en brouillon privé.`
+                    );
+                  } catch (err) {
+                    showNotice(
+                      formatFriendlyFirestoreError(
+                        err,
+                        'Impossible de passer ces textes en brouillon privé.'
+                      )
+                    );
+                  } finally {
+                    setBatchPrivatizeBusy(false);
+                  }
+                }}
+                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-white bg-amber-900 rounded-md hover:bg-amber-950 disabled:opacity-60 whitespace-nowrap"
+              >
+                {batchPrivatizeBusy ? 'En cours…' : 'Passer en brouillons'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <main
         className={`flex-1 transition-opacity duration-200 ease-out ${
           isViewFading ? 'opacity-0' : 'opacity-100'
@@ -1118,7 +1200,7 @@ function SalonApp() {
         {activeTab === 'recits' && activeSalonId !== null && (
           <SalonRoomView
             salonId={activeSalonId}
-            publicStories={visiblePublicStories}
+            publicStories={regulatedPublicStories}
             storiesLoaded={storiesLoaded}
             hiddenUserIds={hiddenUserIds}
             bookmarkedStoryIds={bookmarkedStoryIds}
@@ -1139,7 +1221,7 @@ function SalonApp() {
           <CustomSalonRoomView
             salon={activeCustomSalon}
             salonsLoaded={customSalonsLoaded}
-            publicStories={visiblePublicStories}
+            publicStories={regulatedPublicStories}
             myStories={myStories}
             hiddenUserIds={hiddenUserIds}
             bookmarkedStoryIds={bookmarkedStoryIds}
@@ -1164,7 +1246,7 @@ function SalonApp() {
 
         {activeTab === 'pelemele' && (
           <PeleMeleStoriesView
-            publicStories={visiblePublicStories}
+            publicStories={regulatedPublicStories}
             customSalons={customSalons}
             storiesLoaded={storiesLoaded}
             bookmarkedStoryIds={bookmarkedStoryIds}
@@ -1190,7 +1272,7 @@ function SalonApp() {
             profilesLoaded={profilesLoaded}
             selectedMemberId={selectedMemberId}
             initialSubTab={profilesSubTab}
-            publicStories={visiblePublicStories}
+            publicStories={regulatedPublicStories}
             myStories={myStories}
             myReposts={myReposts}
             existingExchanges={exchanges}
@@ -2352,6 +2434,7 @@ function SalonApp() {
             allWarnings={allWarnings}
             myCases={myModerationCases}
             userWarnings={userWarnings}
+            publicStories={publicStories}
             onOpenMemberWall={openMemberWall}
           />
         )}
@@ -2431,6 +2514,10 @@ function SalonApp() {
           setReadingStory(null);
           setProfilesSubTab('edit-profile');
           navigateTo('membres', null, null);
+        }}
+        onEditStory={(storyToEdit) => {
+          closeStoryReader();
+          void openComposer({ edit: storyToEdit });
         }}
         onStoryClaimed={(claimedName) => {
           showNotice(`Cet écrit est désormais publié sous votre nom (${claimedName}).`);

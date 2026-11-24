@@ -5,6 +5,7 @@ import {
   Award,
   Bookmark,
   BookOpen,
+  Crown,
   Eye,
   EyeOff,
   Feather,
@@ -140,8 +141,8 @@ export function ThemesView({
     [novelsByGenre]
   );
 
-  const leadNovel = activeGenreNovels[0] ?? null;
-  const otherNovels = activeGenreNovels.slice(1);
+  const podiumNovels = activeGenreNovels.slice(0, 3);
+  const otherNovels = activeGenreNovels.slice(3);
 
   const renderOriginLink = (story: Story) => {
     const { label, accentColor } = getSalonDisplayInfo(story, customSalons);
@@ -322,145 +323,355 @@ export function ThemesView({
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Lead Novel (#1 in selection) */}
-            {leadNovel && (
-              <article className="bg-white border border-stone-200 rounded-lg p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start">
-                <NovelCoverArt
-                  coverUrl={leadNovel.coverUrl}
-                  title={leadNovel.title}
-                  genre={leadNovel.novelGenre}
-                  accentColor={getSalonDisplayInfo(leadNovel, customSalons).accentColor}
-                  size="lg"
-                  showFallbackWhenMissing={true}
-                />
-
-                <div className="min-w-0 flex-1 space-y-4">
-                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
-                    <span className="font-medium text-[#1B365D] uppercase tracking-wider">
-                      N° 1 {selectedGenre === 'all' ? 'général' : `· ${NOVEL_GENRE_LABELS[selectedGenre]}`}
-                    </span>
-                    <span aria-hidden="true">·</span>
-                    <span>{NOVEL_GENRE_LABELS[getNovelCategory(leadNovel)]}</span>
-                    <span aria-hidden="true">·</span>
-                    {renderOriginLink(leadNovel)}
-                    <span aria-hidden="true">·</span>
-                    <span className="tabular-nums">
-                      {leadNovel.chapterCount ?? 1} chap. ·{' '}
-                      {SERIES_STATUS_LABELS[leadNovel.seriesStatus ?? 'en-cours']}
-                    </span>
-                    <MatureContentBadge minAge={leadNovel.minAge} isMature={leadNovel.isMature} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <h3
-                      className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-snug"
-                      style={{ textWrap: 'balance' }}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => onReadStory(leadNovel)}
-                        className="hover:text-[#1B365D] text-left transition-colors"
-                      >
-                        {leadNovel.title}
-                      </button>
-                    </h3>
-                    <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-prose">
-                      {leadNovel.excerpt}
-                    </p>
-                  </div>
-
-                  <div className="pt-3 border-t border-stone-100 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600">
-                      {leadNovel.isAnonymous ? (
-                        <span className="inline-flex items-center gap-1.5 font-medium text-stone-700">
-                          <EyeOff className="w-3.5 h-3.5 text-stone-400" />
-                          <span>Auteur anonyme</span>
+            {/* Podium des meilleurs romans (#2 gauche, #1 surélevé au centre, #3 droite) */}
+            {podiumNovels.length === 1 ? (
+              (() => {
+                const leadNovel = podiumNovels[0];
+                return (
+                  <article className="bg-[#FFFDF8] border border-[#C9A227]/70 rounded-xl overflow-hidden shadow-[0_14px_34px_-20px_rgba(140,77,14,0.28)]">
+                    <div className="bg-[#B4822B] text-[#FFFDF8] px-5 py-2 flex items-center justify-between gap-2 text-xs font-medium">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Crown className="w-3.5 h-3.5 shrink-0" />
+                        <span>
+                          N° 1 {selectedGenre === 'all' ? 'général' : `· ${NOVEL_GENRE_LABELS[selectedGenre]}`}
                         </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => onOpenMemberWall(leadNovel.authorId)}
-                          className="inline-flex items-center gap-1.5 font-medium text-stone-800 hover:text-[#1B365D] hover:underline"
+                      </span>
+                      <span className="font-display text-sm tabular-nums">01</span>
+                    </div>
+
+                    <div className="p-6 sm:p-8 flex flex-col sm:flex-row gap-6 items-start">
+                      <NovelCoverArt
+                        coverUrl={leadNovel.coverUrl}
+                        title={leadNovel.title}
+                        genre={leadNovel.novelGenre}
+                        accentColor={getSalonDisplayInfo(leadNovel, customSalons).accentColor}
+                        size="lg"
+                        showFallbackWhenMissing={true}
+                      />
+
+                      <div className="min-w-0 flex-1 space-y-4">
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                          <span>{NOVEL_GENRE_LABELS[getNovelCategory(leadNovel)]}</span>
+                          <span aria-hidden="true">·</span>
+                          {renderOriginLink(leadNovel)}
+                          <span aria-hidden="true">·</span>
+                          <span className="tabular-nums">
+                            {leadNovel.chapterCount ?? 1} chap. ·{' '}
+                            {SERIES_STATUS_LABELS[leadNovel.seriesStatus ?? 'en-cours']}
+                          </span>
+                          <MatureContentBadge minAge={leadNovel.minAge} isMature={leadNovel.isMature} />
+                        </div>
+
+                        <div className="space-y-2">
+                          <h3
+                            className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-snug"
+                            style={{ textWrap: 'balance' }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => onReadStory(leadNovel)}
+                              className="hover:text-[#1B365D] text-left transition-colors"
+                            >
+                              {leadNovel.title}
+                            </button>
+                          </h3>
+                          <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-prose">
+                            {leadNovel.excerpt}
+                          </p>
+                        </div>
+
+                        <div className="pt-3 border-t border-stone-200/70 flex flex-wrap items-center justify-between gap-4">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600">
+                            {leadNovel.isAnonymous ? (
+                              <span className="inline-flex items-center gap-1.5 font-medium text-stone-700">
+                                <EyeOff className="w-3.5 h-3.5 text-stone-400" />
+                                <span>Auteur anonyme</span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => onOpenMemberWall(leadNovel.authorId)}
+                                className="inline-flex items-center gap-1.5 font-medium text-stone-800 hover:text-[#1B365D] hover:underline"
+                              >
+                                <UserIcon className="w-3.5 h-3.5 text-stone-400" />
+                                <span>{leadNovel.authorName}</span>
+                              </button>
+                            )}
+                            <span aria-hidden="true">·</span>
+                            <span>{formatFrenchDate(leadNovel.createdAt?.toDate() ?? null)}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex items-center gap-1 tabular-nums font-medium text-stone-800">
+                              <Eye className="w-3.5 h-3.5 text-stone-400" />
+                              {leadNovel.viewCount ?? 0} vue{(leadNovel.viewCount ?? 0) > 1 ? 's' : ''}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex items-center gap-1 tabular-nums">
+                              <Heart className="w-3.5 h-3.5 text-stone-400" />
+                              {leadNovel.resonanceCount}
+                            </span>
+                            <span aria-hidden="true">·</span>
+                            <span className="inline-flex items-center gap-1 tabular-nums">
+                              <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
+                              {leadNovel.echoCount}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => onToggleBookmark(leadNovel)}
+                              aria-label="Enregistrer pour lire plus tard"
+                              title={
+                                bookmarkedStoryIds.has(leadNovel.storyId)
+                                  ? 'Retirer des favoris'
+                                  : 'Enregistrer pour lire plus tard'
+                              }
+                              className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
+                                bookmarkedStoryIds.has(leadNovel.storyId)
+                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                  : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                              }`}
+                            >
+                              <Bookmark
+                                className={`w-4 h-4 ${
+                                  bookmarkedStoryIds.has(leadNovel.storyId) ? 'fill-current' : ''
+                                }`}
+                              />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => onOpenRepost(leadNovel)}
+                              aria-label="Repartager"
+                              title="Repartager sur mon compte"
+                              className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
+                                repostedStoryIds.has(leadNovel.storyId)
+                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                  : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                              }`}
+                            >
+                              <Repeat2 className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => onReadStory(leadNovel)}
+                              className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white text-xs font-medium hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              <span>Lire le roman</span>
+                              <ArrowRight className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })()
+            ) : (
+              <div
+                className={
+                  podiumNovels.length >= 3
+                    ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 items-start'
+                    : 'grid grid-cols-1 lg:grid-cols-2 gap-5 items-start max-w-4xl mx-auto'
+                }
+              >
+                {podiumNovels.map((novel, idx) => {
+                  const rank = (idx + 1) as 1 | 2 | 3;
+                  const isChampion = rank === 1;
+                  const isSecond = rank === 2;
+
+                  const orderClass =
+                    podiumNovels.length >= 3
+                      ? isChampion
+                        ? 'order-1 lg:order-2'
+                        : isSecond
+                          ? 'order-2 lg:order-1 lg:mt-8'
+                          : 'order-3 lg:order-3 lg:mt-12'
+                      : isChampion
+                        ? 'order-1'
+                        : 'order-2 lg:mt-6';
+
+                  const cardSurface = isChampion
+                    ? 'bg-[#FFFDF8] border-[#C9A227]/70 shadow-[0_14px_34px_-20px_rgba(140,77,14,0.3)]'
+                    : isSecond
+                      ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.2)]'
+                      : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.16)]';
+
+                  const stripClass = isChampion
+                    ? 'bg-[#B4822B] text-[#FFFDF8]'
+                    : isSecond
+                      ? 'bg-[#57534E] text-white'
+                      : 'bg-[#9A3B29] text-white';
+
+                  const stepHeading =
+                    rank === 1
+                      ? `N° 1 ${selectedGenre === 'all' ? '· Tête d’affiche' : `· ${NOVEL_GENRE_LABELS[selectedGenre]}`}`
+                      : rank === 2
+                        ? 'N° 2 · Deuxième marche'
+                        : 'N° 3 · Troisième marche';
+
+                  return (
+                    <article
+                      key={novel.storyId}
+                      className={`${orderClass} ${cardSurface} border rounded-xl overflow-hidden flex flex-col justify-between`}
+                    >
+                      <div>
+                        <div
+                          className={`${stripClass} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
                         >
-                          <UserIcon className="w-3.5 h-3.5 text-stone-400" />
-                          <span>{leadNovel.authorName}</span>
-                        </button>
-                      )}
-                      <span aria-hidden="true">·</span>
-                      <span>{formatFrenchDate(leadNovel.createdAt?.toDate() ?? null)}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="inline-flex items-center gap-1 tabular-nums font-medium text-stone-800">
-                        <Eye className="w-3.5 h-3.5 text-stone-400" />
-                        {leadNovel.viewCount ?? 0} vue{(leadNovel.viewCount ?? 0) > 1 ? 's' : ''}
-                      </span>
-                      <span aria-hidden="true">·</span>
-                      <span className="inline-flex items-center gap-1 tabular-nums">
-                        <Heart className="w-3.5 h-3.5 text-stone-400" />
-                        {leadNovel.resonanceCount}
-                      </span>
-                      <span aria-hidden="true">·</span>
-                      <span className="inline-flex items-center gap-1 tabular-nums">
-                        <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
-                        {leadNovel.echoCount}
-                      </span>
-                    </div>
+                          <span className="inline-flex items-center gap-1.5">
+                            {isChampion ? (
+                              <Crown className="w-3.5 h-3.5 shrink-0" />
+                            ) : (
+                              <Award className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                            <span className="truncate">{stepHeading}</span>
+                          </span>
+                          <span className="font-display text-sm tabular-nums">0{rank}</span>
+                        </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => onToggleBookmark(leadNovel)}
-                        aria-label="Enregistrer pour lire plus tard"
-                        title={
-                          bookmarkedStoryIds.has(leadNovel.storyId)
-                            ? 'Retirer des favoris'
-                            : 'Enregistrer pour lire plus tard'
-                        }
-                        className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
-                          bookmarkedStoryIds.has(leadNovel.storyId)
-                            ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                            : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
-                        }`}
-                      >
-                        <Bookmark
-                          className={`w-4 h-4 ${
-                            bookmarkedStoryIds.has(leadNovel.storyId) ? 'fill-current' : ''
-                          }`}
-                        />
-                      </button>
+                        <div className={isChampion ? 'p-5 sm:p-6 space-y-4' : 'p-5 space-y-3.5'}>
+                          <div className="flex items-start gap-4">
+                            <NovelCoverArt
+                              coverUrl={novel.coverUrl}
+                              title={novel.title}
+                              genre={novel.novelGenre}
+                              accentColor={getSalonDisplayInfo(novel, customSalons).accentColor}
+                              size={isChampion ? 'md' : 'sm'}
+                              showFallbackWhenMissing={true}
+                            />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <p className="text-[11px] text-stone-500">
+                                {NOVEL_GENRE_LABELS[getNovelCategory(novel)]} ·{' '}
+                                <span className="tabular-nums">
+                                  {novel.chapterCount ?? 1} chap.
+                                </span>
+                              </p>
+                              <h3
+                                className={`font-display font-medium text-stone-900 leading-snug ${
+                                  isChampion ? 'text-2xl' : 'text-xl'
+                                }`}
+                                style={{ textWrap: 'balance' }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => onReadStory(novel)}
+                                  className="hover:text-[#1B365D] text-left transition-colors"
+                                >
+                                  {novel.title}
+                                </button>
+                              </h3>
+                              <p className="text-xs text-stone-600">
+                                {novel.isAnonymous ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <EyeOff className="w-3 h-3 text-stone-400" />
+                                    <span>Auteur anonyme</span>
+                                  </span>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenMemberWall(novel.authorId)}
+                                    className="font-medium text-stone-700 hover:text-[#1B365D] hover:underline"
+                                  >
+                                    {novel.authorName}
+                                  </button>
+                                )}
+                              </p>
+                            </div>
+                          </div>
 
-                      <button
-                        type="button"
-                        onClick={() => onOpenRepost(leadNovel)}
-                        aria-label="Repartager"
-                        title="Repartager sur mon compte"
-                        className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
-                          repostedStoryIds.has(leadNovel.storyId)
-                            ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                            : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
-                        }`}
-                      >
-                        <Repeat2 className="w-4 h-4" />
-                      </button>
+                          <p className="text-xs sm:text-sm text-stone-600 line-clamp-3 leading-relaxed">
+                            {novel.excerpt}
+                          </p>
 
-                      <button
-                        type="button"
-                        onClick={() => onReadStory(leadNovel)}
-                        className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white text-xs font-medium hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
-                      >
-                        <span>Lire le roman</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </article>
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                            {renderOriginLink(novel)}
+                            <span aria-hidden="true">·</span>
+                            <span>{SERIES_STATUS_LABELS[novel.seriesStatus ?? 'en-cours']}</span>
+                            <MatureContentBadge
+                              minAge={novel.minAge}
+                              isMature={novel.isMature}
+                              compact
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2.5">
+                        <div className="flex items-center gap-3 text-xs text-stone-600 tabular-nums">
+                          <span className="inline-flex items-center gap-1 font-medium text-stone-800">
+                            <Eye className="w-3.5 h-3.5 text-stone-400" />
+                            {novel.viewCount ?? 0}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Heart className="w-3.5 h-3.5 text-stone-400" />
+                            {novel.resonanceCount}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
+                            {novel.echoCount}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onToggleBookmark(novel)}
+                            aria-label="Enregistrer pour lire plus tard"
+                            className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                              bookmarkedStoryIds.has(novel.storyId)
+                                ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                            }`}
+                          >
+                            <Bookmark
+                              className={`w-3.5 h-3.5 ${
+                                bookmarkedStoryIds.has(novel.storyId) ? 'fill-current' : ''
+                              }`}
+                            />
+                          </button>
+
+                          {isChampion && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenRepost(novel)}
+                              aria-label="Repartager"
+                              className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                repostedStoryIds.has(novel.storyId)
+                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                  : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                              }`}
+                            >
+                              <Repeat2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => onReadStory(novel)}
+                            className={`min-h-[32px] px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap ${
+                              isChampion
+                                ? 'bg-[#1B365D] text-white hover:bg-[#132744]'
+                                : 'bg-white border border-[#CBD6E6] text-[#1B365D] hover:bg-[#F3F6FA]'
+                            }`}
+                          >
+                            <span>Lire</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             )}
 
-            {/* Ranked List #2+ */}
+            {/* Ranked List #4+ */}
             {otherNovels.length > 0 && (
               <div className="bg-white border border-stone-200 rounded-lg divide-y divide-stone-200">
                 {otherNovels.map((novel, idx) => {
-                  const rank = idx + 2;
+                  const rank = idx + 4;
                   const rankLabel = rank < 10 ? `0${rank}` : `${rank}`;
                   return (
                     <article

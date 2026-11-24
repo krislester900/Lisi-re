@@ -27,6 +27,7 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { evaluateStoryFormatCompliance } from '../lib/contentRegulation';
 import {
   MODERATION_CATEGORY_LABELS,
   MODERATION_REVIEW_STEPS,
@@ -42,6 +43,7 @@ import {
   deleteStoryQuote,
   deleteStoryRepost,
   formatFriendlyFirestoreError,
+  privatizeStoriesBatch,
   removeStoryBookmark,
   removeUserRelationship,
   updateNovelSeriesStatus,
@@ -101,6 +103,7 @@ type StoryFilter =
   | 'all'
   | 'public'
   | 'private'
+  | 'non-compliant'
   | 'anonymous'
   | 'roman'
   | 'roman-en-cours'
@@ -136,6 +139,7 @@ export function JournalView({
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmClaimId, setConfirmClaimId] = useState<string | null>(null);
   const [busyStoryId, setBusyStoryId] = useState<string | null>(null);
+  const [batchPrivatizeBusy, setBatchPrivatizeBusy] = useState(false);
   const [storyActionError, setStoryActionError] = useState<string | null>(null);
   const [busyBookmarkId, setBusyBookmarkId] = useState<string | null>(null);
   const [bookmarkActionError, setBookmarkActionError] = useState<string | null>(null);
@@ -162,6 +166,15 @@ export function JournalView({
     () => myStories.filter((s) => s.visibility === 'private').length,
     [myStories]
   );
+  const nonCompliantStories = useMemo(
+    () => myStories.filter((s) => !evaluateStoryFormatCompliance(s).compliant),
+    [myStories]
+  );
+  const nonCompliantPublicStories = useMemo(
+    () => nonCompliantStories.filter((s) => s.visibility === 'public'),
+    [nonCompliantStories]
+  );
+  const nonCompliantCount = nonCompliantStories.length;
   const anonymousCount = useMemo(
     () => myStories.filter((s) => Boolean(s.isAnonymous)).length,
     [myStories]
@@ -200,6 +213,9 @@ export function JournalView({
     const list = myStories.filter((story) => {
       if (storyFilter === 'public' && story.visibility !== 'public') return false;
       if (storyFilter === 'private' && story.visibility !== 'private') return false;
+      if (storyFilter === 'non-compliant' && evaluateStoryFormatCompliance(story).compliant) {
+        return false;
+      }
       if (storyFilter === 'anonymous' && !story.isAnonymous) return false;
       if (storyFilter === 'roman' && story.storyFormat !== 'roman') return false;
       if (
@@ -708,6 +724,14 @@ export function JournalView({
                         { id: 'all', label: `Tous (${myStories.length})` },
                         { id: 'public', label: `Publiés (${publicCount})` },
                         { id: 'private', label: `Brouillons (${draftCount})` },
+                        ...(nonCompliantCount > 0
+                          ? [
+                              {
+                                id: 'non-compliant' as const,
+                                label: `À régulariser (${nonCompliantCount})`,
+                              },
+                            ]
+                          : []),
                         ...(anonymousCount > 0
                           ? [{ id: 'anonymous' as const, label: `Anonymes (${anonymousCount})` }]
                           : []),
@@ -783,6 +807,62 @@ export function JournalView({
                 </div>
               )}
 
+              {nonCompliantPublicStories.length > 0 && (
+                <div className="bg-amber-50/90 border border-amber-300 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-amber-950 inline-flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                      <span>
+                        Régulation rétroactive : {nonCompliantPublicStories.length} récit
+                        {nonCompliantPublicStories.length > 1 ? 's' : ''} public
+                        {nonCompliantPublicStories.length > 1 ? 's' : ''} sous le seuil minimal
+                      </span>
+                    </p>
+                    <p className="text-xs text-amber-900 leading-relaxed">
+                      Les confessions de 3 lignes ou moins et les romans de moins de 2 pages publiés avant la mise à jour sont automatiquement masqués des salons. Complétez-les pour qu’ils redeviennent visibles, ou passez-les en brouillons privés.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {storyFilter !== 'non-compliant' && (
+                      <button
+                        type="button"
+                        onClick={() => setStoryFilter('non-compliant')}
+                        className="min-h-[34px] px-3 py-1 rounded-md border border-amber-300 bg-white text-xs font-medium text-amber-950 hover:border-amber-500 whitespace-nowrap"
+                      >
+                        Afficher ({nonCompliantCount})
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={batchPrivatizeBusy}
+                      onClick={async () => {
+                        setStoryActionError(null);
+                        setBatchPrivatizeBusy(true);
+                        try {
+                          await privatizeStoriesBatch(
+                            nonCompliantPublicStories.map((s) => s.storyId)
+                          );
+                        } catch (err) {
+                          setStoryActionError(
+                            formatFriendlyFirestoreError(
+                              err,
+                              'Impossible de passer ces textes en brouillon privé.'
+                            )
+                          );
+                        } finally {
+                          setBatchPrivatizeBusy(false);
+                        }
+                      }}
+                      className="min-h-[34px] px-3 py-1 rounded-md bg-amber-900 text-white text-xs font-medium hover:bg-amber-950 disabled:opacity-60 whitespace-nowrap"
+                    >
+                      {batchPrivatizeBusy
+                        ? 'En cours…'
+                        : `Passer en brouillons (${nonCompliantPublicStories.length})`}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {storyActionError && (
                 <p
                   role="alert"
@@ -836,6 +916,7 @@ export function JournalView({
                     const formatLabel =
                       STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label ?? 'Confession';
                     const isDraft = story.visibility === 'private';
+                    const compliance = evaluateStoryFormatCompliance(story);
 
                     return (
                       <article key={story.storyId} className="p-5 sm:p-6 space-y-3">
@@ -910,8 +991,25 @@ export function JournalView({
                               isMature={story.isMature}
                               compact
                             />
+                            {!compliance.compliant && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-[11px] font-medium text-amber-950">
+                                <AlertTriangle className="w-3 h-3 text-amber-700" />
+                                <span>À régulariser</span>
+                              </span>
+                            )}
                           </div>
                         </div>
+
+                        {!compliance.compliant && (
+                          <div className="rounded-md border border-amber-200 bg-amber-50/75 px-3 py-2 text-xs text-amber-950">
+                            <span className="font-medium">
+                              {story.visibility === 'public'
+                                ? 'Suspendu des salons publics : '
+                                : 'Longueur insuffisante pour publication : '}
+                            </span>
+                            <span>{compliance.detailReason}</span>
+                          </div>
+                        )}
 
                         <div className="flex items-start gap-4">
                           {story.storyFormat === 'roman' && (
@@ -982,32 +1080,39 @@ export function JournalView({
                             <button
                               type="button"
                               onClick={() => onEditStory(story)}
-                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-md inline-flex items-center gap-1.5 whitespace-nowrap ${
+                                !compliance.compliant
+                                  ? 'text-amber-950 bg-amber-100 border border-amber-300 hover:bg-amber-200'
+                                  : 'text-stone-800 bg-[#FBF9F5] border border-stone-200 hover:border-stone-400'
+                              }`}
                             >
                               <Edit3 className="w-3.5 h-3.5" />
-                              <span>Modifier</span>
+                              <span>
+                                {!compliance.compliant ? 'Compléter pour publier' : 'Modifier'}
+                              </span>
                             </button>
 
-                            {story.customSalonVisibility !== 'private' && (
-                              <button
-                                type="button"
-                                disabled={isBusy}
-                                onClick={() => void handleToggleVisibility(story)}
-                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
-                              >
-                                {story.visibility === 'public' ? (
-                                  <>
-                                    <EyeOff className="w-3.5 h-3.5" />
-                                    <span>Passer en privé</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Eye className="w-3.5 h-3.5" />
-                                    <span>Publier</span>
-                                  </>
-                                )}
-                              </button>
-                            )}
+                            {story.customSalonVisibility !== 'private' &&
+                              (story.visibility === 'public' || compliance.compliant) && (
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => void handleToggleVisibility(story)}
+                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                                >
+                                  {story.visibility === 'public' ? (
+                                    <>
+                                      <EyeOff className="w-3.5 h-3.5" />
+                                      <span>Passer en privé</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Eye className="w-3.5 h-3.5" />
+                                      <span>Publier</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
 
                             {story.isAnonymous &&
                               (isConfirmingClaim ? (

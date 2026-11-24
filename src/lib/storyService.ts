@@ -749,6 +749,29 @@ export async function updateStoryVisibility(
   }
 }
 
+export async function privatizeStoriesBatch(storyIds: string[]): Promise<number> {
+  const uniqueIds = Array.from(new Set(storyIds)).filter((id) => ID_PATTERN.test(id));
+  if (uniqueIds.length === 0) return 0;
+
+  const CHUNK_SIZE = 400;
+  try {
+    for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+      const slice = uniqueIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const storyId of slice) {
+        batch.update(doc(db, 'stories', storyId), {
+          visibility: 'private',
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+    return uniqueIds.length;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `stories/${uniqueIds[0]}`);
+  }
+}
+
 export async function claimAnonymousStory(
   storyId: string,
   authorName: string

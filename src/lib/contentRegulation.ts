@@ -1,4 +1,4 @@
-import { AgeRating, FIELD_LIMITS } from '../types/story';
+import { AgeRating, FIELD_LIMITS, Story, StoryFormat } from '../types/story';
 
 export const ROMAN_PAGE_CHARS = 1500;
 export const ROMAN_MIN_PAGES = 2;
@@ -135,6 +135,63 @@ export function evaluateConfessionLength(text: string): ConfessionLengthEvaluati
     ok,
     message,
   };
+}
+
+export interface StoryFormatComplianceResult {
+  compliant: boolean;
+  format: StoryFormat;
+  shortReason: string;
+  detailReason: string;
+  targetSummary: string;
+  missingChars: number;
+  currentChars: number;
+  currentLines?: number;
+  estimatedPages?: number;
+}
+
+export function evaluateStoryFormatCompliance(
+  story: Pick<Story, 'storyFormat' | 'content'>
+): StoryFormatComplianceResult {
+  const format: StoryFormat = story.storyFormat === 'roman' ? 'roman' : 'confession';
+  const rawContent = story.content ?? '';
+
+  if (format === 'roman') {
+    const evalNovel = evaluateNovelChapterLength(rawContent);
+    return {
+      compliant: evalNovel.ok,
+      format,
+      shortReason: evalNovel.ok
+        ? 'Conforme (2 pages ou plus)'
+        : `Chapitre 1 trop court (${evalNovel.estimatedPages.toFixed(1).replace('.', ',')} p. / 2 p. min.)`,
+      detailReason: evalNovel.message,
+      targetSummary: `Minimum ${ROMAN_MIN_PAGES} pages (${ROMAN_MIN_CHARS.toLocaleString('fr-FR')} caractères)`,
+      missingChars: evalNovel.remainingChars,
+      currentChars: evalNovel.chars,
+      estimatedPages: evalNovel.estimatedPages,
+    };
+  }
+
+  const evalConfession = evaluateConfessionLength(rawContent);
+  return {
+    compliant: evalConfession.ok,
+    format,
+    shortReason: evalConfession.ok
+      ? 'Conforme (plus de 3 lignes)'
+      : evalConfession.lines < CONFESSION_MIN_LINES
+        ? `${evalConfession.lines} ligne${evalConfession.lines > 1 ? 's' : ''} détectée${evalConfession.lines > 1 ? 's' : ''} (plus de 3 lignes requises)`
+        : `Trop court (${evalConfession.chars} / ${CONFESSION_MIN_CHARS} car. min.)`,
+    detailReason: evalConfession.message,
+    targetSummary: `Plus de 3 lignes (${CONFESSION_MIN_LINES} lignes / phrases et ${CONFESSION_MIN_CHARS} car. min.)`,
+    missingChars: evalConfession.remainingChars,
+    currentChars: evalConfession.chars,
+    currentLines: evalConfession.lines,
+  };
+}
+
+export function isStoryCompliantForPublicFeed(
+  story: Pick<Story, 'storyFormat' | 'content'>
+): boolean {
+  return evaluateStoryFormatCompliance(story).compliant;
 }
 
 const EXPLICIT_HATE_PATTERNS: ReadonlyArray<RegExp> = [

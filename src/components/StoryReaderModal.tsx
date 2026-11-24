@@ -7,11 +7,13 @@ import {
   Check,
   Copy,
   Disc3,
+  Edit3,
   Eye,
   EyeOff,
   Flag,
   Heart,
   Highlighter,
+  Lock,
   Maximize2,
   MessageCircle,
   Minimize2,
@@ -34,6 +36,7 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   checkLocalContentHygiene,
   evaluateNovelChapterLength,
+  evaluateStoryFormatCompliance,
   getStoryAgeAccessBlockReason,
   shouldShowMatureWarning,
 } from '../lib/contentRegulation';
@@ -62,6 +65,7 @@ import {
   toggleFavoriteAuthor,
   toggleStoryResonance,
   updateNovelSeriesStatus,
+  updateStoryVisibility,
 } from '../lib/storyService';
 import {
   ACCENT_TONE_PALETTES,
@@ -107,6 +111,7 @@ interface StoryReaderModalProps {
   onOpenPeleMele?: () => void;
   onOpenReport?: (draft: ReportDraft) => void;
   onOpenAgeSettings?: () => void;
+  onEditStory?: (story: Story) => void;
   onStoryClaimed?: (authorName: string) => void;
 }
 
@@ -129,6 +134,7 @@ export function StoryReaderModal({
   onOpenPeleMele,
   onOpenReport,
   onOpenAgeSettings,
+  onEditStory,
   onStoryClaimed,
 }: StoryReaderModalProps) {
   const { user, profile, viewerAge, favoriteAuthors, signInWithGoogle } = useAuth();
@@ -139,6 +145,8 @@ export function StoryReaderModal({
   const [confirmClaimAnon, setConfirmClaimAnon] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [privatizeBusy, setPrivatizeBusy] = useState(false);
+  const [privatizeError, setPrivatizeError] = useState<string | null>(null);
   const [echoes, setEchoes] = useState<Echo[]>([]);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [activeChapterIdx, setActiveChapterIdx] = useState(0); // 0 = Chapitre 1 (story.content), >=1 = chapters[idx - 1]
@@ -546,6 +554,10 @@ export function StoryReaderModal({
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
+  const formatCompliance = evaluateStoryFormatCompliance(story);
+  const isBlockedByRetroactiveRule = Boolean(
+    story.visibility === 'public' && !formatCompliance.compliant && !isAuthor
+  );
   const ageBlockReason = getStoryAgeAccessBlockReason(
     story,
     viewerAge,
@@ -554,13 +566,20 @@ export function StoryReaderModal({
   );
   const storyIsMature = shouldShowMatureWarning(story);
   const needsMatureGate = Boolean(
-    ageBlockReason === null && !isAuthor && storyIsMature && !matureAcknowledged
+    !isBlockedByRetroactiveRule &&
+      ageBlockReason === null &&
+      !isAuthor &&
+      storyIsMature &&
+      !matureAcknowledged
   );
-  const isReadingBlocked = ageBlockReason !== null || needsMatureGate;
+  const isReadingBlocked =
+    isBlockedByRetroactiveRule || ageBlockReason !== null || needsMatureGate;
   const isAnonymousStory = Boolean(story.isAnonymous);
   const publicAuthorLabel = isAnonymousStory ? 'Auteur anonyme' : story.authorName;
   const canSharePublicLink =
-    story.visibility === 'public' && story.customSalonVisibility !== 'private';
+    story.visibility === 'public' &&
+    story.customSalonVisibility !== 'private' &&
+    formatCompliance.compliant;
   const directStoryUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/histoires/${encodeURIComponent(story.storyId)}`
@@ -635,6 +654,9 @@ export function StoryReaderModal({
   const totalChapters = isRoman ? 1 + chapters.length : 1;
   const activeFollowupChapter =
     isRoman && activeChapterIdx > 0 ? chapters[activeChapterIdx - 1] ?? null : null;
+  const activeFollowupChapterEval = activeFollowupChapter
+    ? evaluateNovelChapterLength(activeFollowupChapter.content)
+    : null;
 
   const authorPinnedMusic =
     !isAnonymousStory && authorProfile?.favoriteTrackTitle
@@ -1999,7 +2021,90 @@ export function StoryReaderModal({
               </div>
             )}
 
-            {ageBlockReason !== null ? (
+            {!zenMode && isAuthor && !formatCompliance.compliant && (
+              <div className="mb-6 bg-amber-50/90 border border-amber-300 rounded-lg p-4 sm:p-5 space-y-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-amber-950">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    Régulation rétroactive : {formatCompliance.shortReason}
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-amber-950 leading-relaxed">
+                  {story.visibility === 'public'
+                    ? `Ce récit publié avant l’entrée en vigueur des nouveaux seuils est actuellement masqué des salons publics. ${formatCompliance.detailReason}`
+                    : formatCompliance.detailReason}
+                </p>
+                {privatizeError && (
+                  <p role="alert" className="text-xs text-red-700">
+                    {privatizeError}
+                  </p>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  {onEditStory && (
+                    <button
+                      type="button"
+                      onClick={() => onEditStory(story)}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white text-xs font-medium hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>Compléter pour republier</span>
+                    </button>
+                  )}
+                  {story.visibility === 'public' && (
+                    <button
+                      type="button"
+                      disabled={privatizeBusy}
+                      onClick={async () => {
+                        setPrivatizeError(null);
+                        setPrivatizeBusy(true);
+                        try {
+                          await updateStoryVisibility(story.storyId, 'private');
+                          onClose();
+                        } catch (err) {
+                          setPrivatizeError(
+                            formatFriendlyFirestoreError(
+                              err,
+                              'Impossible de passer ce récit en brouillon privé.'
+                            )
+                          );
+                        } finally {
+                          setPrivatizeBusy(false);
+                        }
+                      }}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-md border border-amber-300 bg-white text-amber-950 text-xs font-medium hover:border-amber-500 inline-flex items-center gap-1.5 disabled:opacity-60 whitespace-nowrap"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>
+                        {privatizeBusy ? 'En cours…' : 'Passer en brouillon privé'}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isBlockedByRetroactiveRule ? (
+              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 sm:p-8 space-y-4">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
+                  <h2 className="font-display text-xl font-medium text-stone-900">
+                    Publication suspendue par régulation rétroactive
+                  </h2>
+                </div>
+                <p className="text-sm text-stone-700 leading-relaxed">
+                  Lisière exige désormais plus de 3 lignes pour les confessions et au moins 2 pages par chapitre de roman, y compris sur les récits publiés avant la mise à jour. Ce texte ne remplit pas encore ce seuil ({formatCompliance.shortReason}) et reste retiré des salons tant que son auteur ne l’a pas complété.
+                </p>
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500"
+                  >
+                    Revenir aux récits
+                  </button>
+                </div>
+              </div>
+            ) : ageBlockReason !== null ? (
               <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 sm:p-8 space-y-4">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
@@ -2296,26 +2401,53 @@ export function StoryReaderModal({
               </div>
             )}
 
-            <div
-              ref={storyParagraphsRef}
-              onMouseUp={inspectSelection}
-              onTouchEnd={() => window.setTimeout(inspectSelection, 120)}
-              className={
-                zenMode
-                  ? `space-y-6 select-text ${zenTypefaceClass} ${zenFontClass} ${zenBodyTextClass}`
-                  : 'space-y-5 select-text text-base sm:text-[17px] leading-[1.8] text-stone-800'
-              }
-            >
-              {paragraphs.map((para, idx) => (
-                <p
-                  key={idx}
-                  data-paragraph-index={idx}
-                  className={idx === 0 ? 'editorial-drop-cap' : ''}
-                >
-                  {renderHighlightedParagraph(para, idx)}
+            {activeFollowupChapter &&
+            activeFollowupChapterEval &&
+            !activeFollowupChapterEval.ok &&
+            !isAuthor ? (
+              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-950">
+                  <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    Chapitre {activeFollowupChapter.chapterNumber} suspendu par régulation rétroactive
+                  </span>
+                </div>
+                <p className="text-sm text-stone-700 leading-relaxed">
+                  Ce chapitre antérieur à la mise à jour contient moins de 2 pages ({activeFollowupChapterEval.estimatedPages.toFixed(1).replace('.', ',')} p. / 2 p. minimum) et n’est plus affiché aux lecteurs.
                 </p>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <>
+                {activeFollowupChapter &&
+                  activeFollowupChapterEval &&
+                  !activeFollowupChapterEval.ok &&
+                  isAuthor && (
+                    <div className="mb-5 px-3.5 py-2.5 rounded-md border border-amber-300 bg-amber-50 text-xs text-amber-950">
+                      Attention (auteur) : ce chapitre {activeFollowupChapter.chapterNumber} fait moins de 2 pages ({activeFollowupChapterEval.estimatedPages.toFixed(1).replace('.', ',')} p.) et est masqué aux visiteurs sous l’effet de la régulation rétroactive.
+                    </div>
+                  )}
+                <div
+                  ref={storyParagraphsRef}
+                  onMouseUp={inspectSelection}
+                  onTouchEnd={() => window.setTimeout(inspectSelection, 120)}
+                  className={
+                    zenMode
+                      ? `space-y-6 select-text ${zenTypefaceClass} ${zenFontClass} ${zenBodyTextClass}`
+                      : 'space-y-5 select-text text-base sm:text-[17px] leading-[1.8] text-stone-800'
+                  }
+                >
+                  {paragraphs.map((para, idx) => (
+                    <p
+                      key={idx}
+                      data-paragraph-index={idx}
+                      className={idx === 0 ? 'editorial-drop-cap' : ''}
+                    >
+                      {renderHighlightedParagraph(para, idx)}
+                    </p>
+                  ))}
+                </div>
+              </>
+            )}
 
             {!zenMode && activeFollowupChapter?.authorNote && (
               <div className="mt-8 p-4 bg-white border border-stone-200 rounded-md text-sm text-stone-700 italic">

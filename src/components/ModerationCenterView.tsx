@@ -18,6 +18,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { evaluateStoryFormatCompliance } from '../lib/contentRegulation';
 import {
   CASE_STUDY_CRITERIA,
   isModerationAdminEmail,
@@ -47,6 +48,7 @@ import {
   ModerationCase,
   ModerationCaseStatus,
   ModerationGravityLevel,
+  Story,
   WarningSeverity,
 } from '../types/story';
 
@@ -55,6 +57,7 @@ interface ModerationCenterViewProps {
   allWarnings: MemberWarning[];
   myCases: ModerationCase[];
   userWarnings: MemberWarning[];
+  publicStories?: Story[];
   onOpenMemberWall: (userId: string) => void;
 }
 
@@ -71,12 +74,14 @@ export function ModerationCenterView({
   allWarnings,
   myCases,
   userWarnings,
+  publicStories = [],
   onOpenMemberWall,
 }: ModerationCenterViewProps) {
   const { user, profile, signInWithGoogle } = useAuth();
   const isAdmin = isModerationAdminEmail(user?.email);
 
   const [statusFilter, setStatusFilter] = useState<CaseFilter>('all');
+  const [showRetroactiveAudit, setShowRetroactiveAudit] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
@@ -154,6 +159,17 @@ export function ModerationCenterView({
     ).length;
     return { priorCases, priorWarnings };
   }, [activeCase, allCases, allWarnings]);
+
+  const retroactivelySuspendedStories = useMemo(
+    () =>
+      publicStories
+        .map((story) => ({
+          story,
+          compliance: evaluateStoryFormatCompliance(story),
+        }))
+        .filter((entry) => !entry.compliance.compliant),
+    [publicStories]
+  );
 
   if (!user) {
     return (
@@ -616,6 +632,62 @@ export function ModerationCenterView({
           ))}
         </div>
       </div>
+
+      {/* Retroactive Format Regulation Audit */}
+      <section className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <p className="text-xs font-semibold text-stone-900 inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#1B365D]" />
+              <span>
+                Régulation rétroactive des formats (&gt; 3 lignes confessions · ≥ 2 pages romans)
+              </span>
+            </p>
+            <p className="text-xs text-stone-600 tabular-nums">
+              {retroactivelySuspendedStories.length === 0
+                ? 'Tous les récits publics actuels respectent les seuils de longueur.'
+                : `${retroactivelySuspendedStories.length} récit${retroactivelySuspendedStories.length > 1 ? 's' : ''} antérieur${retroactivelySuspendedStories.length > 1 ? 's' : ''} à la mise à jour ${retroactivelySuspendedStories.length > 1 ? 'sont automatiquement masqués' : 'est automatiquement masqué'} des salons publics jusqu’à régularisation par leur auteur.`}
+            </p>
+          </div>
+          {retroactivelySuspendedStories.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowRetroactiveAudit((prev) => !prev)}
+              className="min-h-[32px] px-3 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-[#1B365D] hover:border-[#1B365D] whitespace-nowrap self-start sm:self-center"
+            >
+              {showRetroactiveAudit ? 'Masquer la liste' : 'Voir les textes suspendus'}
+            </button>
+          )}
+        </div>
+
+        {showRetroactiveAudit && retroactivelySuspendedStories.length > 0 && (
+          <div className="pt-2 border-t border-stone-100 divide-y divide-stone-100 max-h-64 overflow-y-auto">
+            {retroactivelySuspendedStories.map(({ story, compliance }) => (
+              <div
+                key={story.storyId}
+                className="py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-stone-900 truncate">{story.title}</p>
+                  <p className="text-stone-500">
+                    {story.isAnonymous ? 'Auteur anonyme' : story.authorName} ·{' '}
+                    {compliance.shortReason}
+                  </p>
+                </div>
+                {!story.isAnonymous && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenMemberWall(story.authorId)}
+                    className="text-[#1B365D] hover:underline font-medium whitespace-nowrap self-start sm:self-center"
+                  >
+                    Voir le membre
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Filters, Batch AI Triage & Search */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">

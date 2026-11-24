@@ -23,6 +23,10 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  evaluateStoryFormatCompliance,
+  isStoryCompliantForPublicFeed,
+} from '../lib/contentRegulation';
 import { compressAvatarForProfile, compressPhotoForWall } from '../lib/storageService';
 import {
   claimAnonymousStory,
@@ -720,7 +724,9 @@ export function ProfileWallView({
   }
 
   const publicStories = memberStories.filter(
-    (s) => s.visibility === 'public' && (isOwner || !s.isAnonymous)
+    (s) =>
+      s.visibility === 'public' &&
+      (isOwner || (!s.isAnonymous && isStoryCompliantForPublicFeed(s)))
   );
   const isAnyMusicPlaying = Boolean(activeTrackId);
 
@@ -1622,6 +1628,7 @@ export function ProfileWallView({
                 const salonInfo = THEME_MAP[story.theme];
                 const formatLabel =
                   STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label ?? 'Confession';
+                const compliance = evaluateStoryFormatCompliance(story);
                 return (
                   <article
                     key={story.storyId}
@@ -1666,6 +1673,14 @@ export function ProfileWallView({
                             <span className="inline-flex items-center gap-1 text-stone-700 font-medium">
                               <EyeOff className="w-3 h-3" />
                               <span>Anonyme (masqué aux visiteurs)</span>
+                            </span>
+                          </>
+                        )}
+                        {isOwner && !compliance.compliant && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-amber-800 font-medium">
+                              À régulariser (masqué aux visiteurs · {compliance.shortReason})
                             </span>
                           </>
                         )}

@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
   ArrowRight,
+  Award,
+  Calendar,
   ChevronDown,
   ChevronUp,
+  Crown,
   EyeOff,
   Feather,
   Heart,
@@ -25,6 +28,18 @@ import { PublicProfile, Story } from '../types/story';
 import { NovelCoverArt } from './NovelCoverArt';
 
 export type AuthorSpotlightCriteria = 'most-read' | 'best-rated' | 'combined';
+export type SpotlightPeriod = 'week' | 'month' | 'all';
+
+const PERIOD_OPTIONS: ReadonlyArray<{
+  id: SpotlightPeriod;
+  label: string;
+  caption: string;
+  days: number | null;
+}> = [
+  { id: 'week', label: 'Cette semaine', caption: 'Activité des 7 derniers jours', days: 7 },
+  { id: 'month', label: 'Ce mois-ci', caption: 'Activité des 30 derniers jours', days: 30 },
+  { id: 'all', label: 'Tout le temps', caption: 'Depuis l’ouverture de Lisière', days: null },
+];
 
 interface AuthorsSpotlightProps {
   stories: Story[];
@@ -65,24 +80,28 @@ function SpotlightAvatar({
   name,
   avatarUrl,
   size = 'md',
+  ringClass = 'border-stone-200',
 }: {
   name: string;
   avatarUrl?: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
+  ringClass?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const initial = (name.trim()[0] || 'A').toUpperCase();
   const sizeClass =
-    size === 'lg'
-      ? 'w-14 h-14 text-lg'
-      : size === 'md'
-        ? 'w-10 h-10 text-sm'
-        : 'w-8 h-8 text-xs';
+    size === 'xl'
+      ? 'w-16 h-16 text-xl'
+      : size === 'lg'
+        ? 'w-14 h-14 text-lg'
+        : size === 'md'
+          ? 'w-10 h-10 text-sm'
+          : 'w-8 h-8 text-xs';
 
   if (avatarUrl && !failed) {
     return (
       <div
-        className={`${sizeClass} rounded-full overflow-hidden border border-stone-200 bg-stone-100 shrink-0`}
+        className={`${sizeClass} rounded-full overflow-hidden border-2 ${ringClass} bg-stone-100 shrink-0`}
       >
         <img
           src={avatarUrl}
@@ -97,7 +116,7 @@ function SpotlightAvatar({
 
   return (
     <div
-      className={`${sizeClass} rounded-full border border-stone-300 bg-[#F3F6FA] text-[#1B365D] font-display font-medium flex items-center justify-center shrink-0`}
+      className={`${sizeClass} rounded-full border-2 ${ringClass} bg-[#F3F6FA] text-[#1B365D] font-display font-medium flex items-center justify-center shrink-0`}
       aria-hidden="true"
     >
       {initial}
@@ -117,6 +136,7 @@ export function AuthorsSpotlight({
 }: AuthorsSpotlightProps) {
   const { user, profile, favoriteAuthors, signInWithGoogle } = useAuth();
   const [criteria, setCriteria] = useState<AuthorSpotlightCriteria>('most-read');
+  const [period, setPeriod] = useState<SpotlightPeriod>('all');
   const [busyFollowId, setBusyFollowId] = useState<string | null>(null);
   const [identityBusyId, setIdentityBusyId] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
@@ -165,7 +185,24 @@ export function AuthorsSpotlight({
     return 'mixed';
   }, [myPublicStories.length, myAnonymousPublicStories.length, mySignedPublicStories.length]);
 
-  // Aggregate ONLY signed public stories so anonymous writings remain strictly confidential.
+  const activePeriodMeta = useMemo(
+    () => PERIOD_OPTIONS.find((p) => p.id === period) ?? PERIOD_OPTIONS[2],
+    [period]
+  );
+
+  // Filter signed public stories according to the selected time window
+  const periodStories = useMemo(() => {
+    const signed = stories.filter((story) => !story.isAnonymous && Boolean(story.authorId));
+    if (activePeriodMeta.days === null) return signed;
+    const cutoffMs = Date.now() - activePeriodMeta.days * 86_400_000;
+    return signed.filter((story) => {
+      const activityMs =
+        story.updatedAt?.toMillis() ?? story.createdAt?.toMillis() ?? Date.now();
+      return activityMs >= cutoffMs;
+    });
+  }, [stories, activePeriodMeta.days]);
+
+  // Aggregate ONLY signed public stories within the period so anonymous writings stay strictly confidential
   const rankedAuthors = useMemo<SpotlightAuthorEntry[]>(() => {
     const byAuthor = new Map<
       string,
@@ -182,8 +219,7 @@ export function AuthorsSpotlight({
       }
     >();
 
-    for (const story of stories) {
-      if (story.isAnonymous || !story.authorId) continue;
+    for (const story of periodStories) {
       const views = story.viewCount ?? 0;
       const resonances = story.resonanceCount ?? 0;
       const echoes = story.echoCount ?? 0;
@@ -267,7 +303,6 @@ export function AuthorsSpotlight({
         if (scoreDiff !== 0) return scoreDiff;
         return b.totalViews - a.totalViews;
       }
-      // most-read
       const viewDiff = b.totalViews - a.totalViews;
       if (viewDiff !== 0) return viewDiff;
       const novelViewDiff = b.novelViews - a.novelViews;
@@ -276,10 +311,10 @@ export function AuthorsSpotlight({
     });
 
     return entries;
-  }, [stories, profileMap, criteria]);
+  }, [periodStories, profileMap, criteria]);
 
-  const leadAuthor = rankedAuthors[0] ?? null;
-  const runnerUpAuthors = rankedAuthors.slice(1, 6);
+  const podiumAuthors = rankedAuthors.slice(0, 3);
+  const remainingAuthors = rankedAuthors.slice(3, 10);
 
   const handleToggleFollowAuthor = async (authorId: string, authorName: string) => {
     if (!user) {
@@ -313,7 +348,6 @@ export function AuthorsSpotlight({
     const targetList = targetAnonymous ? mySignedPublicStories : myAnonymousPublicStories;
     if (targetList.length === 0) return;
 
-    // Require inline confirmation if updating more than 1 story at once
     const batchKey = targetAnonymous ? 'anonymous' : 'real';
     if (targetList.length > 1 && confirmBatchTarget !== batchKey) {
       setConfirmBatchTarget(batchKey);
@@ -373,64 +407,291 @@ export function AuthorsSpotlight({
     }
   };
 
-  const leadHighlightStory =
-    leadAuthor && criteria === 'best-rated'
-      ? leadAuthor.topRatedStory
-      : leadAuthor?.topReadStory ?? null;
+  const renderPodiumCard = (author: SpotlightAuthorEntry, rank: 1 | 2 | 3) => {
+    const featuredStory =
+      criteria === 'best-rated' ? author.topRatedStory : author.topReadStory;
+    const isChampion = rank === 1;
+    const isSecond = rank === 2;
+    const isFollowing = favoriteAuthorIds.has(author.authorId);
 
-  const leadBadgeLabel =
-    criteria === 'best-rated'
-      ? 'N° 1 · Auteur le mieux noté'
-      : criteria === 'combined'
-        ? 'N° 1 · Palmarès global'
-        : 'N° 1 · Auteur le plus lu';
+    const cardOrderClass =
+      podiumAuthors.length >= 3
+        ? isChampion
+          ? 'order-1 lg:order-2'
+          : isSecond
+            ? 'order-2 lg:order-1 lg:mt-8'
+            : 'order-3 lg:order-3 lg:mt-12'
+        : podiumAuthors.length === 2
+          ? isChampion
+            ? 'order-1'
+            : 'order-2 lg:mt-6'
+          : 'max-w-2xl mx-auto w-full';
+
+    const surfaceClass = isChampion
+      ? 'bg-[#FFFDF8] border-[#C9A227]/70 shadow-[0_14px_34px_-20px_rgba(140,77,14,0.32)]'
+      : isSecond
+        ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.22)]'
+        : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.18)]';
+
+    const topStripColor = isChampion
+      ? 'bg-[#B4822B] text-[#FFFDF8]'
+      : isSecond
+        ? 'bg-[#57534E] text-white'
+        : 'bg-[#9A3B29] text-white';
+
+    const avatarRing = isChampion
+      ? 'border-[#C9A227]'
+      : isSecond
+        ? 'border-stone-400'
+        : 'border-[#C97B6B]';
+
+    const rankTitle =
+      rank === 1
+        ? criteria === 'best-rated'
+          ? 'N° 1 · Mieux noté'
+          : criteria === 'combined'
+            ? 'N° 1 · Palmarès'
+            : 'N° 1 · Plus lu'
+        : rank === 2
+          ? 'N° 2 · Deuxième marche'
+          : 'N° 3 · Troisième marche';
+
+    return (
+      <article
+        key={author.authorId}
+        className={`${cardOrderClass} ${surfaceClass} border rounded-xl overflow-hidden flex flex-col justify-between transition-transform duration-200`}
+      >
+        <div>
+          {/* Architectural Podium Pedestal Top Band */}
+          <div
+            className={`${topStripColor} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
+          >
+            <span className="inline-flex items-center gap-1.5 tracking-wide">
+              {isChampion ? (
+                <Crown className="w-3.5 h-3.5 shrink-0" />
+              ) : (
+                <Award className="w-3.5 h-3.5 shrink-0" />
+              )}
+              <span>{rankTitle}</span>
+            </span>
+            <span className="font-display text-sm tabular-nums opacity-90">0{rank}</span>
+          </div>
+
+          <div className={isChampion ? 'p-5 sm:p-6 space-y-5' : 'p-5 space-y-4'}>
+            {/* Author Identity Row */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <SpotlightAvatar
+                  name={author.authorName}
+                  avatarUrl={author.avatarUrl}
+                  size={isChampion ? 'xl' : 'lg'}
+                  ringClass={avatarRing}
+                />
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenMemberWall(author.authorId)}
+                    className={`font-display font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate max-w-full block ${
+                      isChampion ? 'text-2xl' : 'text-xl'
+                    }`}
+                  >
+                    {author.authorName}
+                  </button>
+                  <p className="text-xs text-stone-500 mt-0.5 tabular-nums">
+                    {author.novelCount > 0
+                      ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
+                      : `${author.storyCount} texte${author.storyCount > 1 ? 's' : ''} signé${author.storyCount > 1 ? 's' : ''}`}
+                    {author.bio ? '' : ` · ${activePeriodMeta.label}`}
+                  </p>
+                </div>
+              </div>
+
+              {user?.uid !== author.authorId && (
+                <button
+                  type="button"
+                  disabled={busyFollowId === author.authorId}
+                  onClick={() =>
+                    void handleToggleFollowAuthor(author.authorId, author.authorName)
+                  }
+                  aria-pressed={isFollowing}
+                  className={`min-h-[32px] px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                    isFollowing
+                      ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                      : 'border-stone-200 bg-white text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
+                  }`}
+                >
+                  <Star className={`w-3.5 h-3.5 ${isFollowing ? 'fill-current' : ''}`} />
+                  <span>{isFollowing ? 'Suivi' : 'Suivre'}</span>
+                </button>
+              )}
+            </div>
+
+            {author.bio && (
+              <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 leading-relaxed">
+                {author.bio}
+              </p>
+            )}
+
+            {/* Metrics Bar */}
+            <div className="grid grid-cols-3 gap-3 py-3 border-y border-stone-200/80">
+              <div>
+                <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                  {author.totalViews}
+                </p>
+                <p className="text-[11px] text-stone-500">Lectures</p>
+              </div>
+              <div>
+                <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                  {author.totalResonances}
+                </p>
+                <p className="text-[11px] text-stone-500">Résonances</p>
+              </div>
+              <div>
+                <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                  {formatFrenchDecimal(author.averageResonance)}
+                </p>
+                <p className="text-[11px] text-stone-500">Moy. / texte</p>
+              </div>
+            </div>
+
+            {/* Featured Work */}
+            {featuredStory && (
+              <div className="rounded-md bg-[#F7F4EE] border border-stone-200/90 p-3.5 flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  {featuredStory.storyFormat === 'roman' && (
+                    <NovelCoverArt
+                      coverUrl={featuredStory.coverUrl}
+                      title={featuredStory.title}
+                      genre={featuredStory.novelGenre}
+                      size="xs"
+                      showFallbackWhenMissing={true}
+                    />
+                  )}
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-widest text-stone-500">
+                      {criteria === 'best-rated' ? 'Œuvre la mieux notée' : 'Œuvre phare'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onReadStory(featuredStory)}
+                      className="font-display text-base font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left block truncate max-w-full"
+                    >
+                      {featuredStory.title}
+                    </button>
+                    <p className="text-[11px] text-stone-600 tabular-nums">
+                      {featuredStory.viewCount ?? 0} vue
+                      {(featuredStory.viewCount ?? 0) > 1 ? 's' : ''} ·{' '}
+                      {featuredStory.resonanceCount} rés.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onReadStory(featuredStory)}
+                  className="min-h-[32px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-white border border-[#CBD6E6] rounded hover:bg-[#F3F6FA] whitespace-nowrap shrink-0 self-center"
+                >
+                  Lire
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => onOpenMemberWall(author.authorId)}
+            className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+          >
+            <span>Voir son mur littéraire</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+          <span className="text-[11px] text-stone-500 tabular-nums">
+            {author.totalEchoes} comm.
+          </span>
+        </div>
+      </article>
+    );
+  };
 
   return (
     <section aria-label="Auteurs en lumière" className="space-y-6">
-      {/* Component Header + Criteria Tabs */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-stone-500">
-            Palmarès des plumes
-          </p>
-          <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 mt-1">
-            Auteurs en lumière
-          </h2>
-          <p className="text-xs sm:text-sm text-stone-600 mt-1">
-            Classement en direct des auteurs les plus lus et les mieux notés (par résonances des lecteurs), sur les textes signés uniquement.
-          </p>
-        </div>
+      {/* Component Header + Criteria Tabs + Period Selector */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-stone-500">
+              Palmarès des plumes · {activePeriodMeta.caption}
+            </p>
+            <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 mt-1">
+              Auteurs en lumière
+            </h2>
+            <p className="text-xs sm:text-sm text-stone-600 mt-1">
+              Podium en direct des plumes les plus lues et les mieux notées sur la période choisie, à partir de leurs écrits signés.
+            </p>
+          </div>
 
-        <div
-          role="tablist"
-          aria-label="Critère de classement des auteurs"
-          className="inline-flex items-center gap-1 p-1 bg-stone-100 rounded-lg border border-stone-200 self-start md:self-auto"
-        >
-          {(
-            [
-              { id: 'most-read', label: 'Les plus lus' },
-              { id: 'best-rated', label: 'Les mieux notés' },
-              { id: 'combined', label: 'Palmarès global' },
-            ] as const
-          ).map((tab) => {
-            const active = criteria === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setCriteria(tab.id)}
-                className={`min-h-[34px] px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                  active
-                    ? 'bg-white text-[#1B365D] shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-2.5">
+            {/* Period Selector */}
+            <div
+              role="group"
+              aria-label="Période d’activité"
+              className="inline-flex items-center gap-1 p-1 bg-white rounded-lg border border-stone-200"
+            >
+              <Calendar className="w-3.5 h-3.5 text-stone-400 ml-2 mr-0.5 shrink-0" />
+              {PERIOD_OPTIONS.map((opt) => {
+                const active = period === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setPeriod(opt.id)}
+                    className={`min-h-[32px] px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                      active
+                        ? 'bg-[#1B365D] text-white'
+                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Ranking Criteria Tabs */}
+            <div
+              role="tablist"
+              aria-label="Critère de classement des auteurs"
+              className="inline-flex items-center gap-1 p-1 bg-stone-100 rounded-lg border border-stone-200"
+            >
+              {(
+                [
+                  { id: 'most-read', label: 'Les plus lus' },
+                  { id: 'best-rated', label: 'Les mieux notés' },
+                  { id: 'combined', label: 'Palmarès global' },
+                ] as const
+              ).map((tab) => {
+                const active = criteria === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    onClick={() => setCriteria(tab.id)}
+                    className={`min-h-[32px] px-3 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                      active
+                        ? 'bg-white text-[#1B365D] shadow-xs'
+                        : 'text-stone-600 hover:text-stone-900'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -452,13 +713,13 @@ export function AuthorsSpotlight({
             </div>
             <p className="text-xs text-stone-600">
               {!user
-                ? 'Connectez-vous pour choisir si vos récits apparaissent sous votre identité réelle dans Auteurs en lumière ou restent anonymes.'
+                ? 'Connectez-vous pour choisir si vos récits apparaissent sous votre identité réelle sur le podium ou restent anonymes.'
                 : myPublicStories.length === 0
                   ? 'Aucun récit public publié pour le moment. Vous pourrez basculer entre anonymat et identité réelle dès votre première publication.'
                   : currentAuthorMode === 'anonymous'
-                    ? 'Tous vos textes publics sont actuellement en anonymat : votre nom reste confidentiel et n’apparaît pas dans le classement.'
+                    ? 'Tous vos textes publics sont actuellement en anonymat : votre nom reste confidentiel et n’apparaît pas sur le podium.'
                     : currentAuthorMode === 'real'
-                      ? `Vos textes publics sont publiés sous votre identité réelle (${realDisplayName}) et comptent pour Auteurs en lumière.`
+                      ? `Vos textes publics sont publiés sous votre identité réelle (${realDisplayName}) et comptent pour le podium.`
                       : `Une partie de vos textes est signée (${realDisplayName}) et une autre reste anonyme.`}
             </p>
           </div>
@@ -637,271 +898,151 @@ export function AuthorsSpotlight({
         )}
       </div>
 
-      {/* Main Leaderboard Display */}
+      {/* Main Podium & Runners-up */}
       {!storiesLoaded ? (
         <div className="bg-white border border-stone-200 rounded-lg p-8 text-sm text-stone-500">
           Chargement des auteurs en lumière…
         </div>
-      ) : !leadAuthor ? (
+      ) : podiumAuthors.length === 0 ? (
         <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
           <p className="font-display text-xl text-stone-900">
-            Aucun auteur signé n’apparaît encore dans Auteurs en lumière
+            {period === 'all'
+              ? 'Aucun auteur signé n’apparaît encore sur le podium'
+              : `Aucun écrit signé enregistré sur la période « ${activePeriodMeta.label.toLowerCase()} »`}
           </p>
           <p className="text-sm text-stone-600 max-w-lg mx-auto">
-            Publiez un texte ou basculez l’un de vos écrits anonymes vers votre identité réelle ci-dessus pour entrer au palmarès.
+            {period === 'all'
+              ? 'Publiez un texte ou basculez l’un de vos écrits anonymes vers votre identité réelle ci-dessus pour entrer sur le podium.'
+              : 'Essayez une période plus large ou publiez un nouveau chapitre pour prendre place sur le podium.'}
           </p>
+          {period !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setPeriod('all')}
+              className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D]"
+            >
+              Afficher tout le temps
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-          {/* #1 Author Spotlight */}
-          <article className="lg:col-span-7 bg-white border border-stone-200 rounded-lg p-6 sm:p-7 flex flex-col justify-between space-y-6">
-            <div className="space-y-5">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-4 min-w-0">
-                  <SpotlightAvatar
-                    name={leadAuthor.authorName}
-                    avatarUrl={leadAuthor.avatarUrl}
-                    size="lg"
-                  />
-                  <div className="min-w-0">
-                    <p className="text-[11px] uppercase tracking-widest text-[#1B365D] font-medium">
-                      {leadBadgeLabel}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => onOpenMemberWall(leadAuthor.authorId)}
-                      className="font-display text-2xl sm:text-3xl font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate max-w-full block"
-                    >
-                      {leadAuthor.authorName}
-                    </button>
-                    {leadAuthor.bio && (
-                      <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 mt-1">
-                        {leadAuthor.bio}
-                      </p>
-                    )}
-                  </div>
-                </div>
+        <div className="space-y-6">
+          {/* Stepped Podium Grid (#2 Left, #1 Center Elevated, #3 Right) */}
+          <div
+            className={
+              podiumAuthors.length >= 3
+                ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 items-start'
+                : podiumAuthors.length === 2
+                  ? 'grid grid-cols-1 lg:grid-cols-2 gap-5 items-start max-w-4xl mx-auto'
+                  : 'grid grid-cols-1 gap-5'
+            }
+          >
+            {podiumAuthors.map((author, idx) =>
+              renderPodiumCard(author, (idx + 1) as 1 | 2 | 3)
+            )}
+          </div>
 
-                {user?.uid !== leadAuthor.authorId && (
-                  <button
-                    type="button"
-                    disabled={busyFollowId === leadAuthor.authorId}
-                    onClick={() =>
-                      void handleToggleFollowAuthor(leadAuthor.authorId, leadAuthor.authorName)
-                    }
-                    aria-pressed={favoriteAuthorIds.has(leadAuthor.authorId)}
-                    className={`min-h-[36px] px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
-                      favoriteAuthorIds.has(leadAuthor.authorId)
-                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                        : 'border-stone-200 bg-white text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
-                    }`}
-                  >
-                    <Star
-                      className={`w-3.5 h-3.5 ${
-                        favoriteAuthorIds.has(leadAuthor.authorId) ? 'fill-current' : ''
-                      }`}
-                    />
-                    <span>
-                      {favoriteAuthorIds.has(leadAuthor.authorId) ? 'Suivi' : 'Suivre'}
-                    </span>
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-y border-stone-200">
-                <div>
-                  <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                    {leadAuthor.totalViews}
-                  </p>
-                  <p className="text-xs text-stone-500">Lectures totales</p>
-                </div>
-                <div>
-                  <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                    {leadAuthor.totalResonances}
-                  </p>
-                  <p className="text-xs text-stone-500">Résonances (note)</p>
-                </div>
-                <div>
-                  <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                    {formatFrenchDecimal(leadAuthor.averageResonance)}
-                  </p>
-                  <p className="text-xs text-stone-500">Moy. / texte</p>
-                </div>
-                <div>
-                  <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
-                    {leadAuthor.novelCount > 0 ? leadAuthor.novelCount : leadAuthor.storyCount}
-                  </p>
-                  <p className="text-xs text-stone-500">
-                    {leadAuthor.novelCount > 0
-                      ? `Roman${leadAuthor.novelCount > 1 ? 's' : ''}`
-                      : `Texte${leadAuthor.storyCount > 1 ? 's' : ''} signé${leadAuthor.storyCount > 1 ? 's' : ''}`}
-                  </p>
-                </div>
-              </div>
-
-              {leadHighlightStory && (
-                <div className="rounded-md bg-[#F7F4EE] border border-stone-200 p-4 flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3 min-w-0">
-                    {leadHighlightStory.storyFormat === 'roman' && (
-                      <NovelCoverArt
-                        coverUrl={leadHighlightStory.coverUrl}
-                        title={leadHighlightStory.title}
-                        genre={leadHighlightStory.novelGenre}
-                        size="xs"
-                        showFallbackWhenMissing={true}
-                      />
-                    )}
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-[11px] uppercase tracking-widest text-stone-500">
-                        {criteria === 'best-rated' ? 'Œuvre la mieux notée' : 'Œuvre la plus lue'}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => onReadStory(leadHighlightStory)}
-                        className="font-display text-lg font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left block truncate max-w-full"
-                      >
-                        {leadHighlightStory.title}
-                      </button>
-                      <p className="text-xs text-stone-600 tabular-nums">
-                        {leadHighlightStory.viewCount ?? 0} vue
-                        {(leadHighlightStory.viewCount ?? 0) > 1 ? 's' : ''} ·{' '}
-                        {leadHighlightStory.resonanceCount} résonance
-                        {leadHighlightStory.resonanceCount > 1 ? 's' : ''} ·{' '}
-                        {leadHighlightStory.echoCount} commentaire
-                        {leadHighlightStory.echoCount > 1 ? 's' : ''}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onReadStory(leadHighlightStory)}
-                    className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] bg-white border border-[#CBD6E6] rounded hover:bg-[#F3F6FA] whitespace-nowrap shrink-0 self-center"
-                  >
-                    Lire
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <button
-                type="button"
-                onClick={() => onOpenMemberWall(leadAuthor.authorId)}
-                className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
-              >
-                <span>Découvrir tout son mur littéraire</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </article>
-
-          {/* Runners-up List */}
-          <div className="lg:col-span-5 bg-white border border-stone-200 rounded-lg p-5 sm:p-6 flex flex-col justify-between">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-stone-200 pb-3">
+          {/* Ranks #4+ */}
+          {remainingAuthors.length > 0 && (
+            <div className="bg-white border border-stone-200 rounded-lg p-5 sm:p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
                 <h3 className="font-display text-lg font-medium text-stone-900">
-                  {criteria === 'best-rated'
-                    ? 'Autres plumes les mieux notées'
-                    : criteria === 'combined'
-                      ? 'Autres plumes au palmarès'
-                      : 'Autres plumes les plus lues'}
+                  Au pied du podium · {activePeriodMeta.label}
                 </h3>
                 <span className="text-xs text-stone-500 tabular-nums">
-                  Top {rankedAuthors.length > 6 ? 6 : rankedAuthors.length}
+                  Rangs 04 à {rankedAuthors.length < 10 ? `0${rankedAuthors.length}` : rankedAuthors.length > 10 ? '10' : rankedAuthors.length}
                 </span>
               </div>
 
-              {runnerUpAuthors.length === 0 ? (
-                <p className="text-sm text-stone-500 py-6 text-center">
-                  Les prochains auteurs signés apparaîtront ici dès que leurs récits recueilleront des lectures et résonances.
-                </p>
-              ) : (
-                <ol className="divide-y divide-stone-200">
-                  {runnerUpAuthors.map((author, idx) => {
-                    const rank = idx + 2;
-                    const featuredStory =
-                      criteria === 'best-rated'
-                        ? author.topRatedStory
-                        : author.topReadStory;
-                    return (
-                      <li
-                        key={author.authorId}
-                        className="py-3.5 first:pt-1 last:pb-1 flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="font-display text-base font-medium text-stone-400 tabular-nums w-5 shrink-0">
-                            0{rank}
-                          </span>
-                          <SpotlightAvatar
-                            name={author.authorName}
-                            avatarUrl={author.avatarUrl}
-                            size="sm"
-                          />
-                          <div className="min-w-0">
-                            <button
-                              type="button"
-                              onClick={() => onOpenMemberWall(author.authorId)}
-                              className="text-sm font-medium text-stone-900 hover:text-[#1B365D] hover:underline truncate block max-w-full text-left"
-                            >
-                              {author.authorName}
-                            </button>
-                            <p className="text-xs text-stone-500 tabular-nums">
-                              {author.totalViews} lecture{author.totalViews > 1 ? 's' : ''} ·{' '}
-                              <span className="inline-flex items-center gap-0.5 text-stone-700 font-medium">
-                                <Heart className="w-3 h-3 text-stone-400 inline" />{' '}
-                                {author.totalResonances}
-                              </span>{' '}
-                              ({formatFrenchDecimal(author.averageResonance)}/texte)
-                            </p>
-                          </div>
+              <ol className="divide-y divide-stone-200">
+                {remainingAuthors.map((author, idx) => {
+                  const rank = idx + 4;
+                  const rankLabel = rank < 10 ? `0${rank}` : `${rank}`;
+                  const featuredStory =
+                    criteria === 'best-rated' ? author.topRatedStory : author.topReadStory;
+                  return (
+                    <li
+                      key={author.authorId}
+                      className="py-3.5 first:pt-1 last:pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="font-display text-base font-medium text-stone-400 tabular-nums w-6 shrink-0">
+                          {rankLabel}
+                        </span>
+                        <SpotlightAvatar
+                          name={author.authorName}
+                          avatarUrl={author.avatarUrl}
+                          size="sm"
+                        />
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => onOpenMemberWall(author.authorId)}
+                            className="text-sm font-medium text-stone-900 hover:text-[#1B365D] hover:underline truncate block max-w-full text-left"
+                          >
+                            {author.authorName}
+                          </button>
+                          <p className="text-xs text-stone-500 tabular-nums">
+                            {author.totalViews} lecture{author.totalViews > 1 ? 's' : ''} ·{' '}
+                            <span className="inline-flex items-center gap-0.5 text-stone-700 font-medium">
+                              <Heart className="w-3 h-3 text-stone-400 inline" />{' '}
+                              {author.totalResonances}
+                            </span>{' '}
+                            ({formatFrenchDecimal(author.averageResonance)}/texte)
+                          </p>
                         </div>
+                      </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {user?.uid !== author.authorId && (
-                            <button
-                              type="button"
-                              disabled={busyFollowId === author.authorId}
-                              onClick={() =>
-                                void handleToggleFollowAuthor(author.authorId, author.authorName)
-                              }
-                              aria-label={
-                                favoriteAuthorIds.has(author.authorId)
-                                  ? `Ne plus suivre ${author.authorName}`
-                                  : `Suivre ${author.authorName}`
-                              }
-                              aria-pressed={favoriteAuthorIds.has(author.authorId)}
-                              className={`min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border transition-colors ${
-                                favoriteAuthorIds.has(author.authorId)
-                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                  : 'border-stone-200 bg-white text-stone-500 hover:border-[#1B365D] hover:text-[#1B365D]'
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        {user?.uid !== author.authorId && (
+                          <button
+                            type="button"
+                            disabled={busyFollowId === author.authorId}
+                            onClick={() =>
+                              void handleToggleFollowAuthor(author.authorId, author.authorName)
+                            }
+                            aria-label={
+                              favoriteAuthorIds.has(author.authorId)
+                                ? `Ne plus suivre ${author.authorName}`
+                                : `Suivre ${author.authorName}`
+                            }
+                            aria-pressed={favoriteAuthorIds.has(author.authorId)}
+                            className={`min-h-[32px] px-2.5 py-1 inline-flex items-center gap-1 rounded border text-xs transition-colors whitespace-nowrap ${
+                              favoriteAuthorIds.has(author.authorId)
+                                ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                : 'border-stone-200 bg-white text-stone-600 hover:border-[#1B365D] hover:text-[#1B365D]'
+                            }`}
+                          >
+                            <Star
+                              className={`w-3.5 h-3.5 ${
+                                favoriteAuthorIds.has(author.authorId) ? 'fill-current' : ''
                               }`}
-                            >
-                              <Star
-                                className={`w-3.5 h-3.5 ${
-                                  favoriteAuthorIds.has(author.authorId) ? 'fill-current' : ''
-                                }`}
-                              />
-                            </button>
-                          )}
+                            />
+                            <span>
+                              {favoriteAuthorIds.has(author.authorId) ? 'Suivi' : 'Suivre'}
+                            </span>
+                          </button>
+                        )}
+                        {featuredStory && (
                           <button
                             type="button"
                             onClick={() => onReadStory(featuredStory)}
-                            className="min-h-[30px] px-2.5 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
+                            className="min-h-[32px] px-3 py-1 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#E7EEF7] whitespace-nowrap"
                           >
-                            Lire
+                            Lire « {featuredStory.title} »
                           </button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
             </div>
+          )}
 
-            <p className="text-[11px] text-stone-500 pt-4 mt-4 border-t border-stone-100">
-              Les écrits marqués « Anonyme » restent strictement exclus du palmarès des auteurs tant qu’ils ne sont pas basculés vers l’identité réelle.
-            </p>
-          </div>
+          <p className="text-[11px] text-stone-500">
+            Les écrits marqués « Anonyme » restent strictement exclus du podium des auteurs tant qu’ils ne sont pas basculés vers l’identité réelle.
+          </p>
         </div>
       )}
     </section>
