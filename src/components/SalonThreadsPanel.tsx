@@ -18,6 +18,7 @@ import {
   shouldShowMatureWarning,
 } from '../lib/contentRegulation';
 import { formatFrenchDate } from '../lib/themes';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import {
   addSalonThreadReply,
   createSalonThread,
@@ -31,18 +32,24 @@ import {
 import {
   AgeRating,
   FIELD_LIMITS,
+  PublicProfile,
   SalonThread,
   SalonThreadReply,
   SalonThreadScope,
 } from '../types/story';
 import { MatureContentBadge } from './MatureContentBadge';
 import type { ReportDraft } from './ReportModal';
+import { RoleBadgesRow } from './RoleBadge';
 
 interface SalonThreadsPanelProps {
   scope: SalonThreadScope;
   salonId: string;
   salonTitle: string;
   salonOwnerId?: string;
+  adminUserIds?: Set<string>;
+  moderatorIds?: Set<string>;
+  profilesByUserId?: Map<string, PublicProfile>;
+  canModerate?: boolean;
   viewerAge: number | null;
   canPost?: boolean;
   onOpenMemberWall: (memberId: string) => void;
@@ -55,6 +62,10 @@ export function SalonThreadsPanel({
   salonId,
   salonTitle,
   salonOwnerId,
+  adminUserIds,
+  moderatorIds,
+  profilesByUserId,
+  canModerate = false,
   viewerAge,
   canPost = true,
   onOpenMemberWall,
@@ -62,6 +73,7 @@ export function SalonThreadsPanel({
   onOpenReport,
 }: SalonThreadsPanelProps) {
   const { user, profile, signInWithGoogle } = useAuth();
+  const isGlobalAdmin = isModerationAdminEmail(user?.email);
   const [threads, setThreads] = useState<SalonThread[]>([]);
   const [threadsLoaded, setThreadsLoaded] = useState(false);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -564,7 +576,9 @@ export function SalonThreadsPanel({
               )}
               {user &&
                 (activeThread.authorId === user.uid ||
-                  (salonOwnerId && salonOwnerId === user.uid)) && (
+                  (salonOwnerId && salonOwnerId === user.uid) ||
+                  canModerate ||
+                  isGlobalAdmin) && (
                   <button
                     type="button"
                     onClick={() => void handleDeleteThread(activeThread)}
@@ -604,6 +618,16 @@ export function SalonThreadsPanel({
               >
                 {activeThread.authorName}
               </button>
+              <RoleBadgesRow
+                isAdmin={Boolean(
+                  profilesByUserId?.get(activeThread.authorId)?.isAdmin ||
+                    adminUserIds?.has(activeThread.authorId)
+                )}
+                isOwner={Boolean(salonOwnerId && salonOwnerId === activeThread.authorId)}
+                isModerator={Boolean(moderatorIds?.has(activeThread.authorId))}
+                profileBadges={profilesByUserId?.get(activeThread.authorId)?.badges}
+                compact
+              />
               <span aria-hidden="true">·</span>
               <span>{formatFrenchDate(activeThread.createdAt?.toDate() ?? null)}</span>
               <MatureContentBadge minAge={activeThread.minAge} isMature={activeThread.isMature} />
@@ -637,12 +661,15 @@ export function SalonThreadsPanel({
                 {replies.map((reply) => {
                   const canDeleteReply = Boolean(
                     user &&
-                      (reply.authorId === user.uid || (salonOwnerId && salonOwnerId === user.uid))
+                      (reply.authorId === user.uid ||
+                        (salonOwnerId && salonOwnerId === user.uid) ||
+                        canModerate ||
+                        isGlobalAdmin)
                   );
                   return (
                     <div key={reply.replyId} className="py-3.5 space-y-1.5">
                       <div className="flex items-center justify-between gap-2 text-xs text-stone-500">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(reply.authorId)}
@@ -650,6 +677,16 @@ export function SalonThreadsPanel({
                           >
                             {reply.authorName}
                           </button>
+                          <RoleBadgesRow
+                            isAdmin={Boolean(
+                              profilesByUserId?.get(reply.authorId)?.isAdmin ||
+                                adminUserIds?.has(reply.authorId)
+                            )}
+                            isOwner={Boolean(salonOwnerId && salonOwnerId === reply.authorId)}
+                            isModerator={Boolean(moderatorIds?.has(reply.authorId))}
+                            profileBadges={profilesByUserId?.get(reply.authorId)?.badges}
+                            compact
+                          />
                           <span aria-hidden="true">·</span>
                           <span>{formatFrenchDate(reply.createdAt?.toDate() ?? null)}</span>
                         </div>
@@ -784,6 +821,16 @@ export function SalonThreadsPanel({
                   >
                     {thread.authorName}
                   </button>
+                  <RoleBadgesRow
+                    isAdmin={Boolean(
+                      profilesByUserId?.get(thread.authorId)?.isAdmin ||
+                        adminUserIds?.has(thread.authorId)
+                    )}
+                    isOwner={Boolean(salonOwnerId && salonOwnerId === thread.authorId)}
+                    isModerator={Boolean(moderatorIds?.has(thread.authorId))}
+                    profileBadges={profilesByUserId?.get(thread.authorId)?.badges}
+                    compact
+                  />
                   <span aria-hidden="true">·</span>
                   <span>{formatFrenchDate(thread.createdAt?.toDate() ?? null)}</span>
                   <MatureContentBadge minAge={thread.minAge} isMature={thread.isMature} compact />

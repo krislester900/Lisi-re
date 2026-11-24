@@ -14,14 +14,23 @@ import {
   MessageSquare,
   MessagesSquare,
   Repeat2,
+  ShieldCheck,
+  UserPlus,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { isContentAllowedForAge } from '../lib/contentRegulation';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import {
   createDefaultStoryFilterState,
   filterAndSortStories,
   StoryFilterState,
 } from '../lib/storyFilter';
+import {
+  assignPredefinedSalonModerator,
+  formatFriendlyFirestoreError,
+  revokePredefinedSalonModerator,
+} from '../lib/storyService';
 import {
   formatCumulativeMinutes,
   formatFrenchDate,
@@ -31,10 +40,16 @@ import {
   STORY_THEMES,
   THEME_MAP,
 } from '../lib/themes';
-import { Story, StoryThemeId } from '../types/story';
+import {
+  PredefinedSalonModerator,
+  PublicProfile,
+  Story,
+  StoryThemeId,
+} from '../types/story';
 import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
+import { RoleBadge, RoleBadgesRow } from './RoleBadge';
 import { SalonChatPanel } from './SalonChatPanel';
 import { SalonEmblem } from './SalonEmblem';
 import { SalonThreadsPanel } from './SalonThreadsPanel';
@@ -48,6 +63,9 @@ interface SalonRoomViewProps {
   hiddenUserIds?: Set<string>;
   bookmarkedStoryIds?: Set<string>;
   repostedStoryIds?: Set<string>;
+  adminUserIds?: Set<string>;
+  moderators?: PredefinedSalonModerator[];
+  discoverableProfiles?: PublicProfile[];
   onToggleBookmark?: (story: Story) => void;
   onOpenRepost?: (story: Story) => void;
   onSelectSalon: (salonId: StoryThemeId | null) => void;
@@ -66,6 +84,9 @@ export function SalonRoomView({
   hiddenUserIds,
   bookmarkedStoryIds,
   repostedStoryIds,
+  adminUserIds,
+  moderators = [],
+  discoverableProfiles = [],
   onToggleBookmark,
   onOpenRepost,
   onSelectSalon,
@@ -82,12 +103,29 @@ export function SalonRoomView({
   const [imgFailed, setImgFailed] = useState(false);
   const [faqCategory, setFaqCategory] = useState<'all' | SalonFaqItem['category']>('all');
   const [openFaqId, setOpenFaqId] = useState<string>(SALON_FAQ_ITEMS[0]?.id ?? '');
+  const [showModeratorsPanel, setShowModeratorsPanel] = useState(false);
+  const [modSearch, setModSearch] = useState('');
+  const [modBusyId, setModBusyId] = useState<string | null>(null);
+  const [modError, setModError] = useState<string | null>(null);
+  const [modFeedback, setModFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     setFilterState(createDefaultStoryFilterState('recent'));
     setRoomSection('stories');
     setImgFailed(false);
+    setShowModeratorsPanel(false);
+    setModSearch('');
+    setModError(null);
+    setModFeedback(null);
   }, [salonId]);
+
+  const profilesByUserId = useMemo(() => {
+    const map = new Map<string, PublicProfile>();
+    for (const p of discoverableProfiles) {
+      map.set(p.userId, p);
+    }
+    return map;
+  }, [discoverableProfiles]);
 
   const deferredFilter = useDeferredValue(filterState);
   const salon = THEME_MAP[salonId];
@@ -139,6 +177,68 @@ export function SalonRoomView({
     () => allInSalon.reduce((sum, s) => sum + (s.readingMinutes || 0), 0),
     [allInSalon]
   );
+
+  const isGlobalAdmin = isModerationAdminEmail(user?.email);
+  const moderatorIds = useMemo(
+    () => new Set(moderators.map((m) => m.userId)),
+    [moderators]
+  );
+  const canModerateSalon = Boolean(
+    isGlobalAdmin || (user && moderatorIds.has(user.uid))
+  );
+
+  const candidateProfiles = useMemo(() => {
+    const q = modSearch.trim().toLowerCase();
+    return discoverableProfiles
+      .filter((p) => !moderatorIds.has(p.userId))
+      .filter((p) => {
+        if (!q) return true;
+        return (
+          p.displayName.toLowerCase().includes(q) ||
+          (p.bio ?? '').toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 8);
+  }, [discoverableProfiles, moderatorIds, modSearch]);
+
+  const handleAppointModerator = async (target: PublicProfile) => {
+    if (!user || !isGlobalAdmin || modBusyId) return;
+    setModError(null);
+    setModFeedback(null);
+    setModBusyId(target.userId);
+    try {
+      await assignPredefinedSalonModerator({
+        salonId,
+        targetUserId: target.userId,
+        targetUserName: target.displayName,
+        assignedById: user.uid,
+      });
+      setModFeedback(`${target.displayName} a été nommé modérateur de ${salon.shortSalonName}.`);
+    } catch (err) {
+      setModError(
+        formatFriendlyFirestoreError(err, 'Impossible de nommer ce modérateur.')
+      );
+    } finally {
+      setModBusyId(null);
+    }
+  };
+
+  const handleRevokeModerator = async (mod: PredefinedSalonModerator) => {
+    if (!user || !isGlobalAdmin || modBusyId) return;
+    setModError(null);
+    setModFeedback(null);
+    setModBusyId(mod.userId);
+    try {
+      await revokePredefinedSalonModerator(salonId, mod.userId);
+      setModFeedback(`${mod.userName} n’est plus modérateur de ${salon.shortSalonName}.`);
+    } catch (err) {
+      setModError(
+        formatFriendlyFirestoreError(err, 'Impossible de retirer ce modérateur.')
+      );
+    } finally {
+      setModBusyId(null);
+    }
+  };
 
   const leadStory = salonStories[0] ?? null;
   const secondaryStories = salonStories.slice(1);
@@ -252,7 +352,46 @@ export function SalonRoomView({
                 <span>Lire la FAQ ({SALON_FAQ_ITEMS.length})</span>
               </button>
             )}
+
+            {isGlobalAdmin && (
+              <button
+                type="button"
+                aria-expanded={showModeratorsPanel}
+                onClick={() => setShowModeratorsPanel((prev) => !prev)}
+                className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-[#1B365D] bg-white border border-[#1B365D]/35 rounded-md hover:border-[#1B365D] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>
+                  Gérer les modérateurs{moderators.length > 0 ? ` (${moderators.length})` : ''}
+                </span>
+              </button>
+            )}
           </div>
+
+          {moderators.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-stone-700">
+              <RoleBadge role="moderator" compact />
+              <span className="text-stone-500">Modération du salon :</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {moderators.map((mod, idx) => (
+                  <React.Fragment key={mod.userId}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenMemberWall(mod.userId)}
+                      className="font-medium text-stone-900 hover:underline"
+                    >
+                      {mod.userName}
+                    </button>
+                    {idx < moderators.length - 1 && (
+                      <span className="text-stone-400" aria-hidden="true">
+                        ·
+                      </span>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <figure className="lg:col-span-4 hidden sm:block">
@@ -284,6 +423,133 @@ export function SalonRoomView({
           )}
         </figure>
       </section>
+
+      {isGlobalAdmin && showModeratorsPanel && (
+        <section
+          aria-label={`Gestion des modérateurs de ${salon.salonName}`}
+          className="bg-white border border-stone-200 rounded-lg p-5 sm:p-6 space-y-4"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <RoleBadge role="admin" compact />
+                <h2 className="font-display text-xl font-medium text-stone-900">
+                  Modérateurs de {salon.salonName}
+                </h2>
+              </div>
+              <p className="text-xs text-stone-600">
+                Les modérateurs désignés reçoivent un badge dans ce salon et peuvent supprimer des messages, fils ou réponses contraires à l’esprit du lieu.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowModeratorsPanel(false)}
+              aria-label="Fermer le panneau de gestion des modérateurs"
+              className="p-1.5 text-stone-500 hover:text-stone-900 rounded-md"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {modFeedback && (
+            <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+              {modFeedback}
+            </p>
+          )}
+          {modError && (
+            <p role="alert" className="text-xs text-red-800 bg-red-50 border border-red-200 rounded px-3 py-2">
+              {modError}
+            </p>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="space-y-2.5">
+              <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                Modérateurs actuels ({moderators.length})
+              </p>
+              {moderators.length === 0 ? (
+                <p className="text-xs text-stone-500 italic bg-[#FBF9F5] border border-stone-200 rounded-md p-3">
+                  Aucun modérateur dédié pour ce salon pour le moment.
+                </p>
+              ) : (
+                <div className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5]">
+                  {moderators.map((mod) => (
+                    <div
+                      key={mod.userId}
+                      className="px-3.5 py-2.5 flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => onOpenMemberWall(mod.userId)}
+                          className="text-xs font-semibold text-stone-900 hover:underline truncate"
+                        >
+                          {mod.userName}
+                        </button>
+                        <RoleBadge role="moderator" compact />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={modBusyId === mod.userId}
+                        onClick={() => void handleRevokeModerator(mod)}
+                        className="min-h-[30px] px-2.5 py-1 text-xs font-medium text-red-800 bg-white border border-red-200 rounded hover:border-red-400 disabled:opacity-60 whitespace-nowrap"
+                      >
+                        Retirer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2.5">
+              <label
+                htmlFor={`salon-mod-search-${salonId}`}
+                className="block text-xs font-medium uppercase tracking-wider text-stone-500"
+              >
+                Nommer un membre modérateur
+              </label>
+              <input
+                id={`salon-mod-search-${salonId}`}
+                type="search"
+                value={modSearch}
+                onChange={(e) => setModSearch(e.target.value)}
+                placeholder="Rechercher un membre par nom…"
+                className="w-full min-h-[36px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+              />
+              <div className="divide-y divide-stone-200 border border-stone-200 rounded-md max-h-52 overflow-y-auto">
+                {candidateProfiles.length === 0 ? (
+                  <p className="p-3 text-xs text-stone-500">
+                    Aucun autre profil public correspondant.
+                  </p>
+                ) : (
+                  candidateProfiles.map((candidate) => (
+                    <div
+                      key={candidate.userId}
+                      className="px-3.5 py-2 flex items-center justify-between gap-2 bg-white"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-medium text-stone-900 truncate">
+                          {candidate.displayName}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={modBusyId === candidate.userId}
+                        onClick={() => void handleAppointModerator(candidate)}
+                        className="min-h-[30px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded hover:border-[#1B365D] disabled:opacity-60 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                      >
+                        <UserPlus className="w-3 h-3" />
+                        <span>Nommer</span>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Clean 3-Tab Room Switcher: Stories | Chat | Repères & Pistes (or FAQ Guide) */}
       <div
@@ -475,13 +741,24 @@ export function SalonRoomView({
                         {leadStory.isAnonymous ? (
                           <span className="font-medium text-stone-600">Par Auteur anonyme</span>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => onOpenMemberWall(leadStory.authorId)}
-                            className="font-medium text-stone-800 hover:underline"
-                          >
-                            Par {leadStory.authorName}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => onOpenMemberWall(leadStory.authorId)}
+                              className="font-medium text-stone-800 hover:underline"
+                            >
+                              Par {leadStory.authorName}
+                            </button>
+                            <RoleBadgesRow
+                              isAdmin={Boolean(
+                                profilesByUserId.get(leadStory.authorId)?.isAdmin ||
+                                  adminUserIds?.has(leadStory.authorId)
+                              )}
+                              isModerator={moderatorIds.has(leadStory.authorId)}
+                              profileBadges={profilesByUserId.get(leadStory.authorId)?.badges}
+                              compact
+                            />
+                          </>
                         )}
                         <span aria-hidden="true">·</span>
                         <span>{leadStory.readingMinutes} min</span>
@@ -634,13 +911,24 @@ export function SalonRoomView({
                             {story.isAnonymous ? (
                               <span className="font-medium text-stone-600">Auteur anonyme</span>
                             ) : (
-                              <button
-                                type="button"
-                                onClick={() => onOpenMemberWall(story.authorId)}
-                                className="font-medium text-stone-800 hover:underline"
-                              >
-                                {story.authorName}
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => onOpenMemberWall(story.authorId)}
+                                  className="font-medium text-stone-800 hover:underline"
+                                >
+                                  {story.authorName}
+                                </button>
+                                <RoleBadgesRow
+                                  isAdmin={Boolean(
+                                    profilesByUserId.get(story.authorId)?.isAdmin ||
+                                      adminUserIds?.has(story.authorId)
+                                  )}
+                                  isModerator={moderatorIds.has(story.authorId)}
+                                  profileBadges={profilesByUserId.get(story.authorId)?.badges}
+                                  compact
+                                />
+                              </>
                             )}
                             <span aria-hidden="true">·</span>
                             <span>{story.readingMinutes} min</span>
@@ -771,6 +1059,10 @@ export function SalonRoomView({
           salonTitle={salon.salonName}
           viewerAge={viewerAge}
           canPost={true}
+          adminUserIds={adminUserIds}
+          moderatorIds={moderatorIds}
+          profilesByUserId={profilesByUserId}
+          canModerate={canModerateSalon}
           onOpenMemberWall={onOpenMemberWall}
           onWriteFromThread={(tTitle, tBody) =>
             onWriteInSalon(salon.id, tTitle, tBody ? `${tBody.slice(0, 140)} ` : '')
@@ -784,6 +1076,10 @@ export function SalonRoomView({
         <SalonChatPanel
           salonId={salonId}
           hiddenUserIds={hiddenUserIds}
+          adminUserIds={adminUserIds}
+          moderatorIds={moderatorIds}
+          profilesByUserId={profilesByUserId}
+          canModerate={canModerateSalon}
           onOpenMemberWall={onOpenMemberWall}
           onOpenReport={onOpenReport}
         />

@@ -39,6 +39,13 @@ export type WallItemKind = 'photo' | 'music' | 'novel' | 'note';
 
 export type WallAccentTone = 'ink' | 'ochre' | 'terracotta' | 'sage' | 'sand';
 
+export type MemberBadgeId =
+  | 'administrateur'
+  | 'moderateur'
+  | 'expert_litteraire'
+  | 'plume_confirmee'
+  | 'grand_lecteur';
+
 export interface PublicProfile {
   userId: string;
   displayName: string;
@@ -51,6 +58,8 @@ export interface PublicProfile {
   interests?: string;
   avatarUrl?: string;
   discoverable?: boolean;
+  isAdmin?: boolean;
+  badges?: MemberBadgeId[];
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -76,7 +85,16 @@ export type StoryScope = 'salon' | 'pelemele';
 
 export type SalonMemberStatus = 'pending' | 'approved' | 'rejected';
 
-export type SalonMemberRole = 'owner' | 'member';
+export type SalonMemberRole = 'owner' | 'moderator' | 'member';
+
+export interface PredefinedSalonModerator {
+  userId: string;
+  salonId: StoryThemeId;
+  userName: string;
+  assignedById: string;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+}
 
 export type AgeRating = 0 | 13 | 16 | 18;
 
@@ -489,6 +507,7 @@ export const FIELD_LIMITS = {
   favoriteNovel: { max: 140 },
   interests: { max: 240 },
   avatarUrl: { max: 60000 },
+  memberBadgesMax: 5,
   userAge: { min: 13, max: 115 },
   wallTitle: { min: 1, max: 140 },
   wallSubtitle: { max: 140 },

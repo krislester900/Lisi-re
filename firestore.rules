@@ -59,6 +59,20 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid)).data.status == 'approved';
     }
 
+    function isCustomSalonModerator(salonId) {
+      return isSignedIn()
+        && isValidId(salonId)
+        && exists(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid)).data.status == 'approved'
+        && get(/databases/$(database)/documents/customSalons/$(salonId)/members/$(request.auth.uid)).data.role == 'moderator';
+    }
+
+    function isPredefinedSalonModerator(salonId) {
+      return isSignedIn()
+        && isValidSalonId(salonId)
+        && exists(/databases/$(database)/documents/salons/$(salonId)/moderators/$(request.auth.uid));
+    }
+
     function canReadStoryData(storyData) {
       return storyData.visibility == 'public'
         || (isSignedIn() && storyData.authorId == request.auth.uid)
@@ -78,13 +92,18 @@ service cloud.firestore {
       );
     }
 
+    function isValidMemberBadge(badge) {
+      return badge is string
+        && badge in ['administrateur', 'moderateur', 'expert_litteraire', 'plume_confirmee', 'grand_lecteur'];
+    }
+
     // --- Validation Blueprints ---
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
         && data.keys().hasOnly([
           'userId', 'displayName', 'bio', 'listeningNote',
           'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable',
+          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'isAdmin', 'badges',
           'createdAt', 'updatedAt'
         ])
         && isValidId(data.userId)
@@ -98,6 +117,19 @@ service cloud.firestore {
         && (!('interests' in data) || (data.interests is string && data.interests.size() <= 240))
         && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000))
         && (!('discoverable' in data) || data.discoverable is bool)
+        && (!('isAdmin' in data) || data.isAdmin is bool)
+        && (
+          !('badges' in data)
+          || (
+            data.badges is list
+            && data.badges.size() <= 5
+            && (data.badges.size() < 1 || isValidMemberBadge(data.badges[0]))
+            && (data.badges.size() < 2 || isValidMemberBadge(data.badges[1]))
+            && (data.badges.size() < 3 || isValidMemberBadge(data.badges[2]))
+            && (data.badges.size() < 4 || isValidMemberBadge(data.badges[3]))
+            && (data.badges.size() < 5 || isValidMemberBadge(data.badges[4]))
+          )
+        )
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -471,7 +503,22 @@ service cloud.firestore {
         && data.userName is string && data.userName.size() >= 2 && data.userName.size() <= 60
         && data.requestNote is string && data.requestNote.size() <= 300
         && data.status in ['pending', 'approved', 'rejected']
-        && data.role in ['owner', 'member']
+        && data.role in ['owner', 'moderator', 'member']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSalonModerator(data) {
+      return data.keys().hasAll([
+          'userId', 'salonId', 'userName', 'assignedById', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'userId', 'salonId', 'userName', 'assignedById', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.userId)
+        && isValidSalonId(data.salonId)
+        && data.userName is string && data.userName.size() >= 2 && data.userName.size() <= 60
+        && isValidId(data.assignedById)
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -718,20 +765,49 @@ service cloud.firestore {
         && isOwner(userId)
         && isValidPublicProfile(incoming())
         && incoming().userId == request.auth.uid
+        && (!('isAdmin' in incoming()) || incoming().isAdmin == false || isAdminEmail())
+        && (!('badges' in incoming()) || (incoming().badges is list && incoming().badges.size() == 0) || isAdminEmail())
         && incoming().createdAt == request.time
         && incoming().updatedAt == request.time;
       allow update: if isVerifiedUser()
         && isValidId(userId)
-        && isOwner(userId)
         && isValidPublicProfile(incoming())
         && incoming().userId == existing().userId
         && incoming().createdAt == existing().createdAt
         && incoming().updatedAt == request.time
-        && incoming().diff(existing()).affectedKeys().hasOnly([
-          'displayName', 'bio', 'listeningNote',
-          'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'updatedAt'
-        ]);
+        && (
+          (
+            isOwner(userId)
+            && (
+              (!('isAdmin' in existing()) && !('isAdmin' in incoming()))
+              || ('isAdmin' in existing() && 'isAdmin' in incoming() && incoming().isAdmin == existing().isAdmin)
+            )
+            && (
+              (!('badges' in existing()) && !('badges' in incoming()))
+              || ('badges' in existing() && 'badges' in incoming() && incoming().badges == existing().badges)
+            )
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'bio', 'listeningNote',
+              'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
+              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'updatedAt'
+            ])
+          )
+          || (
+            isOwner(userId)
+            && isAdminEmail()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'bio', 'listeningNote',
+              'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
+              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'isAdmin', 'badges', 'updatedAt'
+            ])
+          )
+          || (
+            isAdminEmail()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'badges', 'updatedAt'
+            ])
+          )
+        );
       allow delete: if false;
 
       // Yope-style profile wall cards
@@ -1122,6 +1198,14 @@ service cloud.firestore {
             && !exists(/databases/$(database)/documents/stories/$(storyId)/views/$(incoming().lastViewId))
             && existsAfter(/databases/$(database)/documents/stories/$(storyId)/views/$(incoming().lastViewId))
           )
+          ||
+          // Action F: Admin removes an echo and decrements echoCount atomically
+          (
+            isAdminEmail()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['echoCount', 'updatedAt'])
+            && existing().echoCount > 0
+            && incoming().echoCount == existing().echoCount - 1
+          )
         );
 
       allow delete: if isVerifiedUser()
@@ -1261,7 +1345,10 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
           && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.lastEchoId == echoId;
         allow update: if false;
-        allow delete: if false;
+        allow delete: if isVerifiedUser()
+          && isValidId(storyId)
+          && isValidId(echoId)
+          && isAdminEmail();
       }
 
       // Reader anti-plagiarism reports for public serialized novels
@@ -1310,7 +1397,11 @@ service cloud.firestore {
       allow delete: if isVerifiedUser()
         && isValidSalonId(salonId)
         && isValidId(messageId)
-        && existing().senderId == request.auth.uid;
+        && (
+          existing().senderId == request.auth.uid
+          || isPredefinedSalonModerator(salonId)
+          || isAdminEmail()
+        );
     }
 
     // Built-in Salon discussion threads & replies
@@ -1364,7 +1455,11 @@ service cloud.firestore {
       allow delete: if isVerifiedUser()
         && isValidSalonId(salonId)
         && isValidId(threadId)
-        && existing().authorId == request.auth.uid;
+        && (
+          existing().authorId == request.auth.uid
+          || isPredefinedSalonModerator(salonId)
+          || isAdminEmail()
+        );
 
       match /replies/{replyId} {
         allow get: if isValidSalonId(salonId)
@@ -1390,8 +1485,34 @@ service cloud.firestore {
           && isValidSalonId(salonId)
           && isValidId(threadId)
           && isValidId(replyId)
-          && existing().authorId == request.auth.uid;
+          && (
+            existing().authorId == request.auth.uid
+            || isPredefinedSalonModerator(salonId)
+            || isAdminEmail()
+          );
       }
+    }
+
+    // Official predefined salon moderators (assigned by global admin)
+    match /salons/{salonId}/moderators/{userId} {
+      allow get: if isValidSalonId(salonId)
+        && isValidId(userId);
+      allow list: if isValidSalonId(salonId)
+        && resource.data.salonId == salonId;
+      allow create: if isAdminEmail()
+        && isValidSalonId(salonId)
+        && isValidId(userId)
+        && isValidSalonModerator(incoming())
+        && incoming().userId == userId
+        && incoming().salonId == salonId
+        && incoming().assignedById == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/publicProfiles/$(userId));
+      allow update: if false;
+      allow delete: if isAdminEmail()
+        && isValidSalonId(salonId)
+        && isValidId(userId);
     }
 
     // User-created community salons with custom admission rules & profile avatars
@@ -1427,11 +1548,13 @@ service cloud.firestore {
             ])
           )
           ||
-          // Action B: Atomic memberCount update when joining, leaving, or owner approving/removing
+          // Action B: Atomic memberCount update when joining, leaving, or owner/moderator/admin approving/removing
           (
             incoming().diff(existing()).affectedKeys().hasOnly(['memberCount', 'updatedAt'])
             && (
               existing().ownerId == request.auth.uid
+              || isAdminEmail()
+              || isCustomSalonModerator(salonId)
               || (
                 existing().visibility == 'public'
                 && incoming().memberCount == existing().memberCount + 1
@@ -1459,15 +1582,29 @@ service cloud.firestore {
           && (
             isOwner(userId)
             || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isAdminEmail()
+            || isCustomSalonModerator(salonId)
             || (
-              get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
-              && existing().status == 'approved'
+              existing().status == 'approved'
+              && (
+                get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+                || isApprovedCustomSalonMember(salonId)
+              )
             )
           );
         allow list: if isSignedIn()
           && (
-            resource.data.userId == request.auth.uid
+            isAdminEmail()
+            || resource.data.userId == request.auth.uid
             || resource.data.salonOwnerId == request.auth.uid
+            || isCustomSalonModerator(salonId)
+            || (
+              resource.data.status == 'approved'
+              && (
+                get(/databases/$(database)/documents/customSalons/$(salonId)).data.visibility == 'public'
+                || isApprovedCustomSalonMember(salonId)
+              )
+            )
           );
 
         allow create: if isVerifiedUser()
@@ -1515,21 +1652,41 @@ service cloud.firestore {
           && incoming().userId == existing().userId
           && incoming().salonId == existing().salonId
           && incoming().salonOwnerId == existing().salonOwnerId
-          && incoming().role == existing().role
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
-          && existing().role == 'member'
+          && existing().role != 'owner'
           && (
-            // Owner approves or rejects admission request
+            // Owner, Admin, or Moderator approves or rejects admission request
             (
-              get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+              (
+                get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+                || isAdminEmail()
+                || isCustomSalonModerator(salonId)
+              )
+              && existing().role == 'member'
+              && incoming().role == existing().role
               && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
               && incoming().status in ['approved', 'rejected']
+            )
+            ||
+            // Owner or Admin promotes/demotes approved member between 'member' and 'moderator'
+            (
+              (
+                get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+                || isAdminEmail()
+              )
+              && existing().status == 'approved'
+              && incoming().status == 'approved'
+              && existing().role in ['member', 'moderator']
+              && incoming().role in ['member', 'moderator']
+              && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'updatedAt'])
             )
             ||
             // Applicant updates request note / retries admission
             (
               isOwner(userId)
+              && existing().role == 'member'
+              && incoming().role == existing().role
               && existing().status != 'approved'
               && incoming().status == 'pending'
               && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'requestNote', 'userName', 'updatedAt'])
@@ -1543,6 +1700,8 @@ service cloud.firestore {
           && (
             isOwner(userId)
             || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isAdminEmail()
+            || (isCustomSalonModerator(salonId) && existing().role == 'member')
           );
       }
 
@@ -1583,6 +1742,8 @@ service cloud.firestore {
           && (
             existing().senderId == request.auth.uid
             || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isCustomSalonModerator(salonId)
+            || isAdminEmail()
           );
       }
 
@@ -1659,6 +1820,8 @@ service cloud.firestore {
           && (
             existing().authorId == request.auth.uid
             || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+            || isCustomSalonModerator(salonId)
+            || isAdminEmail()
           );
 
         match /replies/{replyId} {
@@ -1702,6 +1865,8 @@ service cloud.firestore {
             && (
               existing().authorId == request.auth.uid
               || get(/databases/$(database)/documents/customSalons/$(salonId)).data.ownerId == request.auth.uid
+              || isCustomSalonModerator(salonId)
+              || isAdminEmail()
             );
         }
       }

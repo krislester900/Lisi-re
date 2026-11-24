@@ -18,7 +18,9 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { handleFirestoreError, OperationType } from './firestoreErrors';
-import { estimateReadingMinutes } from './themes';
+import { sanitizeMemberBadges } from './memberBadges';
+import { isModerationAdminEmail } from './moderationLabels';
+import { estimateReadingMinutes, isStrictNovelGenre, STORY_THEMES } from './themes';
 import {
   checkLocalContentHygiene,
   evaluateConfessionLength,
@@ -40,6 +42,7 @@ import {
   FavoriteAuthor,
   FIELD_LIMITS,
   ID_PATTERN,
+  MemberBadgeId,
   MemberWarning,
   ModerationAiAnalysis,
   ModerationCase,
@@ -49,10 +52,12 @@ import {
   ModerationTargetType,
   NovelGenre,
   PlagiarismReportReason,
+  PredefinedSalonModerator,
   PrivateUserInfo,
   PublicProfile,
   ReleaseCadence,
   SalonMember,
+  SalonMemberRole,
   SalonMemberStatus,
   SalonMessage,
   SalonThread,
@@ -148,6 +153,7 @@ export async function ensureUserProfiles(user: User): Promise<void> {
   const publicRef = doc(db, 'publicProfiles', user.uid);
 
   try {
+    const shouldBeAdmin = isModerationAdminEmail(user.email) && user.emailVerified !== false;
     const publicSnap = await getDoc(publicRef);
     if (!publicSnap.exists()) {
       const rawName = (user.displayName || user.email?.split('@')[0] || 'Auteur').trim();
@@ -167,16 +173,29 @@ export async function ensureUserProfiles(user: User): Promise<void> {
         interests: '',
         avatarUrl: clampString(user.photoURL || '', FIELD_LIMITS.avatarUrl.max),
         discoverable: true,
+        ...(shouldBeAdmin ? { isAdmin: true, badges: ['administrateur'] } : {}),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
     } else {
       const data = publicSnap.data() as Partial<PublicProfile>;
+      const patch: Record<string, unknown> = {
+        updatedAt: serverTimestamp(),
+      };
       if (data.discoverable === undefined) {
-        await updateDoc(publicRef, {
-          discoverable: true,
-          updatedAt: serverTimestamp(),
-        });
+        patch.discoverable = true;
+      }
+      if (shouldBeAdmin && data.isAdmin !== true) {
+        patch.isAdmin = true;
+      }
+      if (shouldBeAdmin) {
+        const currentBadges = sanitizeMemberBadges(data.badges);
+        if (!currentBadges.includes('administrateur')) {
+          patch.badges = sanitizeMemberBadges(['administrateur', ...currentBadges]);
+        }
+      }
+      if (Object.keys(patch).length > 1) {
+        await updateDoc(publicRef, patch);
       }
     }
   } catch (error) {
@@ -414,6 +433,29 @@ export async function updatePublicProfile(
   const path = `publicProfiles/${userId}`;
   try {
     await updateDoc(doc(db, 'publicProfiles', userId), updateFields);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function updateMemberProfileBadges(
+  targetUserId: string,
+  rawBadges: MemberBadgeId[]
+): Promise<MemberBadgeId[]> {
+  assertValidId(targetUserId, 'targetUserId');
+  const currentUser = auth.currentUser;
+  if (!currentUser || !isModerationAdminEmail(currentUser.email)) {
+    throw new Error('Seul l’administrateur de Lisière peut attribuer ou retirer des badges.');
+  }
+
+  const sanitized = sanitizeMemberBadges(rawBadges);
+  const path = `publicProfiles/${targetUserId}`;
+  try {
+    await updateDoc(doc(db, 'publicProfiles', targetUserId), {
+      badges: sanitized,
+      updatedAt: serverTimestamp(),
+    });
+    return sanitized;
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
@@ -665,7 +707,12 @@ function buildValidatedStoryFields(input: StoryInput, authorName: string) {
   };
 
   if (storyFormat === 'roman') {
-    result.novelGenre = input.novelGenre ?? 'contemporain';
+    if (!isStrictNovelGenre(input.novelGenre)) {
+      throw new Error(
+        'Veuillez sélectionner obligatoirement un type de roman précis (Drame, Romance, Contemporain, Historique, Fantastique, Polar, Poème ou Essai).'
+      );
+    }
+    result.novelGenre = input.novelGenre;
     result.coverUrl = clampString(input.coverUrl ?? '', FIELD_LIMITS.coverUrl.max);
     if (input.plagiarismAttested !== undefined) {
       result.plagiarismAttested = Boolean(input.plagiarismAttested);
@@ -1248,6 +1295,34 @@ export async function addStoryEcho(
   }
 }
 
+export async function deleteStoryEcho(storyId: string, echoId: string): Promise<void> {
+  assertValidId(storyId, 'storyId');
+  assertValidId(echoId, 'echoId');
+  const storyRef = doc(db, 'stories', storyId);
+  const echoRef = doc(db, 'stories', storyId, 'echoes', echoId);
+  const path = `stories/${storyId}/echoes/${echoId}`;
+
+  try {
+    const storySnap = await getDoc(storyRef);
+    const currentCount = storySnap.exists()
+      ? Number((storySnap.data() as Partial<Story>).echoCount ?? 0)
+      : 0;
+    if (storySnap.exists() && currentCount > 0) {
+      const batch = writeBatch(db);
+      batch.delete(echoRef);
+      batch.update(storyRef, {
+        echoCount: increment(-1),
+        updatedAt: serverTimestamp(),
+      });
+      await batch.commit();
+    } else {
+      await deleteDoc(echoRef);
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
 // --- Salon Public Text-Only Chat ---
 
 export function subscribeToSalonMessages(
@@ -1757,6 +1832,143 @@ export function subscribeToSalonMembersForOwner(
       handleFirestoreError(error, OperationType.LIST, path);
     }
   );
+}
+
+export function subscribeToApprovedCustomSalonMembers(
+  salonId: string,
+  onData: (members: SalonMember[]) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  const path = `customSalons/${salonId}/members`;
+  const q = query(
+    collection(db, 'customSalons', salonId, 'members'),
+    where('status', '==', 'approved'),
+    limit(120)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as SalonMember);
+      list.sort((a, b) => {
+        const rank = (role: SalonMemberRole) => (role === 'owner' ? 0 : role === 'moderator' ? 1 : 2);
+        const diff = rank(a.role) - rank(b.role);
+        return diff !== 0 ? diff : a.userName.localeCompare(b.userName, 'fr');
+      });
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function setCustomSalonMemberRole(params: {
+  salonId: string;
+  targetUserId: string;
+  nextRole: Extract<SalonMemberRole, 'moderator' | 'member'>;
+}): Promise<void> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.targetUserId, 'targetUserId');
+  const path = `customSalons/${params.salonId}/members/${params.targetUserId}`;
+  try {
+    await updateDoc(doc(db, 'customSalons', params.salonId, 'members', params.targetUserId), {
+      role: params.nextRole,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export function subscribeToPredefinedSalonModerators(
+  salonId: StoryThemeId,
+  onData: (moderators: PredefinedSalonModerator[]) => void
+): () => void {
+  assertValidId(salonId, 'salonId');
+  const path = `salons/${salonId}/moderators`;
+  const q = query(
+    collection(db, 'salons', salonId, 'moderators'),
+    where('salonId', '==', salonId),
+    limit(50)
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list = snapshot.docs.map((d) => d.data() as PredefinedSalonModerator);
+      list.sort((a, b) => a.userName.localeCompare(b.userName, 'fr'));
+      onData(list);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export function subscribeToAllPredefinedSalonModerators(
+  onData: (bySalon: Record<StoryThemeId, PredefinedSalonModerator[]>) => void
+): () => void {
+  const state: Record<StoryThemeId, PredefinedSalonModerator[]> = {
+    creation: [],
+    rencontres: [],
+    solitudes: [],
+    'premiers-elans': [],
+    quotidien: [],
+    faq: [],
+  };
+
+  const unsubs = STORY_THEMES.map((theme) =>
+    subscribeToPredefinedSalonModerators(theme.id, (list) => {
+      state[theme.id] = list;
+      onData({ ...state });
+    })
+  );
+
+  return () => {
+    unsubs.forEach((unsub) => unsub());
+  };
+}
+
+export async function assignPredefinedSalonModerator(params: {
+  salonId: StoryThemeId;
+  targetUserId: string;
+  targetUserName: string;
+  assignedById: string;
+}): Promise<void> {
+  assertValidId(params.salonId, 'salonId');
+  assertValidId(params.targetUserId, 'targetUserId');
+  assertValidId(params.assignedById, 'assignedById');
+
+  const rawName = clampString(params.targetUserName, FIELD_LIMITS.displayName.max);
+  const userName = rawName.length >= FIELD_LIMITS.displayName.min ? rawName : 'Membre';
+  const path = `salons/${params.salonId}/moderators/${params.targetUserId}`;
+
+  try {
+    await setDoc(doc(db, 'salons', params.salonId, 'moderators', params.targetUserId), {
+      userId: params.targetUserId,
+      salonId: params.salonId,
+      userName,
+      assignedById: params.assignedById,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function revokePredefinedSalonModerator(
+  salonId: StoryThemeId,
+  targetUserId: string
+): Promise<void> {
+  assertValidId(salonId, 'salonId');
+  assertValidId(targetUserId, 'targetUserId');
+  const path = `salons/${salonId}/moderators/${targetUserId}`;
+
+  try {
+    await deleteDoc(doc(db, 'salons', salonId, 'moderators', targetUserId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
 }
 
 function buildValidatedSalonFields(input: CustomSalonInput, ownerName: string) {
@@ -3131,26 +3343,51 @@ export async function runAutomatedContentBotGuard(params: {
     throw new Error('Connexion requise pour la vérification automatique avant publication.');
   }
 
-  const idToken = await currentUser.getIdToken();
-  const resp = await fetch('/api/moderation/guard', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${idToken}`,
-    },
-    body: JSON.stringify({
-      kind: params.kind,
-      title: params.title ?? '',
-      text: params.text,
-      declaredMinAge: params.declaredMinAge ?? 0,
-      isMature: Boolean(params.isMature),
-    }),
-    signal: AbortSignal.timeout(15000),
+  const isInteractiveShort =
+    params.kind === 'echo' || params.kind === 'chat' || params.kind === 'reply';
+  const recommendedMinAgeFallback = sanitizeAgeRating(params.declaredMinAge);
+  const buildFallbackVerdict = (): ContentGuardVerdict => ({
+    allowed: true,
+    blockedReason: '',
+    botNotice: '',
+    isMature: Boolean(params.isMature || recommendedMinAgeFallback >= 16),
+    recommendedMinAge: recommendedMinAgeFallback,
+    matureReason: '',
+    qualityIssue: false,
+    model: 'local-hygiene',
   });
+
+  const idToken = await currentUser.getIdToken();
+  let resp: Response;
+  try {
+    resp = await fetch('/api/moderation/guard', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        kind: params.kind,
+        title: params.title ?? '',
+        text: params.text,
+        declaredMinAge: params.declaredMinAge ?? 0,
+        isMature: Boolean(params.isMature),
+      }),
+      signal: AbortSignal.timeout(isInteractiveShort ? 7000 : 15000),
+    });
+  } catch (err) {
+    if (isInteractiveShort) {
+      return buildFallbackVerdict();
+    }
+    throw err;
+  }
 
   const contentType = resp.headers.get('content-type') || '';
   const rawText = await resp.text();
   if (!contentType.includes('application/json') && rawText.trimStart().startsWith('<')) {
+    if (isInteractiveShort) {
+      return buildFallbackVerdict();
+    }
     throw new Error(
       'Le bot de régulation (/api/moderation/guard) n’est pas disponible sur cet hébergement statique.'
     );
@@ -3160,10 +3397,16 @@ export async function runAutomatedContentBotGuard(params: {
   try {
     parsed = JSON.parse(rawText) as { verdict?: ContentGuardVerdict; error?: string };
   } catch {
+    if (isInteractiveShort) {
+      return buildFallbackVerdict();
+    }
     throw new Error('Réponse invalide reçue du bot de régulation.');
   }
 
   if (!resp.ok || !parsed.verdict) {
+    if (isInteractiveShort && resp.status >= 500) {
+      return buildFallbackVerdict();
+    }
     throw new Error(parsed.error || 'Vérification par le bot de régulation indisponible.');
   }
 
@@ -3177,7 +3420,7 @@ export async function runAutomatedContentBotGuard(params: {
     recommendedMinAge,
     matureReason: clampString(raw.matureReason || '', FIELD_LIMITS.matureReason.max),
     qualityIssue: Boolean(raw.qualityIssue),
-    model: clampString(raw.model || 'gemini-4-hydrogen', 60),
+    model: clampString(raw.model || 'gemini-3.1-flash-lite', 60),
   };
 }
 

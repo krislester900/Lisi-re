@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Award,
   AlertTriangle,
   Bot,
   Check,
@@ -15,10 +16,17 @@ import {
   ShieldCheck,
   Sparkles,
   User as UserIcon,
+  UserPlus,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { evaluateStoryFormatCompliance } from '../lib/contentRegulation';
+import {
+  getProfileBadges,
+  MEMBER_BADGE_DEFINITIONS,
+  profileMatchesBadgeQuery,
+} from '../lib/memberBadges';
 import {
   CASE_STUDY_CRITERIA,
   isModerationAdminEmail,
@@ -33,24 +41,32 @@ import {
 } from '../lib/moderationLabels';
 import {
   acknowledgeUserWarning,
+  assignPredefinedSalonModerator,
   dismissModerationCase,
   formatFriendlyFirestoreError,
   requestModerationAiAnalysis,
   resolveModerationCaseWithWarning,
+  revokePredefinedSalonModerator,
   saveModerationCaseAiAnalysis,
+  updateMemberProfileBadges,
   updateModerationCaseStudy,
 } from '../lib/storyService';
-import { formatFrenchDate } from '../lib/themes';
+import { formatFrenchDate, STORY_THEMES } from '../lib/themes';
 import {
   FIELD_LIMITS,
+  MemberBadgeId,
   MemberWarning,
   ModerationAiAnalysis,
   ModerationCase,
   ModerationCaseStatus,
   ModerationGravityLevel,
+  PredefinedSalonModerator,
+  PublicProfile,
   Story,
+  StoryThemeId,
   WarningSeverity,
 } from '../types/story';
+import { ProfileBadgeChip, RoleBadge, RoleBadgesRow } from './RoleBadge';
 
 interface ModerationCenterViewProps {
   allCases: ModerationCase[];
@@ -58,6 +74,8 @@ interface ModerationCenterViewProps {
   myCases: ModerationCase[];
   userWarnings: MemberWarning[];
   publicStories?: Story[];
+  discoverableProfiles?: PublicProfile[];
+  predefinedSalonModerators?: Record<StoryThemeId, PredefinedSalonModerator[]>;
   onOpenMemberWall: (userId: string) => void;
 }
 
@@ -75,6 +93,8 @@ export function ModerationCenterView({
   myCases,
   userWarnings,
   publicStories = [],
+  discoverableProfiles = [],
+  predefinedSalonModerators,
   onOpenMemberWall,
 }: ModerationCenterViewProps) {
   const { user, profile, signInWithGoogle } = useAuth();
@@ -82,6 +102,18 @@ export function ModerationCenterView({
 
   const [statusFilter, setStatusFilter] = useState<CaseFilter>('all');
   const [showRetroactiveAudit, setShowRetroactiveAudit] = useState(false);
+  const [showSalonModManager, setShowSalonModManager] = useState(false);
+  const [selectedModSalonId, setSelectedModSalonId] = useState<StoryThemeId>(STORY_THEMES[0].id);
+  const [modMemberSearch, setModMemberSearch] = useState('');
+  const [modActionBusyId, setModActionBusyId] = useState<string | null>(null);
+  const [modFeedback, setModFeedback] = useState<{ kind: 'success' | 'error'; message: string } | null>(null);
+  const [showProfileBadgesManager, setShowProfileBadgesManager] = useState(false);
+  const [badgeMemberSearch, setBadgeMemberSearch] = useState('');
+  const [badgeActionBusyKey, setBadgeActionBusyKey] = useState<string | null>(null);
+  const [badgeFeedback, setBadgeFeedback] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
@@ -169,6 +201,56 @@ export function ModerationCenterView({
         }))
         .filter((entry) => !entry.compliance.compliant),
     [publicStories]
+  );
+
+  const totalOfficialModerators = useMemo(() => {
+    if (!predefinedSalonModerators) return 0;
+    return STORY_THEMES.reduce(
+      (sum, t) => sum + (predefinedSalonModerators[t.id]?.length ?? 0),
+      0
+    );
+  }, [predefinedSalonModerators]);
+
+  const activeSalonModerators = useMemo(
+    () => predefinedSalonModerators?.[selectedModSalonId] ?? [],
+    [predefinedSalonModerators, selectedModSalonId]
+  );
+
+  const activeSalonModIds = useMemo(
+    () => new Set(activeSalonModerators.map((m) => m.userId)),
+    [activeSalonModerators]
+  );
+
+  const moderatorCandidates = useMemo(() => {
+    const q = modMemberSearch.trim().toLowerCase();
+    return discoverableProfiles
+      .filter((p) => !activeSalonModIds.has(p.userId))
+      .filter((p) => {
+        if (!q) return true;
+        return (
+          p.displayName.toLowerCase().includes(q) ||
+          (p.bio ?? '').toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 8);
+  }, [discoverableProfiles, activeSalonModIds, modMemberSearch]);
+
+  const badgeFilteredProfiles = useMemo(() => {
+    const q = badgeMemberSearch.trim().toLowerCase();
+    const list = discoverableProfiles.filter((p) => {
+      if (!q) return true;
+      return (
+        p.displayName.toLowerCase().includes(q) ||
+        (p.bio ?? '').toLowerCase().includes(q) ||
+        profileMatchesBadgeQuery(p, q)
+      );
+    });
+    return list.slice(0, 12);
+  }, [discoverableProfiles, badgeMemberSearch]);
+
+  const badgedMembersCount = useMemo(
+    () => discoverableProfiles.filter((p) => getProfileBadges(p).length > 0).length,
+    [discoverableProfiles]
   );
 
   if (!user) {
@@ -685,6 +767,356 @@ export function ModerationCenterView({
                 )}
               </div>
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* Official Salon Moderators Management (Admin only) */}
+      <section className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <RoleBadge role="admin" compact />
+              <p className="text-xs font-semibold text-stone-900">
+                Modérateurs des salons officiels ({totalOfficialModerators})
+              </p>
+            </div>
+            <p className="text-xs text-stone-600">
+              Désignez ou révoquez des modérateurs pour chacun des six salons officiels (badge Modérateur + suppression des messages, fils et réponses).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSalonModManager((prev) => !prev)}
+            className="min-h-[32px] px-3 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-[#1B365D] hover:border-[#1B365D] whitespace-nowrap self-start sm:self-center"
+          >
+            {showSalonModManager ? 'Fermer la gestion' : 'Gérer les modérateurs'}
+          </button>
+        </div>
+
+        {showSalonModManager && (
+          <div className="pt-3 border-t border-stone-200 space-y-4">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {STORY_THEMES.map((t) => {
+                const modCount = predefinedSalonModerators?.[t.id]?.length ?? 0;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedModSalonId(t.id);
+                      setModFeedback(null);
+                    }}
+                    className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap ${
+                      selectedModSalonId === t.id
+                        ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                    }`}
+                  >
+                    {t.shortSalonName}
+                    {modCount > 0 ? ` (${modCount})` : ''}
+                  </button>
+                );
+              })}
+            </div>
+
+            {modFeedback && (
+              <p
+                className={`text-xs px-3 py-2 rounded border ${
+                  modFeedback.kind === 'error'
+                    ? 'text-red-800 bg-red-50 border-red-200'
+                    : 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                }`}
+              >
+                {modFeedback.message}
+              </p>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                  Modérateurs actuels ({activeSalonModerators.length})
+                </p>
+                {activeSalonModerators.length === 0 ? (
+                  <p className="text-xs text-stone-500 italic bg-[#FBF9F5] border border-stone-200 rounded-md p-3">
+                    Aucun modérateur assigné à ce salon pour le moment.
+                  </p>
+                ) : (
+                  <div className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5]">
+                    {activeSalonModerators.map((mod) => (
+                      <div
+                        key={mod.userId}
+                        className="px-3 py-2 flex items-center justify-between gap-2"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => onOpenMemberWall(mod.userId)}
+                            className="text-xs font-semibold text-stone-900 hover:underline truncate"
+                          >
+                            {mod.userName}
+                          </button>
+                          <RoleBadge role="moderator" compact />
+                        </div>
+                        <button
+                          type="button"
+                          disabled={modActionBusyId === mod.userId}
+                          onClick={async () => {
+                            if (modActionBusyId) return;
+                            setModFeedback(null);
+                            setModActionBusyId(mod.userId);
+                            try {
+                              await revokePredefinedSalonModerator(selectedModSalonId, mod.userId);
+                              setModFeedback({
+                                kind: 'success',
+                                message: `${mod.userName} a été retiré de la modération de ce salon.`,
+                              });
+                            } catch (err) {
+                              setModFeedback({
+                                kind: 'error',
+                                message: formatFriendlyFirestoreError(
+                                  err,
+                                  'Impossible de retirer ce modérateur.'
+                                ),
+                              });
+                            } finally {
+                              setModActionBusyId(null);
+                            }
+                          }}
+                          className="min-h-[28px] px-2 py-1 text-xs font-medium text-red-800 bg-white border border-red-200 rounded hover:border-red-400 inline-flex items-center gap-1 whitespace-nowrap"
+                        >
+                          <X className="w-3 h-3" />
+                          <span>Retirer</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="admin-mod-member-search"
+                  className="block text-xs font-medium uppercase tracking-wider text-stone-500"
+                >
+                  Nommer un modérateur
+                </label>
+                <input
+                  id="admin-mod-member-search"
+                  type="search"
+                  value={modMemberSearch}
+                  onChange={(e) => setModMemberSearch(e.target.value)}
+                  placeholder="Rechercher un membre par nom…"
+                  className="w-full min-h-[34px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                />
+                <div className="divide-y divide-stone-200 border border-stone-200 rounded-md max-h-44 overflow-y-auto">
+                  {moderatorCandidates.length === 0 ? (
+                    <p className="p-3 text-xs text-stone-500">
+                      Aucun profil public disponible à nommer.
+                    </p>
+                  ) : (
+                    moderatorCandidates.map((candidate) => (
+                      <div
+                        key={candidate.userId}
+                        className="px-3 py-2 flex items-center justify-between gap-2 bg-white"
+                      >
+                        <span className="text-xs font-medium text-stone-900 truncate">
+                          {candidate.displayName}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={modActionBusyId === candidate.userId}
+                          onClick={async () => {
+                            if (modActionBusyId) return;
+                            setModFeedback(null);
+                            setModActionBusyId(candidate.userId);
+                            try {
+                              await assignPredefinedSalonModerator({
+                                salonId: selectedModSalonId,
+                                targetUserId: candidate.userId,
+                                targetUserName: candidate.displayName,
+                                assignedById: user.uid,
+                              });
+                              setModFeedback({
+                                kind: 'success',
+                                message: `${candidate.displayName} est maintenant modérateur de ce salon.`,
+                              });
+                            } catch (err) {
+                              setModFeedback({
+                                kind: 'error',
+                                message: formatFriendlyFirestoreError(
+                                  err,
+                                  'Impossible de nommer ce modérateur.'
+                                ),
+                              });
+                            } finally {
+                              setModActionBusyId(null);
+                            }
+                          }}
+                          className="min-h-[28px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded hover:border-[#1B365D] inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                        >
+                          <UserPlus className="w-3 h-3" />
+                          <span>Nommer</span>
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Distinctive Firestore Profile Badges Management (Admin only) */}
+      <section className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="space-y-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Award className="w-4 h-4 text-[#6E2438]" />
+              <p className="text-xs font-semibold text-stone-900">
+                Badges distinctifs des membres ({badgedMembersCount})
+              </p>
+            </div>
+            <p className="text-xs text-stone-600">
+              Attribuez des badges visibles dans le répertoire, sur les profils et dans les commentaires (Expert littéraire, Modérateur, Administrateur, Plume confirmée, Grand lecteur).
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowProfileBadgesManager((prev) => !prev);
+              setBadgeFeedback(null);
+            }}
+            className="min-h-[32px] px-3 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-[#1B365D] hover:border-[#1B365D] whitespace-nowrap self-start sm:self-center"
+          >
+            {showProfileBadgesManager ? 'Fermer la gestion' : 'Gérer les badges'}
+          </button>
+        </div>
+
+        {showProfileBadgesManager && (
+          <div className="pt-3 border-t border-stone-200 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="search"
+                  value={badgeMemberSearch}
+                  onChange={(e) => setBadgeMemberSearch(e.target.value)}
+                  placeholder="Chercher un membre ou un badge…"
+                  aria-label="Rechercher un membre pour gérer ses badges"
+                  className="w-full min-h-[34px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                />
+              </div>
+              <p className="text-[11px] text-stone-500">
+                Jusqu’à {FIELD_LIMITS.memberBadgesMax} badges par profil · Stockés sur Firestore
+              </p>
+            </div>
+
+            {badgeFeedback && (
+              <p
+                className={`text-xs px-3 py-2 rounded border ${
+                  badgeFeedback.kind === 'error'
+                    ? 'text-red-800 bg-red-50 border-red-200'
+                    : 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                }`}
+              >
+                {badgeFeedback.message}
+              </p>
+            )}
+
+            {badgeFilteredProfiles.length === 0 ? (
+              <p className="text-xs text-stone-500 italic bg-[#FBF9F5] border border-stone-200 rounded-md p-3">
+                Aucun membre trouvé pour cette recherche.
+              </p>
+            ) : (
+              <div className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5]">
+                {badgeFilteredProfiles.map((member) => {
+                  const activeBadges = getProfileBadges(member);
+                  return (
+                    <div
+                      key={member.userId}
+                      className="p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onOpenMemberWall(member.userId)}
+                            className="text-xs font-semibold text-stone-900 hover:text-[#1B365D] hover:underline truncate"
+                          >
+                            {member.displayName}
+                          </button>
+                          <RoleBadgesRow
+                            isAdmin={Boolean(member.isAdmin)}
+                            profileBadges={member.badges}
+                            compact
+                          />
+                        </div>
+                        {member.bio && (
+                          <p className="text-[11px] text-stone-500 line-clamp-1">{member.bio}</p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        {MEMBER_BADGE_DEFINITIONS.map((def) => {
+                          const hasBadge = activeBadges.includes(def.id);
+                          const actionKey = `${member.userId}:${def.id}`;
+                          const busy = badgeActionBusyKey === actionKey;
+                          return (
+                            <button
+                              key={def.id}
+                              type="button"
+                              disabled={badgeActionBusyKey !== null}
+                              title={def.description}
+                              onClick={async () => {
+                                if (badgeActionBusyKey) return;
+                                setBadgeFeedback(null);
+                                setBadgeActionBusyKey(actionKey);
+                                const nextBadges: MemberBadgeId[] = hasBadge
+                                  ? activeBadges.filter((b) => b !== def.id)
+                                  : [...activeBadges, def.id].slice(
+                                      0,
+                                      FIELD_LIMITS.memberBadgesMax
+                                    );
+                                try {
+                                  await updateMemberProfileBadges(member.userId, nextBadges);
+                                  setBadgeFeedback({
+                                    kind: 'success',
+                                    message: hasBadge
+                                      ? `Badge « ${def.label} » retiré à ${member.displayName}.`
+                                      : `Badge « ${def.label} » attribué à ${member.displayName}.`,
+                                  });
+                                } catch (err) {
+                                  setBadgeFeedback({
+                                    kind: 'error',
+                                    message: formatFriendlyFirestoreError(
+                                      err,
+                                      'Impossible de modifier les badges de ce membre.'
+                                    ),
+                                  });
+                                } finally {
+                                  setBadgeActionBusyKey(null);
+                                }
+                              }}
+                              className={`min-h-[28px] px-2 py-0.5 rounded border text-[11px] font-medium inline-flex items-center gap-1 transition-colors disabled:opacity-60 ${
+                                hasBadge
+                                  ? 'border-[#1B365D] bg-white ring-1 ring-[#1B365D]/30'
+                                  : 'border-stone-200 bg-white/75 opacity-75 hover:opacity-100 hover:border-stone-400'
+                              }`}
+                            >
+                              {hasBadge && <Check className="w-2.5 h-2.5 text-[#1B365D]" />}
+                              <ProfileBadgeChip badgeId={def.id} compact />
+                              {busy && <span className="text-[10px] text-stone-500">…</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </section>

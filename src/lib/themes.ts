@@ -466,17 +466,24 @@ export const SERIES_STATUS_LABELS: Record<SeriesStatus, string> = {
   termine: 'Terminé',
 };
 
-export const NOVEL_GENRES: NovelGenre[] = [
+export type StrictNovelGenre = Exclude<NovelGenre, 'autre'>;
+
+export const STRICT_NOVEL_GENRES: StrictNovelGenre[] = [
   'drame',
-  'poeme',
   'romance',
   'contemporain',
   'historique',
   'fantastique',
   'polar',
+  'poeme',
   'essai',
-  'autre',
 ];
+
+export const NOVEL_GENRES: StrictNovelGenre[] = STRICT_NOVEL_GENRES;
+
+export function isStrictNovelGenre(value: unknown): value is StrictNovelGenre {
+  return typeof value === 'string' && (STRICT_NOVEL_GENRES as readonly string[]).includes(value);
+}
 
 export const NOVEL_GENRE_LABELS: Record<NovelGenre, string> = {
   drame: 'Drame',
@@ -487,7 +494,18 @@ export const NOVEL_GENRE_LABELS: Record<NovelGenre, string> = {
   fantastique: 'Fantastique',
   polar: 'Polar & mystère',
   essai: 'Essai & récit',
-  autre: 'Autre genre',
+  autre: 'Non classé',
+};
+
+export const NOVEL_GENRE_DESCRIPTIONS: Record<StrictNovelGenre, string> = {
+  drame: 'Récits psychologiques, familiaux ou sociaux centrés sur les conflits humains.',
+  romance: 'Histoires d’amour, d’attachement et de liens sentimentaux.',
+  contemporain: 'Fictions ancrées dans le monde actuel et la vie quotidienne.',
+  historique: 'Récits situés dans une époque passée documentée ou reconstituée.',
+  fantastique: 'Imaginaire, surnaturel, science-fiction ou mondes merveilleux.',
+  polar: 'Enquêtes, suspense, intrigues policières ou thrillers psychologiques.',
+  poeme: 'Œuvres longues en vers, prose poétique ou recueils structurés.',
+  essai: 'Récits de réflexion, mémoires littéraires ou chroniques vécues.',
 };
 
 export function formatFrenchDate(date: Date | null): string {

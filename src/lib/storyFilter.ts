@@ -608,7 +608,7 @@ export function filterAndSortStories(stories: Story[], state: StoryFilterState):
 
     if (state.novelGenre !== 'all') {
       if (fmt !== 'roman') return false;
-      if ((story.novelGenre ?? 'contemporain') !== state.novelGenre) return false;
+      if (story.novelGenre !== state.novelGenre) return false;
     }
 
     if (state.seriesStatus !== 'all') {

@@ -37,12 +37,15 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   estimateReadingMinutes,
+  isStrictNovelGenre,
+  NOVEL_GENRE_DESCRIPTIONS,
   NOVEL_GENRES,
   NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
   SERIES_STATUS_LABELS,
   STORY_FORMAT_LABELS,
   STORY_THEMES,
+  StrictNovelGenre,
   THEME_MAP,
 } from '../lib/themes';
 import {
@@ -118,7 +121,7 @@ export function StoryComposerModal({
   const [storyFormat, setStoryFormat] = useState<StoryFormat>(initialFormat);
   const [romanMode, setRomanMode] = useState<'new' | 'append'>(initialRomanMode);
   const [selectedNovelId, setSelectedNovelId] = useState<string | null>(initialNovelId);
-  const [novelGenre, setNovelGenre] = useState<NovelGenre>('contemporain');
+  const [novelGenre, setNovelGenre] = useState<NovelGenre | ''>('');
   const [coverUrl, setCoverUrl] = useState('');
   const [coverUploadBusy, setCoverUploadBusy] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
@@ -204,7 +207,9 @@ export function StoryComposerModal({
       setStoryFormat(editingStory.storyFormat ?? 'confession');
       setRomanMode('new');
       setSelectedNovelId(null);
-      setNovelGenre(editingStory.novelGenre ?? 'contemporain');
+      setNovelGenre(
+        isStrictNovelGenre(editingStory.novelGenre) ? editingStory.novelGenre : ''
+      );
       setCoverUrl(editingStory.coverUrl ?? '');
       setPlagiarismAttested(Boolean(editingStory.plagiarismAttested));
       setReleaseCadence(editingStory.releaseCadence ?? 'hebdomadaire');
@@ -250,7 +255,7 @@ export function StoryComposerModal({
       setAppendSeriesStatus(
         pickedNovel?.seriesStatus === 'termine' ? 'termine' : 'en-cours'
       );
-      setNovelGenre(initialNovelGenre ?? 'contemporain');
+      setNovelGenre(isStrictNovelGenre(initialNovelGenre) ? initialNovelGenre : '');
       setCoverUrl('');
       setPlagiarismAttested(false);
       setReleaseCadence('hebdomadaire');
@@ -281,10 +286,16 @@ export function StoryComposerModal({
       setMatureReason('');
       setCharterAttested(false);
 
-      // Jump straight to writing when opened directly from a salon prompt/starter, genre leaderboard, or append chapter
+      // Jump straight to writing when opened directly from a salon prompt/starter, genre leaderboard, or append chapter,
+      // unless creating a new novel whose strict genre still needs to be chosen on Step 1.
+      const needsStrictGenreChoice =
+        nextFormat === 'roman' &&
+        nextRomanMode === 'new' &&
+        !isStrictNovelGenre(initialNovelGenre);
       const openedWithDirectContext =
-        Boolean(initialPrompt || initialStarter || initialCustomSalonId || initialNovelGenre) ||
-        nextRomanMode === 'append';
+        !needsStrictGenreChoice &&
+        (Boolean(initialPrompt || initialStarter || initialCustomSalonId || initialNovelGenre) ||
+          nextRomanMode === 'append');
       setStep(openedWithDirectContext ? 2 : 1);
     }
   }, [
@@ -423,6 +434,18 @@ export function StoryComposerModal({
 
   const handleGoToStep = (target: ComposerStep) => {
     setError(null);
+    if (
+      target >= 2 &&
+      !isAppendMode &&
+      storyFormat === 'roman' &&
+      !isStrictNovelGenre(novelGenre)
+    ) {
+      setError(
+        'Veuillez choisir obligatoirement un type de roman précis (Drame, Romance, Contemporain, Historique, Fantastique, Polar, Poème ou Essai).'
+      );
+      setStep(1);
+      return;
+    }
     if (target === 3) {
       if (activeTitleValue.trim().length < minTitleLen) {
         setError(
@@ -456,6 +479,12 @@ export function StoryComposerModal({
 
   const handleNextStep = () => {
     if (step === 1) {
+      if (!isAppendMode && storyFormat === 'roman' && !isStrictNovelGenre(novelGenre)) {
+        setError(
+          'Veuillez choisir obligatoirement un type de roman précis (Drame, Romance, Contemporain, Historique, Fantastique, Polar, Poème ou Essai).'
+        );
+        return;
+      }
       setError(null);
       setStep(2);
       return;
@@ -613,6 +642,13 @@ export function StoryComposerModal({
     }
 
     if (storyFormat === 'roman') {
+      if (!isStrictNovelGenre(novelGenre)) {
+        setError(
+          'Veuillez choisir obligatoirement un type de roman précis avant de publier.'
+        );
+        setStep(1);
+        return;
+      }
       if (!plagiarismAttested) {
         setError(
           'Veuillez accepter la charte anti-plagiat des romans avant de publier ou d’enregistrer.'
@@ -671,7 +707,10 @@ export function StoryComposerModal({
         storyScope: effectiveScope,
         customSalon: customSalonTarget,
         storyFormat,
-        novelGenre: storyFormat === 'roman' ? novelGenre : undefined,
+        novelGenre:
+          storyFormat === 'roman' && isStrictNovelGenre(novelGenre)
+            ? (novelGenre as StrictNovelGenre)
+            : undefined,
         coverUrl: storyFormat === 'roman' ? coverUrl : '',
         plagiarismAttested: storyFormat === 'roman' ? plagiarismAttested : undefined,
         releaseCadence: storyFormat === 'confession' ? 'unique' : releaseCadence,
@@ -1173,71 +1212,94 @@ export function StoryComposerModal({
               {/* Roman Genre, Cadence, Status & Cover Art */}
               {!isAppendMode && storyFormat === 'roman' && (
                 <div className="space-y-4">
-                  <div className="bg-white border border-stone-200 rounded-md p-4 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                    <div>
-                      <label
-                        htmlFor="roman-genre"
-                        className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
-                      >
-                        Type de roman
-                      </label>
-                      <select
-                        id="roman-genre"
-                        value={novelGenre}
-                        onChange={(e) => setNovelGenre(e.target.value as NovelGenre)}
-                        className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
-                      >
-                        {NOVEL_GENRES.map((g) => (
-                          <option key={g} value={g}>
-                            {NOVEL_GENRE_LABELS[g]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label
-                        htmlFor="roman-cadence"
-                        className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
-                      >
-                        Rythme
-                      </label>
-                      <select
-                        id="roman-cadence"
-                        value={releaseCadence}
-                        onChange={(e) => setReleaseCadence(e.target.value as ReleaseCadence)}
-                        className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
-                      >
-                        {(['hebdomadaire', 'bihebdomadaire', 'libre'] as ReleaseCadence[]).map(
-                          (cad) => (
-                            <option key={cad} value={cad}>
-                              {RELEASE_CADENCE_LABELS[cad]}
+                  <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                      <div>
+                        <label
+                          htmlFor="roman-genre"
+                          className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                        >
+                          Type de roman *
+                        </label>
+                        <select
+                          id="roman-genre"
+                          required
+                          value={novelGenre}
+                          onChange={(e) => setNovelGenre(e.target.value as StrictNovelGenre | '')}
+                          className={`w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D] ${
+                            !isStrictNovelGenre(novelGenre)
+                              ? 'border-[#1B365D]/60'
+                              : 'border-stone-200'
+                          }`}
+                        >
+                          <option value="">— Choisir un genre précis —</option>
+                          {NOVEL_GENRES.map((g) => (
+                            <option key={g} value={g}>
+                              {NOVEL_GENRE_LABELS[g]}
                             </option>
-                          )
-                        )}
-                      </select>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="roman-cadence"
+                          className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                        >
+                          Rythme
+                        </label>
+                        <select
+                          id="roman-cadence"
+                          value={releaseCadence}
+                          onChange={(e) => setReleaseCadence(e.target.value as ReleaseCadence)}
+                          className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                        >
+                          {(['hebdomadaire', 'bihebdomadaire', 'libre'] as ReleaseCadence[]).map(
+                            (cad) => (
+                              <option key={cad} value={cad}>
+                                {RELEASE_CADENCE_LABELS[cad]}
+                              </option>
+                            )
+                          )}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="roman-status"
+                          className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                        >
+                          Statut
+                        </label>
+                        <select
+                          id="roman-status"
+                          value={seriesStatus}
+                          onChange={(e) => setSeriesStatus(e.target.value as SeriesStatus)}
+                          className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                        >
+                          {(['en-cours', 'termine'] as SeriesStatus[]).map((st) => (
+                            <option key={st} value={st}>
+                              {SERIES_STATUS_LABELS[st]}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
-                    <div>
-                      <label
-                        htmlFor="roman-status"
-                        className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
-                      >
-                        Statut
-                      </label>
-                      <select
-                        id="roman-status"
-                        value={seriesStatus}
-                        onChange={(e) => setSeriesStatus(e.target.value as SeriesStatus)}
-                        className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
-                      >
-                        {(['en-cours', 'termine'] as SeriesStatus[]).map((st) => (
-                          <option key={st} value={st}>
-                            {SERIES_STATUS_LABELS[st]}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <p className="text-xs text-stone-600 pt-1 border-t border-stone-100">
+                      {isStrictNovelGenre(novelGenre) ? (
+                        <>
+                          <span className="font-medium text-[#1B365D]">
+                            {NOVEL_GENRE_LABELS[novelGenre]} :
+                          </span>{' '}
+                          {NOVEL_GENRE_DESCRIPTIONS[novelGenre]}
+                        </>
+                      ) : (
+                        <span className="text-[#1B365D] font-medium">
+                          Catégorisation stricte : sélectionnez obligatoirement le type exact de ce roman pour le classer dans le bon rayon.
+                        </span>
+                      )}
+                    </p>
                   </div>
 
                   {/* Collapsible Novel Cover Image Picker */}
@@ -1268,7 +1330,7 @@ export function StoryComposerModal({
                         <NovelCoverArt
                           coverUrl={coverUrl}
                           title={title || 'Nouveau roman'}
-                          genre={novelGenre}
+                          genre={isStrictNovelGenre(novelGenre) ? novelGenre : undefined}
                           size="md"
                           showFallbackWhenMissing={true}
                         />
@@ -1354,7 +1416,9 @@ export function StoryComposerModal({
                     {storyFormat === 'roman'
                       ? isAppendMode
                         ? 'Suite de roman'
-                        : `Roman (${NOVEL_GENRE_LABELS[novelGenre]})`
+                        : isStrictNovelGenre(novelGenre)
+                          ? `Roman (${NOVEL_GENRE_LABELS[novelGenre]})`
+                          : 'Roman (type à préciser)'
                       : 'Confession / Récit'}
                   </span>
                 </div>

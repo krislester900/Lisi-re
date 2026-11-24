@@ -41,6 +41,7 @@ import {
   subscribeToPublicProfile,
   subscribeToWallItems,
   toggleFavoriteAuthor,
+  updateMemberProfileBadges,
   updatePublicProfile,
   updateRepostVisibility,
   upsertUserRelationship,
@@ -52,6 +53,7 @@ import {
 import {
   Exchange,
   FIELD_LIMITS,
+  MemberBadgeId,
   PublicProfile,
   Story,
   StoryRepost,
@@ -60,19 +62,24 @@ import {
   WallItem,
   WallItemKind,
 } from '../types/story';
+import { getProfileBadges, MEMBER_BADGE_DEFINITIONS } from '../lib/memberBadges';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
+import { ProfileBadgeChip, RoleBadgesRow } from './RoleBadge';
 import { StoryFormatKicker } from './StoryFormatKicker';
 
-import { Settings } from 'lucide-react';
+import { Award, Check, Settings, ShieldCheck } from 'lucide-react';
 
 interface ProfileWallViewProps {
   memberId: string;
   memberStories: Story[];
   existingExchanges: Exchange[];
   relationships?: UserRelationship[];
+  adminUserIds?: Set<string>;
+  moderatedSalonNames?: string[];
   onBack?: () => void;
   onEditProfile?: () => void;
   onReadStory: (story: Story) => void;
@@ -141,6 +148,8 @@ export function ProfileWallView({
   memberStories,
   existingExchanges,
   relationships = [],
+  adminUserIds,
+  moderatedSalonNames = [],
   onBack,
   onEditProfile,
   onReadStory,
@@ -208,8 +217,15 @@ export function ProfileWallView({
   const [confirmClaimStoryId, setConfirmClaimStoryId] = useState<string | null>(null);
   const [claimingStoryId, setClaimingStoryId] = useState<string | null>(null);
   const [claimStoryError, setClaimStoryError] = useState<string | null>(null);
+  const [showAdminBadgesPanel, setShowAdminBadgesPanel] = useState(false);
+  const [adminBadgeBusy, setAdminBadgeBusy] = useState<MemberBadgeId | null>(null);
+  const [adminBadgeFeedback, setAdminBadgeFeedback] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const isOwner = Boolean(user && user.uid === memberId);
+  const isGlobalAdmin = isModerationAdminEmail(user?.email);
 
   useEffect(() => {
     setLoaded(false);
@@ -222,6 +238,8 @@ export function ProfileWallView({
     setLightboxItem(null);
     setWallActionError(null);
     setConfirmClaimStoryId(null);
+    setShowAdminBadgesPanel(false);
+    setAdminBadgeFeedback(null);
     setClaimingStoryId(null);
     setClaimStoryError(null);
 
@@ -811,9 +829,40 @@ export function ProfileWallView({
                   </button>
                 )}
               </div>
-              <h1 className="font-display text-3xl font-medium text-stone-900">
-                {memberProfile.displayName}
-              </h1>
+              <div className="flex flex-wrap items-center gap-2.5">
+                <h1 className="font-display text-3xl font-medium text-stone-900">
+                  {memberProfile.displayName}
+                </h1>
+                <RoleBadgesRow
+                  isAdmin={Boolean(
+                    memberProfile.isAdmin ||
+                      adminUserIds?.has(memberId) ||
+                      (isOwner && isGlobalAdmin)
+                  )}
+                  isModerator={moderatedSalonNames.length > 0}
+                  moderatorLabel={
+                    moderatedSalonNames.length === 1
+                      ? `Modérateur · ${moderatedSalonNames[0]}`
+                      : moderatedSalonNames.length > 1
+                        ? `Modérateur (${moderatedSalonNames.length} salons)`
+                        : undefined
+                  }
+                  profileBadges={memberProfile.badges}
+                />
+                {isGlobalAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAdminBadgesPanel((prev) => !prev);
+                      setAdminBadgeFeedback(null);
+                    }}
+                    className="min-h-[28px] px-2.5 py-0.5 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D] text-xs font-medium hover:border-[#1B365D] inline-flex items-center gap-1 whitespace-nowrap"
+                  >
+                    <Award className="w-3 h-3" />
+                    <span>{showAdminBadgesPanel ? 'Fermer badges' : 'Gérer les badges'}</span>
+                  </button>
+                )}
+              </div>
               {memberProfile.bio ? (
                 <p className="text-sm text-stone-700 leading-relaxed max-w-2xl">
                   {memberProfile.bio}
@@ -833,6 +882,80 @@ export function ProfileWallView({
                     <span className="italic">{memberProfile.listeningNote}</span>
                   )}
                 </p>
+              )}
+
+              {isGlobalAdmin && showAdminBadgesPanel && (
+                <div className="mt-3 p-3.5 rounded-md border border-[#CBD6E6] bg-[#F3F6FA]/70 space-y-2.5 max-w-2xl">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-[#1B365D] inline-flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Badges distinctifs sur ce profil (administration)</span>
+                    </p>
+                    <span className="text-[11px] text-stone-500 tabular-nums">
+                      {getProfileBadges(memberProfile).length}/{FIELD_LIMITS.memberBadgesMax}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {MEMBER_BADGE_DEFINITIONS.map((def) => {
+                      const activeBadges = getProfileBadges(memberProfile);
+                      const hasBadge = activeBadges.includes(def.id);
+                      const busy = adminBadgeBusy === def.id;
+                      return (
+                        <button
+                          key={def.id}
+                          type="button"
+                          disabled={adminBadgeBusy !== null}
+                          onClick={async () => {
+                            if (adminBadgeBusy) return;
+                            setAdminBadgeFeedback(null);
+                            setAdminBadgeBusy(def.id);
+                            const nextBadges = hasBadge
+                              ? activeBadges.filter((b) => b !== def.id)
+                              : [...activeBadges, def.id].slice(0, FIELD_LIMITS.memberBadgesMax);
+                            try {
+                              await updateMemberProfileBadges(memberId, nextBadges);
+                              setAdminBadgeFeedback({
+                                kind: 'success',
+                                message: hasBadge
+                                  ? `Badge « ${def.label} » retiré.`
+                                  : `Badge « ${def.label} » attribué.`,
+                              });
+                            } catch (err) {
+                              setAdminBadgeFeedback({
+                                kind: 'error',
+                                message: formatFriendlyFirestoreError(
+                                  err,
+                                  'Impossible de mettre à jour les badges de ce profil.'
+                                ),
+                              });
+                            } finally {
+                              setAdminBadgeBusy(null);
+                            }
+                          }}
+                          title={def.description}
+                          className={`min-h-[32px] px-2.5 py-1 rounded border text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 ${
+                            hasBadge
+                              ? 'border-[#1B365D] bg-white ring-1 ring-[#1B365D]/35'
+                              : 'border-stone-200 bg-white/80 opacity-80 hover:opacity-100 hover:border-stone-400'
+                          }`}
+                        >
+                          {hasBadge && <Check className="w-3 h-3 text-[#1B365D]" />}
+                          <ProfileBadgeChip badgeId={def.id} compact />
+                          {busy && <span className="text-[10px] text-stone-500">…</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {adminBadgeFeedback && (
+                    <p
+                      className={`text-xs ${
+                        adminBadgeFeedback.kind === 'error' ? 'text-red-700' : 'text-emerald-800'
+                      }`}
+                    >
+                      {adminBadgeFeedback.message}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </div>

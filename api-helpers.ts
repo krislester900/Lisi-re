@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { GoogleGenAI, Type } from '@google/genai';
 import firebaseConfig from './firebase-applet-config.json' with { type: 'json' };
 
@@ -34,12 +35,33 @@ function clampText(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
+const VERIFIED_TOKEN_CACHE_TTL_MS = 5 * 60 * 1000;
+const VERIFIED_TOKEN_CACHE_MAX = 500;
+const verifiedTokenCache = new Map<
+  string,
+  { caller: VerifiedFirebaseCaller; expiresAt: number }
+>();
+
+function hashIdToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 export async function verifyFirebaseIdToken(
   idToken: string,
   overrideApiKey?: string
 ): Promise<VerifiedFirebaseCaller | null> {
   const token = idToken.trim();
   if (!token || token.length > 4096) return null;
+
+  const cacheKey = hashIdToken(token);
+  const cached = verifiedTokenCache.get(cacheKey);
+  const now = Date.now();
+  if (cached && cached.expiresAt > now) {
+    return cached.caller;
+  }
+  if (cached) {
+    verifiedTokenCache.delete(cacheKey);
+  }
 
   const apiKey = (overrideApiKey || firebaseConfig.apiKey || '').trim();
   if (!apiKey) return null;
@@ -65,11 +87,29 @@ export async function verifyFirebaseIdToken(
     };
     const user = json.users?.[0];
     if (!user?.localId) return null;
-    return {
+    const caller: VerifiedFirebaseCaller = {
       uid: user.localId,
       email: typeof user.email === 'string' ? user.email.toLowerCase() : null,
       emailVerified: Boolean(user.emailVerified),
     };
+
+    if (verifiedTokenCache.size >= VERIFIED_TOKEN_CACHE_MAX) {
+      for (const [key, entry] of verifiedTokenCache.entries()) {
+        if (entry.expiresAt <= now) {
+          verifiedTokenCache.delete(key);
+        }
+      }
+      if (verifiedTokenCache.size >= VERIFIED_TOKEN_CACHE_MAX) {
+        const oldestKey = verifiedTokenCache.keys().next().value;
+        if (oldestKey) verifiedTokenCache.delete(oldestKey);
+      }
+    }
+    verifiedTokenCache.set(cacheKey, {
+      caller,
+      expiresAt: now + VERIFIED_TOKEN_CACHE_TTL_MS,
+    });
+
+    return caller;
   } catch {
     return null;
   }
@@ -321,6 +361,24 @@ export interface ContentGuardVerdict {
   model: string;
 }
 
+function buildInteractiveFallbackVerdict(
+  declaredMinAge: number,
+  declaredMature: boolean
+): ContentGuardVerdict {
+  const fallbackAge: 0 | 13 | 16 | 18 =
+    declaredMinAge >= 18 ? 18 : declaredMinAge >= 16 ? 16 : declaredMinAge >= 13 ? 13 : 0;
+  return {
+    allowed: true,
+    blockedReason: '',
+    botNotice: 'Validation rapide effectuée par le filtre de la charte Lisière.',
+    isMature: declaredMature || fallbackAge >= 16,
+    recommendedMinAge: fallbackAge,
+    matureReason: '',
+    qualityIssue: false,
+    model: 'local-fallback',
+  };
+}
+
 export async function guardContentWithGemini(params: {
   apiKey: string;
   kind: ContentGuardKind;
@@ -329,15 +387,6 @@ export async function guardContentWithGemini(params: {
   declaredMinAge?: number;
   declaredMature?: boolean;
 }): Promise<ContentGuardVerdict> {
-  const cleanKey = (params.apiKey || '').trim();
-  if (!cleanKey || cleanKey === 'MY_GEMINI_API_KEY') {
-    const err = new Error(
-      'Le bot de régulation IA (GEMINI_API_KEY) n’est pas configuré sur le serveur.'
-    ) as Error & { statusCode?: number };
-    err.statusCode = 503;
-    throw err;
-  }
-
   const kind: ContentGuardKind =
     params.kind === 'story' ||
     params.kind === 'chapter' ||
@@ -349,8 +398,9 @@ export async function guardContentWithGemini(params: {
       ? params.kind
       : 'story';
 
+  const isInteractiveShort = kind === 'echo' || kind === 'chat' || kind === 'reply';
   const title = clampText(params.title || '', 160);
-  const text = clampText(params.text || '', 8000);
+  const text = clampText(params.text || '', isInteractiveShort ? 2000 : 8000);
   const declaredMinAge = Number(params.declaredMinAge ?? 0) || 0;
   const declaredMature = Boolean(params.declaredMature);
 
@@ -362,76 +412,126 @@ export async function guardContentWithGemini(params: {
     throw err;
   }
 
+  const cleanKey = (params.apiKey || '').trim();
+  if (!cleanKey || cleanKey === 'MY_GEMINI_API_KEY') {
+    if (isInteractiveShort) {
+      return buildInteractiveFallbackVerdict(declaredMinAge, declaredMature);
+    }
+    const err = new Error(
+      'Le bot de régulation IA (GEMINI_API_KEY) n’est pas configuré sur le serveur.'
+    ) as Error & { statusCode?: number };
+    err.statusCode = 503;
+    throw err;
+  }
+
   const ai = new GoogleGenAI({
     apiKey: cleanKey,
     httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
   });
 
-  const modelName = 'gemini-4-hydrogen';
+  const modelName = isInteractiveShort ? 'gemini-3.1-flash-lite' : 'gemini-4-hydrogen';
+  const timeoutMs = isInteractiveShort ? 4500 : 11000;
 
-  const prompt = [
-    `Tu es le Bot de régulation de « Lisière », une plateforme littéraire francophone (confessions, romans à chapitres, fils de discussion et chats de salon).`,
-    `Analyse le texte suivant avant sa mise en ligne et décide s’il respecte le cadre éditorial :`,
-    ``,
-    `- Nature du contenu : ${kind}`,
-    `- Âge minimum déclaré par l’auteur : ${declaredMinAge}+`,
-    `- Indicateur mature déclaré par l’auteur : ${declaredMature ? 'oui' : 'non'}`,
-    title ? `- Titre : ${title}` : `- Titre : (aucun)`,
-    `- Texte à contrôler :`,
-    `« ${text} »`,
-    ``,
-    `Critères stricts de blocage (allowed = false) :`,
-    `1. Incitation à la haine, racisme, xénophobie, sexisme, homophobie, transphobie, antisémitisme, validisme ou discrimination visant une personne ou un groupe.`,
-    `2. Insultes graves, propos offensants/dégradants ciblés, menaces, harcèlement ou incitation à l’automutilation / violence.`,
-    `3. Foutoir / contenu incohérent : charabia de clavier (« azertyuiop », « fghjklm »), répétitions mécaniques sans sens, spam publicitaire ou bruit destiné uniquement à salir le salon (qualityIssue = true).`,
-    ``,
-    `Critères d’évaluation de la maturité (isMature & recommendedMinAge) :`,
-    `- Un texte sincère mais sensible (deuil, détresse émotionnelle profonde, violence évoquée sans apologie, sexualité adulte non haineuse, addiction, traumatisme) peut être AUTORISÉ (allowed = true) s’il reste respectueux, mais DOIT être classé isMature = true et recommendedMinAge = 16 ou 18 avec un matureReason bref en français (ex. « Thèmes psychologiques sensibles », « Scènes réservées aux adultes »).`,
-    `- Ne bloque PAS une confession sincère ou un passage dramatique de roman simplement parce qu’il est triste ou sérieux : distingue clairement l’émotion littéraire (autorisée, éventuellement 16+/18+ mature) de la haine, de l’offense et du charabia (bloqués).`,
-    ``,
-    `Règles de réponse JSON :`,
-    `- allowed: true si acceptable, false si bloqué.`,
-    `- blockedReason: en français, poli et précis si allowed=false (sinon "").`,
-    `- botNotice: bref message de synthèse du Bot de régulation Lisière (ex. « Contenu validé par le bot de régulation. » ou motif clair).`,
-    `- isMature: true si le texte contient des thèmes matures ou sensibles (16+ ou 18+).`,
-    `- recommendedMinAge: 0, 13, 16, ou 18.`,
-    `- matureReason: explication courte en français si isMature=true (sinon "").`,
-    `- qualityIssue: true si refusé pour charabia/spam/bêtises incohérentes.`,
-  ].join('\n');
+  const prompt = isInteractiveShort
+    ? [
+        `Modération rapide Lisière (${kind}) :`,
+        `Texte : « ${text} »`,
+        `Bloque (allowed=false) UNIQUEMENT si haine/discrimination, insulte grave ciblée, menace/harcèlement, appel à la violence, ou charabia/spam pur (qualityIssue=true).`,
+        `Autorise (allowed=true) tout commentaire sincère, critique littéraire respectueuse ou émotion.`,
+      ].join('\n')
+    : [
+        `Tu es le Bot de régulation de « Lisière », une plateforme littéraire francophone (confessions, romans à chapitres, fils de discussion et chats de salon).`,
+        `Analyse le texte suivant avant sa mise en ligne et décide s’il respecte le cadre éditorial :`,
+        ``,
+        `- Nature du contenu : ${kind}`,
+        `- Âge minimum déclaré par l’auteur : ${declaredMinAge}+`,
+        `- Indicateur mature déclaré par l’auteur : ${declaredMature ? 'oui' : 'non'}`,
+        title ? `- Titre : ${title}` : `- Titre : (aucun)`,
+        `- Texte à contrôler :`,
+        `« ${text} »`,
+        ``,
+        `Critères stricts de blocage (allowed = false) :`,
+        `1. Incitation à la haine, racisme, xénophobie, sexisme, homophobie, transphobie, antisémitisme, validisme ou discrimination visant une personne ou un groupe.`,
+        `2. Insultes graves, propos offensants/dégradants ciblés, menaces, harcèlement ou incitation à l’automutilation / violence.`,
+        `3. Foutoir / contenu incohérent : charabia de clavier (« azertyuiop », « fghjklm »), répétitions mécaniques sans sens, spam publicitaire ou bruit destiné uniquement à salir le salon (qualityIssue = true).`,
+        ``,
+        `Critères d’évaluation de la maturité (isMature & recommendedMinAge) :`,
+        `- Un texte sincère mais sensible (deuil, détresse émotionnelle profonde, violence évoquée sans apologie, sexualité adulte non haineuse, addiction, traumatisme) peut être AUTORISÉ (allowed = true) s’il reste respectueux, mais DOIT être classé isMature = true et recommendedMinAge = 16 ou 18 avec un matureReason bref en français (ex. « Thèmes psychologiques sensibles », « Scènes réservées aux adultes »).`,
+        `- Ne bloque PAS une confession sincère ou un passage dramatique de roman simplement parce qu’il est triste ou sérieux : distingue clairement l’émotion littéraire (autorisée, éventuellement 16+/18+ mature) de la haine, de l’offense et du charabia (bloqués).`,
+        ``,
+        `Règles de réponse JSON :`,
+        `- allowed: true si acceptable, false si bloqué.`,
+        `- blockedReason: en français, poli et précis si allowed=false (sinon "").`,
+        `- botNotice: bref message de synthèse du Bot de régulation Lisière (ex. « Contenu validé par le bot de régulation. » ou motif clair).`,
+        `- isMature: true si le texte contient des thèmes matures ou sensibles (16+ ou 18+).`,
+        `- recommendedMinAge: 0, 13, 16, ou 18.`,
+        `- matureReason: explication courte en français si isMature=true (sinon "").`,
+        `- qualityIssue: true si refusé pour charabia/spam/bêtises incohérentes.`,
+      ].join('\n');
 
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: prompt,
-    config: {
-      systemInstruction:
-        'Tu es le bot de régulation automatique de Lisière. Tu protéges le calme et la qualité littéraire des salons contre la haine, l’offense, le harcèlement et le charabia, tout en classant justement la maturité (Tout public, 13+, 16+, 18+).',
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          allowed: { type: Type.BOOLEAN },
-          blockedReason: { type: Type.STRING },
-          botNotice: { type: Type.STRING },
-          isMature: { type: Type.BOOLEAN },
-          recommendedMinAge: { type: Type.INTEGER },
-          matureReason: { type: Type.STRING },
-          qualityIssue: { type: Type.BOOLEAN },
+  let rawText = '';
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const generatePromise = ai.models.generateContent({
+      model: modelName,
+      contents: prompt,
+      config: {
+        temperature: 0,
+        maxOutputTokens: isInteractiveShort ? 180 : 320,
+        thinkingConfig: { thinkingBudget: 0 },
+        systemInstruction: isInteractiveShort
+          ? 'Modérateur rapide Lisière. Réponds uniquement en JSON valide et concis.'
+          : 'Tu es le bot de régulation automatique de Lisière. Tu protèges le calme et la qualité littéraire des salons contre la haine, l’offense, le harcèlement et le charabia, tout en classant justement la maturité (Tout public, 13+, 16+, 18+).',
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            allowed: { type: Type.BOOLEAN },
+            blockedReason: { type: Type.STRING },
+            botNotice: { type: Type.STRING },
+            isMature: { type: Type.BOOLEAN },
+            recommendedMinAge: { type: Type.INTEGER },
+            matureReason: { type: Type.STRING },
+            qualityIssue: { type: Type.BOOLEAN },
+          },
+          required: [
+            'allowed',
+            'blockedReason',
+            'botNotice',
+            'isMature',
+            'recommendedMinAge',
+            'matureReason',
+            'qualityIssue',
+          ],
         },
-        required: [
-          'allowed',
-          'blockedReason',
-          'botNotice',
-          'isMature',
-          'recommendedMinAge',
-          'matureReason',
-          'qualityIssue',
-        ],
       },
-    },
-  });
+    });
 
-  const rawText = response.text?.trim() || '';
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const err = new Error('Délai dépassé lors de la vérification IA.') as Error & {
+          statusCode?: number;
+        };
+        err.statusCode = 504;
+        reject(err);
+      }, timeoutMs);
+    });
+
+    const response = await Promise.race([generatePromise, timeoutPromise]);
+    rawText = response.text?.trim() || '';
+  } catch (err) {
+    if (isInteractiveShort) {
+      return buildInteractiveFallbackVerdict(declaredMinAge, declaredMature);
+    }
+    throw err;
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  }
+
   if (!rawText) {
+    if (isInteractiveShort) {
+      return buildInteractiveFallbackVerdict(declaredMinAge, declaredMature);
+    }
     throw new Error('Réponse vide du bot de régulation IA.');
   }
 
@@ -439,6 +539,9 @@ export async function guardContentWithGemini(params: {
   try {
     parsed = JSON.parse(rawText) as Record<string, unknown>;
   } catch {
+    if (isInteractiveShort) {
+      return buildInteractiveFallbackVerdict(declaredMinAge, declaredMature);
+    }
     throw new Error('Impossible de lire le verdict du bot de régulation IA.');
   }
 

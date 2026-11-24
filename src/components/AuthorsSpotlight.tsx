@@ -39,8 +39,8 @@ const PERIOD_OPTIONS: ReadonlyArray<{
   caption: string;
   days: number | null;
 }> = [
-  { id: 'week', label: 'Cette semaine', caption: 'Activité des 7 derniers jours', days: 7 },
-  { id: 'month', label: 'Ce mois-ci', caption: 'Activité des 30 derniers jours', days: 30 },
+  { id: 'week', label: 'Semaine', caption: 'Activité des 7 derniers jours', days: 7 },
+  { id: 'month', label: 'Mois', caption: 'Activité des 30 derniers jours', days: 30 },
   { id: 'all', label: 'Tout le temps', caption: 'Depuis l’ouverture de Lisière', days: null },
 ];
 
@@ -434,24 +434,24 @@ export function AuthorsSpotlight({
         ? isChampion
           ? 'order-1 lg:order-2'
           : isSecond
-            ? 'order-2 lg:order-1 lg:mt-8'
-            : 'order-3 lg:order-3 lg:mt-12'
+            ? 'order-2 lg:order-1'
+            : 'order-3 lg:order-3'
         : podiumAuthors.length === 2
           ? isChampion
             ? 'order-1'
-            : 'order-2 lg:mt-6'
+            : 'order-2'
           : 'max-w-2xl mx-auto w-full';
 
     const surfaceClass = isChampion
-      ? 'bg-[#FFFDF8] border-[#C9A227]/70 shadow-[0_14px_34px_-20px_rgba(140,77,14,0.32)]'
+      ? 'bg-[#FFFDF8] border-[#C9A227]/80 shadow-[0_14px_34px_-20px_rgba(122,82,16,0.28)] lg:min-h-[340px]'
       : isSecond
-        ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.22)]'
-        : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.18)]';
+        ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[310px]'
+        : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.14)] lg:min-h-[290px]';
 
     const topStripColor = isChampion
-      ? 'bg-[#B4822B] text-[#FFFDF8]'
+      ? 'bg-[#7A5210] text-[#FFFDF8]'
       : isSecond
-        ? 'bg-[#57534E] text-white'
+        ? 'bg-[#44403C] text-white'
         : 'bg-[#9A3B29] text-white';
 
     const avatarRing = isChampion
@@ -459,6 +459,14 @@ export function AuthorsSpotlight({
       : isSecond
         ? 'border-stone-400'
         : 'border-[#C97B6B]';
+
+    const plinthStyle = isChampion
+      ? 'h-16 bg-gradient-to-b from-[#F4E7C3] to-[#E8D295] border-x border-t border-[#C9A227]/70 text-[#5C3D0B]'
+      : isSecond
+        ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 border-x border-t border-stone-300 text-stone-700'
+        : 'h-7 bg-gradient-to-b from-[#F8EBE7] to-[#EED5CE] border-x border-t border-[#D9B9AE] text-[#7A2D1F]';
+
+    const plinthLabel = isChampion ? '1re marche' : isSecond ? '2e marche' : '3e marche';
 
     const rankTitle =
       rank === 1
@@ -468,127 +476,131 @@ export function AuthorsSpotlight({
             ? 'N° 1 · Palmarès'
             : 'N° 1 · Plus lu'
         : rank === 2
-          ? 'N° 2 · Deuxième marche'
-          : 'N° 3 · Troisième marche';
+          ? 'N° 2 · Argent'
+          : 'N° 3 · Bronze';
+
+    const showPedestal = podiumAuthors.length >= 2;
 
     return (
-      <article
-        key={author.authorId}
-        className={`${cardOrderClass} ${surfaceClass} border rounded-xl overflow-hidden flex flex-col justify-between transition-transform duration-200`}
-      >
-        <div>
-          {/* Architectural Podium Pedestal Top Band */}
-          <div
-            className={`${topStripColor} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
-          >
-            <span className="inline-flex items-center gap-1.5 tracking-wide">
-              {isChampion ? (
-                <Crown className="w-3.5 h-3.5 shrink-0" />
-              ) : (
-                <Award className="w-3.5 h-3.5 shrink-0" />
-              )}
-              <span>{rankTitle}</span>
-            </span>
-            <span className="font-display text-sm tabular-nums opacity-90">0{rank}</span>
-          </div>
+      <div key={author.authorId} className={`${cardOrderClass} flex flex-col`}>
+        <article
+          className={`${surfaceClass} border ${
+            showPedestal ? 'rounded-xl lg:rounded-b-none' : 'rounded-xl'
+          } overflow-hidden flex flex-col justify-between flex-1 transition-transform duration-200`}
+        >
+          <div>
+            {/* Architectural Podium Crown / Rank Header */}
+            <div
+              className={`${topStripColor} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
+            >
+              <span className="inline-flex items-center gap-1.5 tracking-wide whitespace-nowrap">
+                {isChampion ? (
+                  <Crown className="w-3.5 h-3.5 shrink-0" />
+                ) : (
+                  <Award className="w-3.5 h-3.5 shrink-0" />
+                )}
+                <span>{rankTitle}</span>
+              </span>
+              <span className="font-display text-sm tabular-nums">0{rank}</span>
+            </div>
 
-          <div className={isChampion ? 'p-5 sm:p-6 space-y-5' : 'p-5 space-y-4'}>
-            {/* Author Identity Row */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <SpotlightAvatar
-                  name={author.authorName}
-                  avatarUrl={author.avatarUrl}
-                  size={isChampion ? 'xl' : 'lg'}
-                  ringClass={avatarRing}
-                />
-                <div className="min-w-0">
+            <div className={isChampion ? 'p-5 sm:p-6 space-y-5' : 'p-5 space-y-4'}>
+              {/* Author Identity Row */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <SpotlightAvatar
+                    name={author.authorName}
+                    avatarUrl={author.avatarUrl}
+                    size={isChampion ? 'xl' : 'lg'}
+                    ringClass={avatarRing}
+                  />
+                  <div className="min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => onOpenMemberWall(author.authorId)}
+                      className={`font-display font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate max-w-full block ${
+                        isChampion ? 'text-2xl' : 'text-xl'
+                      }`}
+                    >
+                      {author.authorName}
+                    </button>
+                    <p className="text-xs text-stone-500 mt-0.5 tabular-nums">
+                      {[
+                        author.novelCount > 0
+                          ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
+                          : null,
+                        author.confessionCount > 0
+                          ? `${author.confessionCount} confession${author.confessionCount > 1 ? 's' : ''}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      {author.bio ? '' : ` · ${activePeriodMeta.label}`}
+                    </p>
+                  </div>
+                </div>
+
+                {user?.uid !== author.authorId && (
                   <button
                     type="button"
-                    onClick={() => onOpenMemberWall(author.authorId)}
-                    className={`font-display font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate max-w-full block ${
-                      isChampion ? 'text-2xl' : 'text-xl'
+                    disabled={busyFollowId === author.authorId}
+                    onClick={() =>
+                      void handleToggleFollowAuthor(author.authorId, author.authorName)
+                    }
+                    aria-pressed={isFollowing}
+                    className={`min-h-[32px] px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                      isFollowing
+                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                        : 'border-stone-200 bg-white text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
                     }`}
                   >
-                    {author.authorName}
+                    <Star className={`w-3.5 h-3.5 ${isFollowing ? 'fill-current' : ''}`} />
+                    <span>{isFollowing ? 'Suivi' : 'Suivre'}</span>
                   </button>
-                  <p className="text-xs text-stone-500 mt-0.5 tabular-nums">
-                    {[
-                      author.novelCount > 0
-                        ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
-                        : null,
-                      author.confessionCount > 0
-                        ? `${author.confessionCount} confession${author.confessionCount > 1 ? 's' : ''}`
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    {author.bio ? '' : ` · ${activePeriodMeta.label}`}
+                )}
+              </div>
+
+              {author.bio && (
+                <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 leading-relaxed">
+                  {author.bio}
+                </p>
+              )}
+
+              {/* Metrics Bar */}
+              <div className="grid grid-cols-3 gap-3 py-3 border-y border-stone-200/80">
+                <div>
+                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                    {author.totalViews}
                   </p>
+                  <p className="text-[11px] text-stone-500">Lectures</p>
+                </div>
+                <div>
+                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                    {author.totalResonances}
+                  </p>
+                  <p className="text-[11px] text-stone-500">Résonances</p>
+                </div>
+                <div>
+                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                    {formatFrenchDecimal(author.averageResonance)}
+                  </p>
+                  <p className="text-[11px] text-stone-500">Moy. / texte</p>
                 </div>
               </div>
 
-              {user?.uid !== author.authorId && (
-                <button
-                  type="button"
-                  disabled={busyFollowId === author.authorId}
-                  onClick={() =>
-                    void handleToggleFollowAuthor(author.authorId, author.authorName)
-                  }
-                  aria-pressed={isFollowing}
-                  className={`min-h-[32px] px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
-                    isFollowing
-                      ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                      : 'border-stone-200 bg-white text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
-                  }`}
-                >
-                  <Star className={`w-3.5 h-3.5 ${isFollowing ? 'fill-current' : ''}`} />
-                  <span>{isFollowing ? 'Suivi' : 'Suivre'}</span>
-                </button>
-              )}
-            </div>
-
-            {author.bio && (
-              <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 leading-relaxed">
-                {author.bio}
-              </p>
-            )}
-
-            {/* Metrics Bar */}
-            <div className="grid grid-cols-3 gap-3 py-3 border-y border-stone-200/80">
-              <div>
-                <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
-                  {author.totalViews}
-                </p>
-                <p className="text-[11px] text-stone-500">Lectures</p>
-              </div>
-              <div>
-                <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
-                  {author.totalResonances}
-                </p>
-                <p className="text-[11px] text-stone-500">Résonances</p>
-              </div>
-              <div>
-                <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
-                  {formatFrenchDecimal(author.averageResonance)}
-                </p>
-                <p className="text-[11px] text-stone-500">Moy. / texte</p>
-              </div>
-            </div>
-
-            {/* Featured Work */}
-            {featuredStory && (
-              <div className="rounded-md bg-[#F7F4EE] border border-stone-200/90 p-3.5 flex items-start justify-between gap-3">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  {featuredStory.storyFormat === 'roman' && (
-                    <NovelCoverArt
-                      coverUrl={featuredStory.coverUrl}
-                      title={featuredStory.title}
-                      genre={featuredStory.novelGenre}
-                      size="xs"
-                      showFallbackWhenMissing={true}
-                    />
-                  )}
+              {/* Featured Work (unbordered warm inset) */}
+              {featuredStory && (
+                <div className="rounded-md bg-[#F7F4EE] p-3.5 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    {featuredStory.storyFormat === 'roman' && (
+                      <NovelCoverArt
+                        coverUrl={featuredStory.coverUrl}
+                        title={featuredStory.title}
+                        genre={featuredStory.novelGenre}
+                        size="xs"
+                        showFallbackWhenMissing={true}
+                      />
+                    )}
                   <div className="min-w-0 space-y-0.5">
                     <p className="text-[10px] uppercase tracking-widest flex items-center gap-1.5">
                       <span
@@ -643,20 +655,40 @@ export function AuthorsSpotlight({
           </div>
         </div>
 
-        <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={() => onOpenMemberWall(author.authorId)}
-            className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+          <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => onOpenMemberWall(author.authorId)}
+              className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span>Voir son mur littéraire</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <span className="text-[11px] text-stone-500 tabular-nums">
+              {author.totalEchoes} comm.
+            </span>
+          </div>
+        </article>
+
+        {/* Architectural Stepped Podium Plinth (Desktop 2-3+ steps) */}
+        {showPedestal && (
+          <div
+            aria-hidden="true"
+            className={`hidden lg:flex items-center justify-between px-4 ${plinthStyle}`}
           >
-            <span>Voir son mur littéraire</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <span className="text-[11px] text-stone-500 tabular-nums">
-            {author.totalEchoes} comm.
-          </span>
-        </div>
-      </article>
+            <span className="text-[11px] uppercase tracking-widest font-medium">
+              {plinthLabel}
+            </span>
+            <span
+              className={`font-display font-semibold tabular-nums leading-none ${
+                isChampion ? 'text-2xl' : isSecond ? 'text-xl' : 'text-base'
+              }`}
+            >
+              0{rank}
+            </span>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -712,31 +744,21 @@ export function AuthorsSpotlight({
               })}
             </div>
 
-            {/* Period Selector */}
-            <div
-              role="group"
-              aria-label="Période d’activité"
-              className="inline-flex items-center gap-1 p-1 bg-white rounded-lg border border-stone-200"
-            >
-              <Calendar className="w-3.5 h-3.5 text-stone-400 ml-2 mr-0.5 shrink-0" />
-              {PERIOD_OPTIONS.map((opt) => {
-                const active = period === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => setPeriod(opt.id)}
-                    className={`min-h-[32px] px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                      active
-                        ? 'bg-[#1B365D] text-white'
-                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
-                    }`}
-                  >
+            {/* Period Dropdown Selector (Semaine / Mois / Tout le temps) */}
+            <div className="relative flex items-center shrink-0">
+              <Calendar className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 pointer-events-none" />
+              <select
+                aria-label="Période d’activité"
+                value={period}
+                onChange={(e) => setPeriod(e.target.value as SpotlightPeriod)}
+                className="min-h-[40px] pl-8 pr-7 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-800 hover:border-stone-400 focus:outline-none focus:border-[#1B365D] cursor-pointer"
+              >
+                {PERIOD_OPTIONS.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
                     {opt.label}
-                  </button>
-                );
-              })}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* Ranking Criteria Tabs */}
@@ -1025,14 +1047,31 @@ export function AuthorsSpotlight({
           )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
+          {podiumAuthors.length >= 2 && (
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <p className="text-xs uppercase tracking-widest text-stone-500">
+                Podium · Top {podiumAuthors.length} des plumes ·{' '}
+                {criteria === 'best-rated'
+                  ? 'Les mieux notées'
+                  : criteria === 'combined'
+                    ? 'Palmarès global'
+                    : 'Les plus lues'}
+              </p>
+              <span className="text-xs text-stone-500 tabular-nums">
+                {activePeriodMeta.label} · {rankedAuthors.length} plume
+                {rankedAuthors.length > 1 ? 's' : ''} classée{rankedAuthors.length > 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
+
           {/* Stepped Podium Grid (#2 Left, #1 Center Elevated, #3 Right) */}
           <div
             className={
               podiumAuthors.length >= 3
-                ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 items-start'
+                ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90'
                 : podiumAuthors.length === 2
-                  ? 'grid grid-cols-1 lg:grid-cols-2 gap-5 items-start max-w-4xl mx-auto'
+                  ? 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90'
                   : 'grid grid-cols-1 gap-5'
             }
           >

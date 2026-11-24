@@ -195,10 +195,11 @@ export function isStoryCompliantForPublicFeed(
 }
 
 const EXPLICIT_HATE_PATTERNS: ReadonlyArray<RegExp> = [
-  /\b(sale\s+(?:arabe|noir|n[eè]gre|juif|bougnoule|p[eé]d[eé]|tapette|chinois|musulman|blanc))\b/i,
-  /\b(n[eè]gre|bougnoule|bamboula|youpin|feuj\s+de\s+merde|raton|bicot|trou\s+du\s+cul)\b/i,
+  /\b(sale\s+(?:arabe|noir|n[eè]gre|juif|bougnoule|p[eé]d[eé]|tapette|chinois|musulman|blanc|p[oô]te|salope|pute|race))\b/i,
+  /\b(n[eè]gre|bougnoule|bamboula|youpin|feuj\s+de\s+merde|raton|bicot|trou\s+du\s+cul|fils\s+de\s+pute|fdp)\b/i,
+  /\b(connard|connasse|encul[eé]s?|salope|petasse|p[eé]tasse|ferme\s+ta\s+gueule|nique\s+ta\s+m[eè]re|ntm)\b/i,
   /\b(mort\s+aux?\s+(?:juifs|arabes|noirs|blancs|homos|gays|trans|femmes|étrangers|migrants))\b/i,
-  /\b(va\s+crever|suicide[-\s]?toi|tue[-\s]?toi|je\s+vais\s+te\s+tuer)\b/i,
+  /\b(va\s+crever|suicide[-\s]?toi|tue[-\s]?toi|je\s+vais\s+te\s+tuer|je\s+vais\s+te\s+buter)\b/i,
   /\b(nigger|faggot|kike|spic|kill\s+yourself)\b/i,
 ];
 

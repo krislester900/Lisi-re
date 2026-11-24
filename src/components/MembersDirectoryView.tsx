@@ -11,17 +11,28 @@ import {
   Users,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  getProfileBadges,
+  MEMBER_BADGE_DEFINITIONS,
+  profileMatchesBadgeQuery,
+} from '../lib/memberBadges';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { toggleFavoriteAuthor } from '../lib/storyService';
+import { STORY_THEMES, THEME_MAP } from '../lib/themes';
 import {
   Exchange,
+  MemberBadgeId,
+  PredefinedSalonModerator,
   PublicProfile,
   Story,
   StoryRepost,
+  StoryThemeId,
   UserRelationship,
 } from '../types/story';
 import { ProfileSettingsPanel } from './ProfileSettingsPanel';
 import { ProfileWallView } from './ProfileWallView';
 import type { ReportDraft } from './ReportModal';
+import { ProfileBadgeChip, RoleBadgesRow } from './RoleBadge';
 
 export type ProfilesPageTab = 'directory' | 'my-profile' | 'edit-profile';
 
@@ -35,6 +46,8 @@ interface MembersDirectoryViewProps {
   myReposts?: StoryRepost[];
   existingExchanges: Exchange[];
   relationships?: UserRelationship[];
+  adminUserIds?: Set<string>;
+  predefinedSalonModerators?: Record<StoryThemeId, PredefinedSalonModerator[]>;
   onSelectMember: (userId: string | null) => void;
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
@@ -53,6 +66,8 @@ export function MembersDirectoryView({
   myReposts = [],
   existingExchanges,
   relationships = [],
+  adminUserIds,
+  predefinedSalonModerators,
   onSelectMember,
   onReadStory,
   onOpenStoryById,
@@ -63,6 +78,7 @@ export function MembersDirectoryView({
   const { user, favoriteAuthors, signInWithGoogle } = useAuth();
   const [subTab, setSubTab] = useState<ProfilesPageTab>(initialSubTab);
   const [searchQuery, setSearchQuery] = useState('');
+  const [badgeFilter, setBadgeFilter] = useState<'all' | MemberBadgeId>('all');
   const [failedAvatars, setFailedAvatars] = useState<Record<string, boolean>>({});
   const [favBusyId, setFavBusyId] = useState<string | null>(null);
 
@@ -110,18 +126,74 @@ export function MembersDirectoryView({
     [profiles, hiddenMemberIds, user?.uid]
   );
 
+  const moderatedSalonsByUser = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    if (!predefinedSalonModerators) return map;
+    for (const theme of STORY_THEMES) {
+      const mods = predefinedSalonModerators[theme.id] ?? [];
+      for (const mod of mods) {
+        if (!map[mod.userId]) map[mod.userId] = [];
+        map[mod.userId].push(THEME_MAP[theme.id]?.shortSalonName ?? theme.shortSalonName);
+      }
+    }
+    return map;
+  }, [predefinedSalonModerators]);
+
+  const memberHasBadge = (member: PublicProfile, targetBadge: MemberBadgeId): boolean => {
+    const badges = getProfileBadges(member);
+    if (badges.includes(targetBadge)) return true;
+    if (
+      targetBadge === 'administrateur' &&
+      (member.isAdmin ||
+        adminUserIds?.has(member.userId) ||
+        (member.userId === user?.uid && isModerationAdminEmail(user?.email)))
+    ) {
+      return true;
+    }
+    if (
+      targetBadge === 'moderateur' &&
+      (moderatedSalonsByUser[member.userId]?.length ?? 0) > 0
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  const availableBadgeFilters = useMemo(
+    () =>
+      MEMBER_BADGE_DEFINITIONS.filter((def) =>
+        visibleProfiles.some((member) => memberHasBadge(member, def.id))
+      ),
+    [visibleProfiles, adminUserIds, moderatedSalonsByUser, user?.uid, user?.email]
+  );
+
   const filteredProfiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    if (!q) return visibleProfiles;
-    return visibleProfiles.filter(
-      (p) =>
+    return visibleProfiles.filter((p) => {
+      if (badgeFilter !== 'all' && !memberHasBadge(p, badgeFilter)) return false;
+      if (!q) return true;
+      const extraRoles = [
+        ...(adminUserIds?.has(p.userId) ? ['Administrateur'] : []),
+        ...((moderatedSalonsByUser[p.userId]?.length ?? 0) > 0 ? ['Modérateur'] : []),
+      ];
+      return (
         p.displayName.toLowerCase().includes(q) ||
         (p.bio || '').toLowerCase().includes(q) ||
         (p.favoriteTrackTitle || '').toLowerCase().includes(q) ||
         (p.favoriteNovel || '').toLowerCase().includes(q) ||
-        (p.interests || '').toLowerCase().includes(q)
-    );
-  }, [visibleProfiles, searchQuery]);
+        (p.interests || '').toLowerCase().includes(q) ||
+        profileMatchesBadgeQuery(p, q, extraRoles)
+      );
+    });
+  }, [
+    visibleProfiles,
+    searchQuery,
+    badgeFilter,
+    adminUserIds,
+    moderatedSalonsByUser,
+    user?.uid,
+    user?.email,
+  ]);
 
   if (selectedMemberId) {
     const isOwnSelected = Boolean(user && user.uid === selectedMemberId);
@@ -135,6 +207,8 @@ export function MembersDirectoryView({
         memberStories={memberStories}
         existingExchanges={existingExchanges}
         relationships={relationships}
+        adminUserIds={adminUserIds}
+        moderatedSalonNames={moderatedSalonsByUser[selectedMemberId] ?? []}
         onBack={() => {
           setSubTab('directory');
           onSelectMember(null);
@@ -242,22 +316,58 @@ export function MembersDirectoryView({
       {/* Tab 1: Community Profiles Directory */}
       {subTab === 'directory' && (
         <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <p className="text-xs text-stone-500 tabular-nums">
-              {filteredProfiles.length} profil{filteredProfiles.length > 1 ? 's' : ''} public
-              {filteredProfiles.length > 1 ? 's' : ''}
-            </p>
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Chercher un prénom, une musique, un livre…"
-                aria-label="Rechercher un profil"
-                className="w-full min-h-[40px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
-              />
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <p className="text-xs text-stone-500 tabular-nums">
+                {filteredProfiles.length} profil{filteredProfiles.length > 1 ? 's' : ''} public
+                {filteredProfiles.length > 1 ? 's' : ''}
+              </p>
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Chercher un nom, badge, musique, livre…"
+                  aria-label="Rechercher un profil"
+                  className="w-full min-h-[40px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                />
+              </div>
             </div>
+
+            {availableBadgeFilters.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setBadgeFilter('all')}
+                  className={`min-h-[30px] px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+                    badgeFilter === 'all'
+                      ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                      : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                  }`}
+                >
+                  Tous les membres
+                </button>
+                {availableBadgeFilters.map((def) => {
+                  const active = badgeFilter === def.id;
+                  return (
+                    <button
+                      key={def.id}
+                      type="button"
+                      onClick={() => setBadgeFilter(active ? 'all' : def.id)}
+                      aria-pressed={active}
+                      className={`min-h-[30px] px-2 py-1 rounded-md border transition-colors inline-flex items-center gap-1 ${
+                        active
+                          ? 'border-[#1B365D] bg-[#F3F6FA] ring-1 ring-[#1B365D]/30'
+                          : 'border-stone-200 bg-white hover:border-stone-400'
+                      }`}
+                    >
+                      <ProfileBadgeChip badgeId={def.id} compact />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {!profilesLoaded ? (
@@ -270,10 +380,13 @@ export function MembersDirectoryView({
               <p className="font-display text-xl text-stone-900">
                 Aucun profil ne correspond à cette recherche
               </p>
-              {searchQuery && (
+              {(searchQuery || badgeFilter !== 'all') && (
                 <button
                   type="button"
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => {
+                    setSearchQuery('');
+                    setBadgeFilter('all');
+                  }}
                   className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
                 >
                   Afficher tous les profils
@@ -308,10 +421,22 @@ export function MembersDirectoryView({
                               {member.displayName.slice(0, 1).toUpperCase()}
                             </div>
                           )}
-                          <div className="min-w-0">
-                            <h2 className="font-display text-xl font-medium text-stone-900 truncate">
-                              {member.displayName}
-                            </h2>
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <h2 className="font-display text-xl font-medium text-stone-900 truncate">
+                                {member.displayName}
+                              </h2>
+                              <RoleBadgesRow
+                                isAdmin={Boolean(
+                                  member.isAdmin ||
+                                    adminUserIds?.has(member.userId) ||
+                                    (isMe && isModerationAdminEmail(user?.email))
+                                )}
+                                isModerator={(moderatedSalonsByUser[member.userId]?.length ?? 0) > 0}
+                                profileBadges={member.badges}
+                                compact
+                              />
+                            </div>
                             <p className="text-xs text-stone-500 tabular-nums">
                               {isMe ? 'Votre profil' : 'Profil public'} · {storiesCount} récit
                               {storiesCount > 1 ? 's' : ''}
@@ -418,6 +543,8 @@ export function MembersDirectoryView({
           memberId={user.uid}
           memberStories={myStories}
           existingExchanges={existingExchanges}
+          adminUserIds={adminUserIds}
+          moderatedSalonNames={moderatedSalonsByUser[user.uid] ?? []}
           onEditProfile={() => setSubTab('edit-profile')}
           onReadStory={onReadStory}
           onOpenStoryById={onOpenStoryById}

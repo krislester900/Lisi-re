@@ -17,10 +17,13 @@ import {
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
+  isStrictNovelGenre,
+  NOVEL_GENRE_DESCRIPTIONS,
   NOVEL_GENRE_LABELS,
   NOVEL_GENRES,
   SERIES_STATUS_LABELS,
   STORY_THEMES,
+  StrictNovelGenre,
   THEME_MAP,
 } from '../lib/themes';
 import {
@@ -56,10 +59,14 @@ interface ThemesViewProps {
 }
 
 type RankingWorkCategory = 'roman' | 'confession';
+type SelectedNovelGenreTab = 'all' | StrictNovelGenre | 'uncategorized';
 type ConfessionThemeFilter = 'all' | StoryThemeId | 'pelemele';
 
-function getNovelCategory(story: Story): NovelGenre {
-  return story.novelGenre ?? 'autre';
+function getNovelGenreLabel(story: Story): string {
+  if (isStrictNovelGenre(story.novelGenre)) {
+    return NOVEL_GENRE_LABELS[story.novelGenre];
+  }
+  return 'Non classé';
 }
 
 function getConfessionBucket(story: Story): StoryThemeId | 'pelemele' {
@@ -114,7 +121,7 @@ export function ThemesView({
   onShowNotice,
 }: ThemesViewProps) {
   const [workCategory, setWorkCategory] = useState<RankingWorkCategory>('roman');
-  const [selectedGenre, setSelectedGenre] = useState<'all' | NovelGenre>('all');
+  const [selectedGenre, setSelectedGenre] = useState<SelectedNovelGenreTab>('all');
   const [selectedConfessionTheme, setSelectedConfessionTheme] =
     useState<ConfessionThemeFilter>('all');
 
@@ -138,17 +145,20 @@ export function ThemesView({
     [stories]
   );
 
-  const novelsByGenre = useMemo(() => {
-    const map = new Map<NovelGenre, Story[]>();
+  const { novelsByGenre, uncategorizedNovels } = useMemo(() => {
+    const map = new Map<StrictNovelGenre, Story[]>();
     for (const genre of NOVEL_GENRES) {
       map.set(genre, []);
     }
+    const uncategorized: Story[] = [];
     for (const novel of allPublicNovels) {
-      const cat = getNovelCategory(novel);
-      const list = map.get(cat);
-      if (list) list.push(novel);
+      if (isStrictNovelGenre(novel.novelGenre)) {
+        map.get(novel.novelGenre)?.push(novel);
+      } else {
+        uncategorized.push(novel);
+      }
     }
-    return map;
+    return { novelsByGenre: map, uncategorizedNovels: uncategorized };
   }, [allPublicNovels]);
 
   const confessionsByTheme = useMemo(() => {
@@ -167,8 +177,9 @@ export function ThemesView({
 
   const activeGenreNovels = useMemo(() => {
     if (selectedGenre === 'all') return allPublicNovels;
+    if (selectedGenre === 'uncategorized') return uncategorizedNovels;
     return novelsByGenre.get(selectedGenre) ?? [];
-  }, [selectedGenre, allPublicNovels, novelsByGenre]);
+  }, [selectedGenre, allPublicNovels, novelsByGenre, uncategorizedNovels]);
 
   const activeConfessions = useMemo(() => {
     if (selectedConfessionTheme === 'all') return allPublicConfessions;
@@ -271,7 +282,11 @@ export function ThemesView({
             <button
               type="button"
               onClick={() =>
-                onWriteNovel(selectedGenre === 'all' ? undefined : selectedGenre)
+                onWriteNovel(
+                  selectedGenre !== 'all' && selectedGenre !== 'uncategorized'
+                    ? selectedGenre
+                    : undefined
+                )
               }
               className="min-h-[40px] px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
             >
@@ -291,7 +306,11 @@ export function ThemesView({
         onReadStory={onReadStory}
         onOpenMemberWall={onOpenMemberWall}
         onWriteNovel={() =>
-          onWriteNovel(selectedGenre === 'all' ? undefined : selectedGenre)
+          onWriteNovel(
+            selectedGenre !== 'all' && selectedGenre !== 'uncategorized'
+              ? selectedGenre
+              : undefined
+          )
         }
         onShowNotice={onShowNotice}
       />
@@ -394,7 +413,31 @@ export function ThemesView({
                   </button>
                 );
               })}
+              {uncategorizedNovels.length > 0 && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedGenre === 'uncategorized'}
+                  onClick={() => setSelectedGenre('uncategorized')}
+                  className={`min-h-[38px] px-3.5 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
+                    selectedGenre === 'uncategorized'
+                      ? 'border-stone-800 bg-stone-800 text-white'
+                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                  }`}
+                >
+                  Non classés ({uncategorizedNovels.length})
+                </button>
+              )}
             </div>
+
+            {selectedGenre !== 'all' && selectedGenre !== 'uncategorized' && (
+              <p className="text-xs text-stone-600 bg-white border border-stone-200 rounded-md px-3.5 py-2.5">
+                <span className="font-semibold text-[#1B365D]">
+                  Rayon {NOVEL_GENRE_LABELS[selectedGenre]} :
+                </span>{' '}
+                {NOVEL_GENRE_DESCRIPTIONS[selectedGenre]}
+              </p>
+            )}
 
             {!storiesLoaded ? (
               <div className="bg-white border border-stone-200 rounded-lg p-8 text-sm text-stone-500">
@@ -407,7 +450,9 @@ export function ThemesView({
                   <h3 className="font-display text-2xl text-stone-900">
                     {selectedGenre === 'all'
                       ? 'Aucun roman n’est encore paru'
-                      : `Aucun roman dans le genre « ${NOVEL_GENRE_LABELS[selectedGenre]} »`}
+                      : selectedGenre === 'uncategorized'
+                        ? 'Aucun roman non classé'
+                        : `Aucun roman dans le genre « ${NOVEL_GENRE_LABELS[selectedGenre]} »`}
                   </h3>
                   <p className="text-sm text-stone-600 max-w-md mx-auto">
                     Soyez la première plume à inaugurer cette catégorie avec un chapitre de deux pages ou plus.
@@ -416,7 +461,11 @@ export function ThemesView({
                 <button
                   type="button"
                   onClick={() =>
-                    onWriteNovel(selectedGenre === 'all' ? undefined : selectedGenre)
+                    onWriteNovel(
+                      selectedGenre !== 'all' && selectedGenre !== 'uncategorized'
+                        ? selectedGenre
+                        : undefined
+                    )
                   }
                   className="min-h-[40px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-2 whitespace-nowrap"
                 >
@@ -431,15 +480,17 @@ export function ThemesView({
                   (() => {
                     const leadNovel = podiumNovels[0];
                     return (
-                      <article className="bg-[#FFFDF8] border border-[#C9A227]/70 rounded-xl overflow-hidden shadow-[0_14px_34px_-20px_rgba(140,77,14,0.28)]">
-                        <div className="bg-[#B4822B] text-[#FFFDF8] px-5 py-2 flex items-center justify-between gap-2 text-xs font-medium">
+                      <article className="bg-[#FFFDF8] border border-[#C9A227]/80 rounded-xl overflow-hidden shadow-[0_14px_34px_-20px_rgba(122,82,16,0.26)]">
+                        <div className="bg-[#7A5210] text-[#FFFDF8] px-5 py-2 flex items-center justify-between gap-2 text-xs font-medium">
                           <span className="inline-flex items-center gap-1.5">
                             <Crown className="w-3.5 h-3.5 shrink-0" />
                             <span>
                               N° 1 Roman{' '}
                               {selectedGenre === 'all'
                                 ? '· Tous genres'
-                                : `· ${NOVEL_GENRE_LABELS[selectedGenre]}`}
+                                : selectedGenre === 'uncategorized'
+                                  ? '· Non classés'
+                                  : `· ${NOVEL_GENRE_LABELS[selectedGenre]}`}
                             </span>
                           </span>
                           <span className="font-display text-sm tabular-nums">01</span>
@@ -574,200 +625,261 @@ export function ThemesView({
                     );
                   })()
                 ) : (
-                  <div
-                    className={
-                      podiumNovels.length >= 3
-                        ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 items-start'
-                        : 'grid grid-cols-1 lg:grid-cols-2 gap-5 items-start max-w-4xl mx-auto'
-                    }
-                  >
-                    {podiumNovels.map((novel, idx) => {
-                      const rank = (idx + 1) as 1 | 2 | 3;
-                      const isChampion = rank === 1;
-                      const isSecond = rank === 2;
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-xs uppercase tracking-widest text-stone-500">
+                        Podium · Top {podiumNovels.length} des romans les plus lus{' '}
+                        {selectedGenre === 'all'
+                          ? '(tous genres)'
+                          : selectedGenre === 'uncategorized'
+                            ? '(non classés)'
+                            : `(${NOVEL_GENRE_LABELS[selectedGenre]})`}
+                      </p>
+                      <span className="text-xs text-stone-500 tabular-nums">
+                        Classés par lectures et résonances
+                      </span>
+                    </div>
 
-                      const orderClass =
+                    <div
+                      className={
                         podiumNovels.length >= 3
-                          ? isChampion
-                            ? 'order-1 lg:order-2'
-                            : isSecond
-                              ? 'order-2 lg:order-1 lg:mt-8'
-                              : 'order-3 lg:order-3 lg:mt-12'
-                          : isChampion
-                            ? 'order-1'
-                            : 'order-2 lg:mt-6';
+                          ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90'
+                          : 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90'
+                      }
+                    >
+                      {podiumNovels.map((novel, idx) => {
+                        const rank = (idx + 1) as 1 | 2 | 3;
+                        const isChampion = rank === 1;
+                        const isSecond = rank === 2;
 
-                      const cardSurface = isChampion
-                        ? 'bg-[#FFFDF8] border-[#C9A227]/70 shadow-[0_14px_34px_-20px_rgba(140,77,14,0.3)]'
-                        : isSecond
-                          ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.2)]'
-                          : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.16)]';
+                        const orderClass =
+                          podiumNovels.length >= 3
+                            ? isChampion
+                              ? 'order-1 lg:order-2'
+                              : isSecond
+                                ? 'order-2 lg:order-1'
+                                : 'order-3 lg:order-3'
+                            : isChampion
+                              ? 'order-1'
+                              : 'order-2';
 
-                      const stripClass = isChampion
-                        ? 'bg-[#B4822B] text-[#FFFDF8]'
-                        : isSecond
-                          ? 'bg-[#57534E] text-white'
-                          : 'bg-[#9A3B29] text-white';
+                        const cardSurface = isChampion
+                          ? 'bg-[#FFFDF8] border-[#C9A227]/80 shadow-[0_14px_34px_-20px_rgba(122,82,16,0.28)] lg:min-h-[340px]'
+                          : isSecond
+                            ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[305px]'
+                            : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.14)] lg:min-h-[285px]';
 
-                      const stepHeading =
-                        rank === 1
-                          ? `N° 1 Roman ${selectedGenre === 'all' ? '· Tête d’affiche' : `· ${NOVEL_GENRE_LABELS[selectedGenre]}`}`
-                          : rank === 2
-                            ? 'N° 2 · Deuxième marche'
-                            : 'N° 3 · Troisième marche';
+                        const stripClass = isChampion
+                          ? 'bg-[#7A5210] text-[#FFFDF8]'
+                          : isSecond
+                            ? 'bg-[#44403C] text-white'
+                            : 'bg-[#9A3B29] text-white';
 
-                      return (
-                        <article
-                          key={novel.storyId}
-                          className={`${orderClass} ${cardSurface} border rounded-xl overflow-hidden flex flex-col justify-between`}
-                        >
-                          <div>
-                            <div
-                              className={`${stripClass} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
+                        const plinthClass = isChampion
+                          ? 'h-16 bg-gradient-to-b from-[#F4E7C3] to-[#E8D295] border-x border-t border-[#C9A227]/70 text-[#5C3D0B]'
+                          : isSecond
+                            ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 border-x border-t border-stone-300 text-stone-700'
+                            : 'h-7 bg-gradient-to-b from-[#F8EBE7] to-[#EED5CE] border-x border-t border-[#D9B9AE] text-[#7A2D1F]';
+
+                        const plinthLabel = isChampion
+                          ? '1re marche'
+                          : isSecond
+                            ? '2e marche'
+                            : '3e marche';
+
+                        const stepHeading =
+                          rank === 1
+                            ? `N° 1 Roman ${
+                                selectedGenre === 'all'
+                                  ? '· Tête d’affiche'
+                                  : selectedGenre === 'uncategorized'
+                                    ? '· Non classés'
+                                    : `· ${NOVEL_GENRE_LABELS[selectedGenre]}`
+                              }`
+                            : rank === 2
+                              ? 'N° 2 · Argent'
+                              : 'N° 3 · Bronze';
+
+                        return (
+                          <div key={novel.storyId} className={`${orderClass} flex flex-col`}>
+                            <article
+                              className={`${cardSurface} border rounded-xl lg:rounded-b-none overflow-hidden flex flex-col justify-between flex-1`}
                             >
-                              <span className="inline-flex items-center gap-1.5">
-                                {isChampion ? (
-                                  <Crown className="w-3.5 h-3.5 shrink-0" />
-                                ) : (
-                                  <Award className="w-3.5 h-3.5 shrink-0" />
-                                )}
-                                <span className="truncate">{stepHeading}</span>
-                              </span>
-                              <span className="font-display text-sm tabular-nums">0{rank}</span>
-                            </div>
-
-                            <div className={isChampion ? 'p-5 sm:p-6 space-y-4' : 'p-5 space-y-3.5'}>
-                              <div className="flex items-start gap-4">
-                                <NovelCoverArt
-                                  coverUrl={novel.coverUrl}
-                                  title={novel.title}
-                                  genre={novel.novelGenre}
-                                  accentColor={getSalonDisplayInfo(novel, customSalons).accentColor}
-                                  size={isChampion ? 'md' : 'sm'}
-                                  showFallbackWhenMissing={true}
-                                />
-                                <div className="min-w-0 flex-1 space-y-1.5">
-                                  <StoryFormatKicker story={novel} showDetails={false} />
-                                  <p className="text-[11px] text-stone-500 tabular-nums">
-                                    {NOVEL_GENRE_LABELS[getNovelCategory(novel)]} ·{' '}
-                                    {novel.chapterCount ?? 1} chap.
-                                  </p>
-                                  <h3
-                                    className={`font-display font-medium text-stone-900 leading-snug ${
-                                      isChampion ? 'text-2xl' : 'text-xl'
-                                    }`}
-                                    style={{ textWrap: 'balance' }}
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => onReadStory(novel)}
-                                      className="hover:text-[#1B365D] text-left transition-colors"
-                                    >
-                                      {novel.title}
-                                    </button>
-                                  </h3>
-                                  <p className="text-xs text-stone-600">
-                                    {novel.isAnonymous ? (
-                                      <span className="inline-flex items-center gap-1">
-                                        <EyeOff className="w-3 h-3 text-stone-400" />
-                                        <span>Auteur anonyme</span>
-                                      </span>
+                              <div>
+                                <div
+                                  className={`${stripClass} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
+                                >
+                                  <span className="inline-flex items-center gap-1.5 min-w-0">
+                                    {isChampion ? (
+                                      <Crown className="w-3.5 h-3.5 shrink-0" />
                                     ) : (
-                                      <button
-                                        type="button"
-                                        onClick={() => onOpenMemberWall(novel.authorId)}
-                                        className="font-medium text-stone-700 hover:text-[#1B365D] hover:underline"
-                                      >
-                                        {novel.authorName}
-                                      </button>
+                                      <Award className="w-3.5 h-3.5 shrink-0" />
                                     )}
+                                    <span className="truncate">{stepHeading}</span>
+                                  </span>
+                                  <span className="font-display text-sm tabular-nums shrink-0">
+                                    0{rank}
+                                  </span>
+                                </div>
+
+                                <div
+                                  className={
+                                    isChampion ? 'p-5 sm:p-6 space-y-4' : 'p-5 space-y-3.5'
+                                  }
+                                >
+                                  <div className="flex items-start gap-4">
+                                    <NovelCoverArt
+                                      coverUrl={novel.coverUrl}
+                                      title={novel.title}
+                                      genre={novel.novelGenre}
+                                      accentColor={
+                                        getSalonDisplayInfo(novel, customSalons).accentColor
+                                      }
+                                      size={isChampion ? 'md' : 'sm'}
+                                      showFallbackWhenMissing={true}
+                                    />
+                                    <div className="min-w-0 flex-1 space-y-1.5">
+                                      <StoryFormatKicker story={novel} showDetails={false} />
+                                      <p className="text-[11px] text-stone-500 tabular-nums">
+                                        {getNovelGenreLabel(novel)} · {novel.chapterCount ?? 1} chap.
+                                      </p>
+                                      <h3
+                                        className={`font-display font-medium text-stone-900 leading-snug ${
+                                          isChampion ? 'text-2xl' : 'text-xl'
+                                        }`}
+                                        style={{ textWrap: 'balance' }}
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() => onReadStory(novel)}
+                                          className="hover:text-[#1B365D] text-left transition-colors"
+                                        >
+                                          {novel.title}
+                                        </button>
+                                      </h3>
+                                      <p className="text-xs text-stone-600">
+                                        {novel.isAnonymous ? (
+                                          <span className="inline-flex items-center gap-1">
+                                            <EyeOff className="w-3 h-3 text-stone-400" />
+                                            <span>Auteur anonyme</span>
+                                          </span>
+                                        ) : (
+                                          <button
+                                            type="button"
+                                            onClick={() => onOpenMemberWall(novel.authorId)}
+                                            className="font-medium text-stone-700 hover:text-[#1B365D] hover:underline"
+                                          >
+                                            {novel.authorName}
+                                          </button>
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <p className="text-xs sm:text-sm text-stone-600 line-clamp-3 leading-relaxed">
+                                    {novel.excerpt}
                                   </p>
+
+                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                                    {renderOriginLink(novel)}
+                                    <span aria-hidden="true">·</span>
+                                    <span>
+                                      {SERIES_STATUS_LABELS[novel.seriesStatus ?? 'en-cours']}
+                                    </span>
+                                    <MatureContentBadge
+                                      minAge={novel.minAge}
+                                      isMature={novel.isMature}
+                                      compact
+                                    />
+                                  </div>
                                 </div>
                               </div>
 
-                              <p className="text-xs sm:text-sm text-stone-600 line-clamp-3 leading-relaxed">
-                                {novel.excerpt}
-                              </p>
+                              <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-3 text-xs text-stone-600 tabular-nums">
+                                  <span className="inline-flex items-center gap-1 font-medium text-stone-800">
+                                    <Eye className="w-3.5 h-3.5 text-stone-400" />
+                                    {novel.viewCount ?? 0}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <Heart className="w-3.5 h-3.5 text-stone-400" />
+                                    {novel.resonanceCount}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
+                                    {novel.echoCount}
+                                  </span>
+                                </div>
 
-                              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
-                                {renderOriginLink(novel)}
-                                <span aria-hidden="true">·</span>
-                                <span>{SERIES_STATUS_LABELS[novel.seriesStatus ?? 'en-cours']}</span>
-                                <MatureContentBadge
-                                  minAge={novel.minAge}
-                                  isMature={novel.isMature}
-                                  compact
-                                />
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() => onToggleBookmark(novel)}
+                                    aria-label="Enregistrer pour lire plus tard"
+                                    className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                      bookmarkedStoryIds.has(novel.storyId)
+                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                        : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                    }`}
+                                  >
+                                    <Bookmark
+                                      className={`w-3.5 h-3.5 ${
+                                        bookmarkedStoryIds.has(novel.storyId) ? 'fill-current' : ''
+                                      }`}
+                                    />
+                                  </button>
+
+                                  {isChampion && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenRepost(novel)}
+                                      aria-label="Repartager"
+                                      className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                        repostedStoryIds.has(novel.storyId)
+                                          ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                          : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                      }`}
+                                    >
+                                      <Repeat2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => onReadStory(novel)}
+                                    className={`min-h-[32px] px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap ${
+                                      isChampion
+                                        ? 'bg-[#1B365D] text-white hover:bg-[#132744]'
+                                        : 'bg-white border border-[#CBD6E6] text-[#1B365D] hover:bg-[#F3F6FA]'
+                                    }`}
+                                  >
+                                    <span>Lire le roman</span>
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          </div>
+                            </article>
 
-                          <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2.5">
-                            <div className="flex items-center gap-3 text-xs text-stone-600 tabular-nums">
-                              <span className="inline-flex items-center gap-1 font-medium text-stone-800">
-                                <Eye className="w-3.5 h-3.5 text-stone-400" />
-                                {novel.viewCount ?? 0}
+                            {/* Architectural Stepped Podium Plinth (Desktop 2-3+ steps) */}
+                            <div
+                              aria-hidden="true"
+                              className={`hidden lg:flex items-center justify-between px-4 ${plinthClass}`}
+                            >
+                              <span className="text-[11px] uppercase tracking-widest font-medium">
+                                {plinthLabel}
                               </span>
-                              <span className="inline-flex items-center gap-1">
-                                <Heart className="w-3.5 h-3.5 text-stone-400" />
-                                {novel.resonanceCount}
-                              </span>
-                              <span className="inline-flex items-center gap-1">
-                                <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
-                                {novel.echoCount}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => onToggleBookmark(novel)}
-                                aria-label="Enregistrer pour lire plus tard"
-                                className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
-                                  bookmarkedStoryIds.has(novel.storyId)
-                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                              <span
+                                className={`font-display font-semibold tabular-nums leading-none ${
+                                  isChampion ? 'text-2xl' : isSecond ? 'text-xl' : 'text-base'
                                 }`}
                               >
-                                <Bookmark
-                                  className={`w-3.5 h-3.5 ${
-                                    bookmarkedStoryIds.has(novel.storyId) ? 'fill-current' : ''
-                                  }`}
-                                />
-                              </button>
-
-                              {isChampion && (
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenRepost(novel)}
-                                  aria-label="Repartager"
-                                  className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
-                                    repostedStoryIds.has(novel.storyId)
-                                      ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
-                                  }`}
-                                >
-                                  <Repeat2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => onReadStory(novel)}
-                                className={`min-h-[32px] px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap ${
-                                  isChampion
-                                    ? 'bg-[#1B365D] text-white hover:bg-[#132744]'
-                                    : 'bg-white border border-[#CBD6E6] text-[#1B365D] hover:bg-[#F3F6FA]'
-                                }`}
-                              >
-                                <span>Lire le roman</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
+                                0{rank}
+                              </span>
                             </div>
                           </div>
-                        </article>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -1122,192 +1234,244 @@ export function ThemesView({
                     );
                   })()
                 ) : (
-                  <div
-                    className={
-                      podiumConfessions.length >= 3
-                        ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 items-start'
-                        : 'grid grid-cols-1 lg:grid-cols-2 gap-5 items-start max-w-4xl mx-auto'
-                    }
-                  >
-                    {podiumConfessions.map((conf, idx) => {
-                      const rank = (idx + 1) as 1 | 2 | 3;
-                      const isChampion = rank === 1;
-                      const isSecond = rank === 2;
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-xs uppercase tracking-widest text-stone-500">
+                        Podium · Top {podiumConfessions.length} des confessions les plus lues{' '}
+                        {selectedConfessionTheme === 'all'
+                          ? '(tous salons)'
+                          : selectedConfessionTheme === 'pelemele'
+                            ? '(hors salon)'
+                            : `(${THEME_MAP[selectedConfessionTheme].shortSalonName})`}
+                      </p>
+                      <span className="text-xs text-stone-500 tabular-nums">
+                        Classées par lectures et résonances
+                      </span>
+                    </div>
 
-                      const orderClass =
+                    <div
+                      className={
                         podiumConfessions.length >= 3
-                          ? isChampion
-                            ? 'order-1 lg:order-2'
-                            : isSecond
-                              ? 'order-2 lg:order-1 lg:mt-8'
-                              : 'order-3 lg:order-3 lg:mt-12'
-                          : isChampion
-                            ? 'order-1'
-                            : 'order-2 lg:mt-6';
+                          ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90'
+                          : 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90'
+                      }
+                    >
+                      {podiumConfessions.map((conf, idx) => {
+                        const rank = (idx + 1) as 1 | 2 | 3;
+                        const isChampion = rank === 1;
+                        const isSecond = rank === 2;
 
-                      const cardSurface = isChampion
-                        ? 'bg-[#FFFBF9] border-[#C97B6B]/80 shadow-[0_14px_34px_-20px_rgba(154,59,41,0.28)]'
-                        : isSecond
-                          ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.2)]'
-                          : 'bg-white border-stone-200 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.14)]';
+                        const orderClass =
+                          podiumConfessions.length >= 3
+                            ? isChampion
+                              ? 'order-1 lg:order-2'
+                              : isSecond
+                                ? 'order-2 lg:order-1'
+                                : 'order-3 lg:order-3'
+                            : isChampion
+                              ? 'order-1'
+                              : 'order-2';
 
-                      const stripClass = isChampion
-                        ? 'bg-[#9A3B29] text-white'
-                        : isSecond
-                          ? 'bg-[#57534E] text-white'
-                          : 'bg-[#78716C] text-white';
+                        const cardSurface = isChampion
+                          ? 'bg-[#FFFBF9] border-[#C97B6B]/80 shadow-[0_14px_34px_-20px_rgba(154,59,41,0.28)] lg:min-h-[300px]'
+                          : isSecond
+                            ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[270px]'
+                            : 'bg-white border-stone-300/80 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.14)] lg:min-h-[250px]';
 
-                      const stepHeading =
-                        rank === 1
-                          ? `N° 1 Confession ${
-                              selectedConfessionTheme === 'all'
-                                ? '· La plus lue'
-                                : selectedConfessionTheme === 'pelemele'
-                                  ? '· Hors salon'
-                                  : `· ${THEME_MAP[selectedConfessionTheme].shortSalonName}`
-                            }`
-                          : rank === 2
-                            ? 'N° 2 · Deuxième marche'
-                            : 'N° 3 · Troisième marche';
+                        const stripClass = isChampion
+                          ? 'bg-[#9A3B29] text-white'
+                          : isSecond
+                            ? 'bg-[#44403C] text-white'
+                            : 'bg-[#78350F] text-white';
 
-                      return (
-                        <article
-                          key={conf.storyId}
-                          className={`${orderClass} ${cardSurface} border rounded-xl overflow-hidden flex flex-col justify-between`}
-                        >
-                          <div>
-                            <div
-                              className={`${stripClass} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
+                        const plinthClass = isChampion
+                          ? 'h-16 bg-gradient-to-b from-[#FBE8E3] to-[#EFC9C0] border-x border-t border-[#C97B6B]/70 text-[#6E271A]'
+                          : isSecond
+                            ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 border-x border-t border-stone-300 text-stone-700'
+                            : 'h-7 bg-gradient-to-b from-[#F5ECE2] to-[#E6D3BE] border-x border-t border-[#D6BEAA] text-[#5E290A]';
+
+                        const plinthLabel = isChampion
+                          ? '1re marche'
+                          : isSecond
+                            ? '2e marche'
+                            : '3e marche';
+
+                        const stepHeading =
+                          rank === 1
+                            ? `N° 1 Confession ${
+                                selectedConfessionTheme === 'all'
+                                  ? '· La plus lue'
+                                  : selectedConfessionTheme === 'pelemele'
+                                    ? '· Hors salon'
+                                    : `· ${THEME_MAP[selectedConfessionTheme].shortSalonName}`
+                              }`
+                            : rank === 2
+                              ? 'N° 2 · Argent'
+                              : 'N° 3 · Bronze';
+
+                        return (
+                          <div key={conf.storyId} className={`${orderClass} flex flex-col`}>
+                            <article
+                              className={`${cardSurface} border rounded-xl lg:rounded-b-none overflow-hidden flex flex-col justify-between flex-1`}
                             >
-                              <span className="inline-flex items-center gap-1.5">
-                                {isChampion ? (
-                                  <Crown className="w-3.5 h-3.5 shrink-0" />
-                                ) : (
-                                  <Award className="w-3.5 h-3.5 shrink-0" />
-                                )}
-                                <span className="truncate">{stepHeading}</span>
-                              </span>
-                              <span className="font-display text-sm tabular-nums">0{rank}</span>
-                            </div>
+                              <div>
+                                <div
+                                  className={`${stripClass} px-4 py-2 flex items-center justify-between gap-2 text-xs font-medium`}
+                                >
+                                  <span className="inline-flex items-center gap-1.5 min-w-0">
+                                    {isChampion ? (
+                                      <Crown className="w-3.5 h-3.5 shrink-0" />
+                                    ) : (
+                                      <Award className="w-3.5 h-3.5 shrink-0" />
+                                    )}
+                                    <span className="truncate">{stepHeading}</span>
+                                  </span>
+                                  <span className="font-display text-sm tabular-nums shrink-0">
+                                    0{rank}
+                                  </span>
+                                </div>
 
-                            <div className={isChampion ? 'p-5 sm:p-6 space-y-3.5' : 'p-5 space-y-3'}>
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
-                                <StoryFormatKicker story={conf} showDetails={false} />
-                                <span aria-hidden="true">·</span>
-                                <span className="tabular-nums">{conf.readingMinutes} min</span>
-                                <MatureContentBadge
-                                  minAge={conf.minAge}
-                                  isMature={conf.isMature}
-                                  compact
-                                />
+                                <div
+                                  className={
+                                    isChampion ? 'p-5 sm:p-6 space-y-3.5' : 'p-5 space-y-3'
+                                  }
+                                >
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
+                                    <StoryFormatKicker story={conf} showDetails={false} />
+                                    <span aria-hidden="true">·</span>
+                                    <span className="tabular-nums">{conf.readingMinutes} min</span>
+                                    <MatureContentBadge
+                                      minAge={conf.minAge}
+                                      isMature={conf.isMature}
+                                      compact
+                                    />
+                                  </div>
+
+                                  <h3
+                                    className={`font-display font-medium text-stone-900 leading-snug ${
+                                      isChampion ? 'text-2xl' : 'text-xl'
+                                    }`}
+                                    style={{ textWrap: 'balance' }}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => onReadStory(conf)}
+                                      className="hover:text-[#9A3B29] text-left transition-colors"
+                                    >
+                                      {conf.title}
+                                    </button>
+                                  </h3>
+
+                                  <p className="text-xs sm:text-sm text-stone-600 line-clamp-3 leading-relaxed">
+                                    {conf.excerpt}
+                                  </p>
+
+                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                                    {conf.isAnonymous ? (
+                                      <span className="inline-flex items-center gap-1">
+                                        <EyeOff className="w-3 h-3 text-stone-400" />
+                                        <span>Auteur anonyme</span>
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => onOpenMemberWall(conf.authorId)}
+                                        className="font-medium text-stone-700 hover:text-[#9A3B29] hover:underline"
+                                      >
+                                        {conf.authorName}
+                                      </button>
+                                    )}
+                                    <span aria-hidden="true">·</span>
+                                    {renderOriginLink(conf)}
+                                  </div>
+                                </div>
                               </div>
 
-                              <h3
-                                className={`font-display font-medium text-stone-900 leading-snug ${
-                                  isChampion ? 'text-2xl' : 'text-xl'
-                                }`}
-                                style={{ textWrap: 'balance' }}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => onReadStory(conf)}
-                                  className="hover:text-[#9A3B29] text-left transition-colors"
-                                >
-                                  {conf.title}
-                                </button>
-                              </h3>
-
-                              <p className="text-xs sm:text-sm text-stone-600 line-clamp-3 leading-relaxed">
-                                {conf.excerpt}
-                              </p>
-
-                              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
-                                {conf.isAnonymous ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <EyeOff className="w-3 h-3 text-stone-400" />
-                                    <span>Auteur anonyme</span>
+                              <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-3 text-xs text-stone-600 tabular-nums">
+                                  <span className="inline-flex items-center gap-1 font-medium text-stone-800">
+                                    <Eye className="w-3.5 h-3.5 text-stone-400" />
+                                    {conf.viewCount ?? 0}
                                   </span>
-                                ) : (
+                                  <span className="inline-flex items-center gap-1">
+                                    <Heart className="w-3.5 h-3.5 text-stone-400" />
+                                    {conf.resonanceCount}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1">
+                                    <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
+                                    {conf.echoCount}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
                                   <button
                                     type="button"
-                                    onClick={() => onOpenMemberWall(conf.authorId)}
-                                    className="font-medium text-stone-700 hover:text-[#9A3B29] hover:underline"
+                                    onClick={() => onToggleBookmark(conf)}
+                                    aria-label="Enregistrer pour lire plus tard"
+                                    className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                      bookmarkedStoryIds.has(conf.storyId)
+                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                        : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                    }`}
                                   >
-                                    {conf.authorName}
+                                    <Bookmark
+                                      className={`w-3.5 h-3.5 ${
+                                        bookmarkedStoryIds.has(conf.storyId) ? 'fill-current' : ''
+                                      }`}
+                                    />
                                   </button>
-                                )}
-                                <span aria-hidden="true">·</span>
-                                {renderOriginLink(conf)}
+
+                                  {isChampion && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenRepost(conf)}
+                                      aria-label="Repartager"
+                                      className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
+                                        repostedStoryIds.has(conf.storyId)
+                                          ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
+                                          : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                      }`}
+                                    >
+                                      <Repeat2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => onReadStory(conf)}
+                                    className={`min-h-[32px] px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap ${
+                                      isChampion
+                                        ? 'bg-[#9A3B29] text-white hover:bg-[#7F2F20]'
+                                        : 'bg-white border border-[#ECC9C1] text-[#9A3B29] hover:bg-[#FDF4F2]'
+                                    }`}
+                                  >
+                                    <span>Lire la confession</span>
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          </div>
+                            </article>
 
-                          <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2.5">
-                            <div className="flex items-center gap-3 text-xs text-stone-600 tabular-nums">
-                              <span className="inline-flex items-center gap-1 font-medium text-stone-800">
-                                <Eye className="w-3.5 h-3.5 text-stone-400" />
-                                {conf.viewCount ?? 0}
+                            {/* Architectural Stepped Podium Plinth (Desktop 2-3+ steps) */}
+                            <div
+                              aria-hidden="true"
+                              className={`hidden lg:flex items-center justify-between px-4 ${plinthClass}`}
+                            >
+                              <span className="text-[11px] uppercase tracking-widest font-medium">
+                                {plinthLabel}
                               </span>
-                              <span className="inline-flex items-center gap-1">
-                                <Heart className="w-3.5 h-3.5 text-stone-400" />
-                                {conf.resonanceCount}
-                              </span>
-                              <span className="inline-flex items-center gap-1">
-                                <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
-                                {conf.echoCount}
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => onToggleBookmark(conf)}
-                                aria-label="Enregistrer pour lire plus tard"
-                                className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
-                                  bookmarkedStoryIds.has(conf.storyId)
-                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                              <span
+                                className={`font-display font-semibold tabular-nums leading-none ${
+                                  isChampion ? 'text-2xl' : isSecond ? 'text-xl' : 'text-base'
                                 }`}
                               >
-                                <Bookmark
-                                  className={`w-3.5 h-3.5 ${
-                                    bookmarkedStoryIds.has(conf.storyId) ? 'fill-current' : ''
-                                  }`}
-                                />
-                              </button>
-
-                              {isChampion && (
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenRepost(conf)}
-                                  aria-label="Repartager"
-                                  className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
-                                    repostedStoryIds.has(conf.storyId)
-                                      ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
-                                  }`}
-                                >
-                                  <Repeat2 className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-
-                              <button
-                                type="button"
-                                onClick={() => onReadStory(conf)}
-                                className={`min-h-[32px] px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap ${
-                                  isChampion
-                                    ? 'bg-[#9A3B29] text-white hover:bg-[#7F2F20]'
-                                    : 'bg-white border border-[#ECC9C1] text-[#9A3B29] hover:bg-[#FDF4F2]'
-                                }`}
-                              >
-                                <span>Lire la confession</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
+                                0{rank}
+                              </span>
                             </div>
                           </div>
-                        </article>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 

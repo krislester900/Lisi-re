@@ -68,6 +68,7 @@ import {
   formatFriendlyFirestoreError,
   privatizeStoriesBatch,
   subscribeToAllModerationCases,
+  subscribeToAllPredefinedSalonModerators,
   subscribeToAllWarnings,
   subscribeToCustomSalons,
   subscribeToDiscoverableProfiles,
@@ -94,6 +95,7 @@ import {
   MemberWarning,
   ModerationCase,
   NovelGenre,
+  PredefinedSalonModerator,
   PublicProfile,
   Story,
   StoryBookmark,
@@ -323,6 +325,16 @@ function SalonApp() {
   const [userWarnings, setUserWarnings] = useState<MemberWarning[]>([]);
   const [allModerationCases, setAllModerationCases] = useState<ModerationCase[]>([]);
   const [allWarnings, setAllWarnings] = useState<MemberWarning[]>([]);
+  const [predefinedSalonModerators, setPredefinedSalonModerators] = useState<
+    Record<StoryThemeId, PredefinedSalonModerator[]>
+  >(() => ({
+    creation: [],
+    rencontres: [],
+    solitudes: [],
+    'premiers-elans': [],
+    quotidien: [],
+    faq: [],
+  }));
   const [reportDraft, setReportDraft] = useState<ReportDraft | null>(null);
   const [ackBannerBusyId, setAckBannerBusyId] = useState<string | null>(null);
   const [journalSubTabRequest, setJournalSubTabRequest] = useState<{
@@ -371,13 +383,28 @@ function SalonApp() {
       setCustomSalons(salons);
       setCustomSalonsLoaded(true);
     });
+    const unsubSalonMods = subscribeToAllPredefinedSalonModerators(
+      setPredefinedSalonModerators
+    );
     return () => {
       unsubStories();
       unsubSalons();
+      unsubSalonMods();
     };
   }, []);
 
   const isModerationAdmin = isModerationAdminEmail(user?.email);
+
+  const adminUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of discoverableProfiles) {
+      if (p.isAdmin) ids.add(p.userId);
+    }
+    if (user && (isModerationAdmin || profile?.isAdmin)) {
+      ids.add(user.uid);
+    }
+    return ids;
+  }, [discoverableProfiles, user, isModerationAdmin, profile?.isAdmin]);
 
   useEffect(() => {
     if (!user) {
@@ -1203,6 +1230,9 @@ function SalonApp() {
             hiddenUserIds={hiddenUserIds}
             bookmarkedStoryIds={bookmarkedStoryIds}
             repostedStoryIds={repostedStoryIds}
+            adminUserIds={adminUserIds}
+            moderators={predefinedSalonModerators[activeSalonId] ?? []}
+            discoverableProfiles={discoverableProfiles}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
             onSelectSalon={(id) => enterSalon(id)}
@@ -1224,6 +1254,8 @@ function SalonApp() {
             hiddenUserIds={hiddenUserIds}
             bookmarkedStoryIds={bookmarkedStoryIds}
             repostedStoryIds={repostedStoryIds}
+            adminUserIds={adminUserIds}
+            discoverableProfiles={discoverableProfiles}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
             onBackToSalons={() => enterSalon(null)}
@@ -1275,6 +1307,8 @@ function SalonApp() {
             myReposts={myReposts}
             existingExchanges={exchanges}
             relationships={userRelationships}
+            adminUserIds={adminUserIds}
+            predefinedSalonModerators={predefinedSalonModerators}
             onSelectMember={(memberId) => navigateTo('membres', null, memberId)}
             onReadStory={(story) => openStoryReader(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
@@ -2415,6 +2449,8 @@ function SalonApp() {
             myCases={myModerationCases}
             userWarnings={userWarnings}
             publicStories={publicStories}
+            discoverableProfiles={discoverableProfiles}
+            predefinedSalonModerators={predefinedSalonModerators}
             onOpenMemberWall={openMemberWall}
           />
         )}
@@ -2476,7 +2512,10 @@ function SalonApp() {
         existingStories={[...publicStories, ...myStories]}
         customSalons={customSalons}
         userQuotes={userQuotes}
+        discoverableProfiles={discoverableProfiles}
         hiddenUserIds={hiddenUserIds}
+        adminUserIds={adminUserIds}
+        moderatorsBySalon={predefinedSalonModerators}
         isBookmarked={Boolean(readingStory && bookmarkedStoryIds.has(readingStory.storyId))}
         isReposted={Boolean(readingStory && repostedStoryIds.has(readingStory.storyId))}
         onToggleBookmark={(story) => void handleToggleBookmark(story)}

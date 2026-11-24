@@ -31,6 +31,7 @@ import {
   checkLocalContentHygiene,
   isContentAllowedForAge,
 } from '../lib/contentRegulation';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import {
   createDefaultStoryFilterState,
   filterAndSortStories,
@@ -39,11 +40,14 @@ import {
 import {
   deleteCustomSalon,
   deleteCustomSalonMessage,
+  formatFriendlyFirestoreError,
   joinOrRequestCustomSalon,
   leaveOrRemoveSalonMember,
   respondToSalonMemberRequest,
   runAutomatedContentBotGuard,
   sendCustomSalonMessage,
+  setCustomSalonMemberRole,
+  subscribeToApprovedCustomSalonMembers,
   subscribeToCustomSalonMessages,
   subscribeToCustomSalonStories,
   subscribeToSalonMemberRecord,
@@ -57,12 +61,14 @@ import {
   CustomSalon,
   CustomSalonMessage,
   FIELD_LIMITS,
+  PublicProfile,
   SalonMember,
   Story,
 } from '../types/story';
 import { MatureContentBadge } from './MatureContentBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
+import { RoleBadge, RoleBadgesRow } from './RoleBadge';
 import { SalonThreadsPanel } from './SalonThreadsPanel';
 import { StoryFilterBar } from './StoryFilterBar';
 import { StoryFormatKicker } from './StoryFormatKicker';
@@ -75,6 +81,8 @@ interface CustomSalonRoomViewProps {
   hiddenUserIds?: Set<string>;
   bookmarkedStoryIds?: Set<string>;
   repostedStoryIds?: Set<string>;
+  adminUserIds?: Set<string>;
+  discoverableProfiles?: PublicProfile[];
   onToggleBookmark?: (story: Story) => void;
   onOpenRepost?: (story: Story) => void;
   onBackToSalons: () => void;
@@ -93,6 +101,8 @@ export function CustomSalonRoomView({
   hiddenUserIds,
   bookmarkedStoryIds,
   repostedStoryIds,
+  adminUserIds,
+  discoverableProfiles = [],
   onToggleBookmark,
   onOpenRepost,
   onBackToSalons,
@@ -103,8 +113,19 @@ export function CustomSalonRoomView({
   onOpenReport,
 }: CustomSalonRoomViewProps) {
   const { user, profile, viewerAge, signInWithGoogle } = useAuth();
+  const profilesByUserId = useMemo(() => {
+    const map = new Map<string, PublicProfile>();
+    for (const p of discoverableProfiles) {
+      map.set(p.userId, p);
+    }
+    if (profile) {
+      map.set(profile.userId, profile);
+    }
+    return map;
+  }, [discoverableProfiles, profile]);
   const [memberRecord, setMemberRecord] = useState<SalonMember | null>(null);
   const [ownerMembers, setOwnerMembers] = useState<SalonMember[]>([]);
+  const [publicApprovedMembers, setPublicApprovedMembers] = useState<SalonMember[]>([]);
   const [privateSalonStories, setPrivateSalonStories] = useState<Story[]>([]);
   const [messages, setMessages] = useState<CustomSalonMessage[]>([]);
 
@@ -115,6 +136,7 @@ export function CustomSalonRoomView({
 
   const [requestNote, setRequestNote] = useState('');
   const [actionBusy, setActionBusy] = useState(false);
+  const [roleBusyUserId, setRoleBusyUserId] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -129,8 +151,13 @@ export function CustomSalonRoomView({
 
   const salonId = salon?.salonId ?? '';
   const isOwner = Boolean(user && salon && user.uid === salon.ownerId);
+  const isGlobalAdmin = isModerationAdminEmail(user?.email);
+  const isApprovedModerator = Boolean(
+    memberRecord && memberRecord.status === 'approved' && memberRecord.role === 'moderator'
+  );
+  const canModerateSalon = Boolean(isOwner || isApprovedModerator || isGlobalAdmin);
   const isApprovedMember = Boolean(
-    isOwner || (memberRecord && memberRecord.status === 'approved')
+    isOwner || isGlobalAdmin || (memberRecord && memberRecord.status === 'approved')
   );
   const canViewContent = Boolean(
     salon && (salon.visibility === 'public' || isApprovedMember)
@@ -155,12 +182,20 @@ export function CustomSalonRoomView({
   }, [salon?.salonId, user?.uid]);
 
   useEffect(() => {
-    if (!salon || !user || !isOwner) {
+    if (!salon || !user || !canModerateSalon) {
       setOwnerMembers([]);
       return;
     }
     return subscribeToSalonMembersForOwner(salon.salonId, salon.ownerId, setOwnerMembers);
-  }, [salon?.salonId, salon?.ownerId, user?.uid, isOwner]);
+  }, [salon?.salonId, salon?.ownerId, user?.uid, canModerateSalon]);
+
+  useEffect(() => {
+    if (!salon || !user || !canViewContent) {
+      setPublicApprovedMembers([]);
+      return;
+    }
+    return subscribeToApprovedCustomSalonMembers(salon.salonId, setPublicApprovedMembers);
+  }, [salon?.salonId, user?.uid, canViewContent]);
 
   useEffect(() => {
     if (!salon || salon.visibility !== 'private' || !canViewContent) {
@@ -229,10 +264,21 @@ export function CustomSalonRoomView({
     () => ownerMembers.filter((m) => m.status === 'pending'),
     [ownerMembers]
   );
-  const approvedMembers = useMemo(
-    () => ownerMembers.filter((m) => m.status === 'approved'),
-    [ownerMembers]
-  );
+  const approvedMembers = useMemo(() => {
+    const list = ownerMembers.filter((m) => m.status === 'approved');
+    return list.length > 0 ? list : publicApprovedMembers;
+  }, [ownerMembers, publicApprovedMembers]);
+
+  const moderatorIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of publicApprovedMembers) {
+      if (m.status === 'approved' && m.role === 'moderator') ids.add(m.userId);
+    }
+    for (const m of ownerMembers) {
+      if (m.status === 'approved' && m.role === 'moderator') ids.add(m.userId);
+    }
+    return ids;
+  }, [publicApprovedMembers, ownerMembers]);
 
   if (!salonsLoaded && !salon) {
     return (
@@ -340,7 +386,35 @@ export function CustomSalonRoomView({
         wasApproved: target.status === 'approved',
       });
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Impossible de retirer ce membre.');
+      setActionError(
+        formatFriendlyFirestoreError(err, 'Impossible de retirer ce membre.')
+      );
+    }
+  };
+
+  const handleToggleModeratorRole = async (target: SalonMember) => {
+    if ((!isOwner && !isGlobalAdmin) || target.role === 'owner' || roleBusyUserId) return;
+    setActionError(null);
+    setActionFeedback(null);
+    const nextRole = target.role === 'moderator' ? 'member' : 'moderator';
+    setRoleBusyUserId(target.userId);
+    try {
+      await setCustomSalonMemberRole({
+        salonId: salon.salonId,
+        targetUserId: target.userId,
+        nextRole,
+      });
+      setActionFeedback(
+        nextRole === 'moderator'
+          ? `${target.userName} est désormais modérateur de ce salon.`
+          : `${target.userName} n’est plus modérateur de ce salon.`
+      );
+    } catch (err) {
+      setActionError(
+        formatFriendlyFirestoreError(err, 'Impossible de modifier le rôle de ce membre.')
+      );
+    } finally {
+      setRoleBusyUserId(null);
     }
   };
 
@@ -526,6 +600,18 @@ export function CustomSalonRoomView({
                 >
                   Animé par {salon.ownerName}
                 </button>
+                <RoleBadgesRow
+                  isAdmin={Boolean(adminUserIds?.has(salon.ownerId))}
+                  isOwner
+                  compact
+                />
+                {moderatorIds.size > 0 && (
+                  <span className="inline-flex items-center gap-1 text-stone-600">
+                    <span aria-hidden="true">·</span>
+                    <RoleBadge role="moderator" compact />
+                    <span className="tabular-nums">{moderatorIds.size}</span>
+                  </span>
+                )}
                 <MatureContentBadge minAge={salon.minAge} compact />
               </div>
 
@@ -771,7 +857,7 @@ export function CustomSalonRoomView({
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>Discussion ({visibleMessages.length})</span>
               </button>
-              {isOwner && (
+              {canModerateSalon && (
                 <button
                   type="button"
                   onClick={() => setRoomSection('members')}
@@ -783,7 +869,7 @@ export function CustomSalonRoomView({
                 >
                   <Users className="w-3.5 h-3.5" />
                   <span>
-                    Admissions
+                    Membres &amp; modération
                     {pendingRequests.length > 0 ? ` (${pendingRequests.length} en attente)` : ''}
                   </span>
                 </button>
@@ -856,13 +942,25 @@ export function CustomSalonRoomView({
                           {story.isAnonymous ? (
                             <span className="font-medium text-stone-600">Auteur anonyme</span>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => onOpenMemberWall(story.authorId)}
-                              className="font-medium text-stone-800 hover:underline"
-                            >
-                              {story.authorName}
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => onOpenMemberWall(story.authorId)}
+                                className="font-medium text-stone-800 hover:underline"
+                              >
+                                {story.authorName}
+                              </button>
+                              <RoleBadgesRow
+                                isAdmin={Boolean(
+                                  profilesByUserId.get(story.authorId)?.isAdmin ||
+                                    adminUserIds?.has(story.authorId)
+                                )}
+                                isOwner={story.authorId === salon.ownerId}
+                                isModerator={moderatorIds.has(story.authorId)}
+                                profileBadges={profilesByUserId.get(story.authorId)?.badges}
+                                compact
+                              />
+                            </>
                           )}
                           <span aria-hidden="true">·</span>
                           <span>{story.readingMinutes} min</span>
@@ -989,6 +1087,10 @@ export function CustomSalonRoomView({
               salonOwnerId={salon.ownerId}
               viewerAge={viewerAge}
               canPost={canViewContent}
+              adminUserIds={adminUserIds}
+              moderatorIds={moderatorIds}
+              profilesByUserId={profilesByUserId}
+              canModerate={canModerateSalon}
               onOpenMemberWall={onOpenMemberWall}
               onWriteFromThread={(tTitle, tBody) =>
                 onWriteInCustomSalon(
@@ -1040,7 +1142,7 @@ export function CustomSalonRoomView({
                       </p>
                     ) : (
                       visibleMessages.map((msg) => {
-                        const canDeleteMsg = msg.senderId === user.uid || isOwner;
+                        const canDeleteMsg = msg.senderId === user.uid || canModerateSalon;
                         const canReportMsg = Boolean(onOpenReport && msg.senderId !== user.uid);
                         return (
                           <div
@@ -1048,7 +1150,7 @@ export function CustomSalonRoomView({
                             className="p-4 rounded-md border border-stone-200 bg-[#FBF9F5] space-y-1.5"
                           >
                             <div className="flex items-center justify-between gap-3 text-xs">
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => onOpenMemberWall(msg.senderId)}
@@ -1056,6 +1158,16 @@ export function CustomSalonRoomView({
                                 >
                                   {msg.senderName}
                                 </button>
+                                <RoleBadgesRow
+                                  isAdmin={Boolean(
+                                    profilesByUserId.get(msg.senderId)?.isAdmin ||
+                                      adminUserIds?.has(msg.senderId)
+                                  )}
+                                  isOwner={msg.senderId === salon.ownerId}
+                                  isModerator={moderatorIds.has(msg.senderId)}
+                                  profileBadges={profilesByUserId.get(msg.senderId)?.badges}
+                                  compact
+                                />
                                 <span className="text-stone-400">·</span>
                                 <span className="text-stone-500">
                                   {formatFrenchDate(msg.createdAt?.toDate() ?? null)}
@@ -1140,8 +1252,8 @@ export function CustomSalonRoomView({
             </section>
           )}
 
-          {/* Section 3: Owner Admission & Members Management */}
-          {roomSection === 'members' && isOwner && (
+          {/* Section 3: Owner & Moderator Admission & Members Management */}
+          {roomSection === 'members' && canModerateSalon && (
             <section className="space-y-8">
               <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
                 <h2 className="font-display text-2xl font-medium text-stone-900">
@@ -1201,39 +1313,86 @@ export function CustomSalonRoomView({
               </div>
 
               <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
-                <h2 className="font-display text-2xl font-medium text-stone-900">
-                  Membres admis ({approvedMembers.length})
-                </h2>
+                <div className="space-y-1">
+                  <h2 className="font-display text-2xl font-medium text-stone-900">
+                    Membres admis ({approvedMembers.length})
+                  </h2>
+                  {(isOwner || isGlobalAdmin) && (
+                    <p className="text-xs text-stone-600">
+                      Vous pouvez nommer des modérateurs parmi les membres admis pour veiller sur les discussions et les admissions de ce salon.
+                    </p>
+                  )}
+                </div>
                 <div className="divide-y divide-stone-100">
-                  {approvedMembers.map((member) => (
-                    <div
-                      key={member.userId}
-                      className="py-3 flex items-center justify-between gap-4"
-                    >
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => onOpenMemberWall(member.userId)}
-                          className="text-sm font-medium text-stone-900 hover:underline"
-                        >
-                          {member.userName}
-                        </button>
-                        <span className="text-xs text-stone-500">
-                          {member.role === 'owner' ? 'Créateur du salon' : 'Membre'}
-                        </span>
+                  {approvedMembers.map((member) => {
+                    const canPromoteOrDemote =
+                      (isOwner || isGlobalAdmin) && member.role !== 'owner';
+                    const canRemoveThisMember =
+                      member.role !== 'owner' &&
+                      (isOwner ||
+                        isGlobalAdmin ||
+                        (isApprovedModerator && member.role === 'member'));
+                    return (
+                      <div
+                        key={member.userId}
+                        className="py-3 flex flex-wrap items-center justify-between gap-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => onOpenMemberWall(member.userId)}
+                            className="text-sm font-medium text-stone-900 hover:underline"
+                          >
+                            {member.userName}
+                          </button>
+                          <RoleBadgesRow
+                            isAdmin={Boolean(
+                              profilesByUserId.get(member.userId)?.isAdmin ||
+                                adminUserIds?.has(member.userId)
+                            )}
+                            isOwner={member.role === 'owner'}
+                            isModerator={member.role === 'moderator'}
+                            profileBadges={profilesByUserId.get(member.userId)?.badges}
+                            compact
+                          />
+                          {member.role === 'member' && (
+                            <span className="text-xs text-stone-500">Membre</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          {canPromoteOrDemote && (
+                            <button
+                              type="button"
+                              disabled={roleBusyUserId === member.userId}
+                              onClick={() => void handleToggleModeratorRole(member)}
+                              className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded-md border transition-colors inline-flex items-center gap-1.5 whitespace-nowrap ${
+                                member.role === 'moderator'
+                                  ? 'border-stone-300 bg-white text-stone-700 hover:border-stone-500'
+                                  : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D] hover:border-[#1B365D]'
+                              }`}
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>
+                                {member.role === 'moderator'
+                                  ? 'Retirer modérateur'
+                                  : 'Nommer modérateur'}
+                              </span>
+                            </button>
+                          )}
+                          {canRemoveThisMember && (
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveMember(member)}
+                              className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-600 hover:text-red-800 inline-flex items-center gap-1"
+                            >
+                              <UserMinus className="w-3.5 h-3.5" />
+                              <span>Retirer</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      {member.role !== 'owner' && (
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveMember(member)}
-                          className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-600 hover:text-red-800 inline-flex items-center gap-1"
-                        >
-                          <UserMinus className="w-3.5 h-3.5" />
-                          <span>Retirer</span>
-                        </button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </section>

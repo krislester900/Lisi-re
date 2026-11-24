@@ -42,9 +42,11 @@ import {
   shouldShowMatureWarning,
 } from '../lib/contentRegulation';
 import { checkNovelPlagiarism } from '../lib/plagiarismCheck';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { MatureContentBadge } from './MatureContentBadge';
 import { ReadingMusicPanel, useReadingAudioEngine } from './ReadingMusicPanel';
 import type { ReportDraft } from './ReportModal';
+import { RoleBadgesRow } from './RoleBadge';
 import { NovelCoverArt } from './NovelCoverArt';
 import { StoryFormatKicker } from './StoryFormatKicker';
 import {
@@ -54,6 +56,7 @@ import {
   claimAnonymousStory,
   createExchangeWithFirstMessage,
   createStoryQuote,
+  deleteStoryEcho,
   deleteStoryQuote,
   fetchPublicProfile,
   formatFriendlyFirestoreError,
@@ -71,7 +74,6 @@ import {
 } from '../lib/storyService';
 import {
   ACCENT_TONE_PALETTES,
-  ECHO_TYPE_LABELS,
   formatFrenchDate,
   NOVEL_GENRE_LABELS,
   RELEASE_CADENCE_LABELS,
@@ -82,10 +84,10 @@ import {
   Chapter,
   CustomSalon,
   Echo,
-  EchoReplyType,
   Exchange,
   FIELD_LIMITS,
   PlagiarismReportReason,
+  PredefinedSalonModerator,
   PublicProfile,
   SeriesStatus,
   Story,
@@ -100,7 +102,10 @@ interface StoryReaderModalProps {
   existingStories?: Story[];
   customSalons?: CustomSalon[];
   userQuotes?: StoryQuote[];
+  discoverableProfiles?: PublicProfile[];
   hiddenUserIds?: Set<string>;
+  adminUserIds?: Set<string>;
+  moderatorsBySalon?: Record<StoryThemeId, PredefinedSalonModerator[]>;
   isBookmarked?: boolean;
   isReposted?: boolean;
   onToggleBookmark?: (story: Story) => void;
@@ -123,7 +128,10 @@ export function StoryReaderModal({
   existingStories = [],
   customSalons = [],
   userQuotes = [],
+  discoverableProfiles = [],
   hiddenUserIds,
+  adminUserIds,
+  moderatorsBySalon,
   isBookmarked = false,
   isReposted = false,
   onToggleBookmark,
@@ -139,6 +147,12 @@ export function StoryReaderModal({
   onStoryClaimed,
 }: StoryReaderModalProps) {
   const { user, profile, viewerAge, favoriteAuthors, signInWithGoogle } = useAuth();
+  const isGlobalAdmin = isModerationAdminEmail(user?.email);
+  const storySalonModeratorIds = useMemo(() => {
+    if (!story || story.customSalonId || !moderatorsBySalon) return new Set<string>();
+    const mods = moderatorsBySalon[story.theme] ?? [];
+    return new Set(mods.map((m) => m.userId));
+  }, [story, moderatorsBySalon]);
   const [matureAcknowledged, setMatureAcknowledged] = useState(false);
   const [favAuthorBusy, setFavAuthorBusy] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
@@ -153,10 +167,13 @@ export function StoryReaderModal({
   const [activeChapterIdx, setActiveChapterIdx] = useState(0); // 0 = Chapitre 1 (story.content), >=1 = chapters[idx - 1]
   const [hasResonated, setHasResonated] = useState(false);
   const [authorProfile, setAuthorProfile] = useState<PublicProfile | null>(null);
+  const [fetchedProfilesByUserId, setFetchedProfilesByUserId] = useState<
+    Record<string, PublicProfile | null>
+  >({});
+  const attemptedProfileFetchRef = React.useRef<Set<string>>(new Set());
   const [resonateBusy, setResonateBusy] = useState(false);
   const [resonateError, setResonateError] = useState<string | null>(null);
 
-  const [replyType, setReplyType] = useState<EchoReplyType>('comment');
   const [echoText, setEchoText] = useState('');
   const [echoBusy, setEchoBusy] = useState(false);
   const [echoError, setEchoError] = useState<string | null>(null);
@@ -282,7 +299,6 @@ export function StoryReaderModal({
     setEchoText('');
     setEchoError(null);
     setResonateError(null);
-    setReplyType('comment');
     setShowBridgeBox(false);
     setBridgeMessage('');
     setBridgeError(null);
@@ -498,6 +514,67 @@ export function StoryReaderModal({
     user?.uid,
     user?.emailVerified,
   ]);
+
+  const profilesByUserId = useMemo(() => {
+    const map = new Map<string, PublicProfile>();
+    for (const p of discoverableProfiles) {
+      map.set(p.userId, p);
+    }
+    for (const [uid, p] of Object.entries(fetchedProfilesByUserId)) {
+      if (p) map.set(uid, p);
+    }
+    if (authorProfile) {
+      map.set(authorProfile.userId, authorProfile);
+    }
+    if (profile) {
+      map.set(profile.userId, profile);
+    }
+    return map;
+  }, [discoverableProfiles, fetchedProfilesByUserId, authorProfile, profile]);
+
+  useEffect(() => {
+    if (!story || story.visibility !== 'public' || echoes.length === 0) return;
+    const missingIds = Array.from(
+      new Set(
+        echoes
+          .map((e) => e.authorId)
+          .filter(
+            (uid) =>
+              Boolean(uid) &&
+              !profilesByUserId.has(uid) &&
+              !attemptedProfileFetchRef.current.has(uid)
+          )
+      )
+    );
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+    missingIds.forEach((uid) => attemptedProfileFetchRef.current.add(uid));
+
+    void Promise.all(
+      missingIds.map(async (uid) => {
+        try {
+          const p = await fetchPublicProfile(uid);
+          return [uid, p] as const;
+        } catch {
+          return [uid, null] as const;
+        }
+      })
+    ).then((entries) => {
+      if (cancelled) return;
+      setFetchedProfilesByUserId((prev) => {
+        const next = { ...prev };
+        for (const [uid, p] of entries) {
+          next[uid] = p;
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [story?.storyId, story?.visibility, echoes, profilesByUserId]);
 
   useEffect(() => {
     if (!story) return;
@@ -757,7 +834,7 @@ export function StoryReaderModal({
       }
 
       const displayName = profile?.displayName || user.displayName || 'Auteur';
-      await addStoryEcho(story.storyId, user.uid, displayName, replyType, echoText);
+      await addStoryEcho(story.storyId, user.uid, displayName, 'comment', echoText);
       setEchoText('');
     } catch (err) {
       setEchoError(
@@ -1849,7 +1926,7 @@ export function StoryReaderModal({
                         )}
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex flex-wrap items-center gap-2">
                         <button
                           type="button"
                           onClick={() => {
@@ -1861,6 +1938,16 @@ export function StoryReaderModal({
                           <UserIcon className="w-3.5 h-3.5 text-stone-500" />
                           <span>{story.authorName}</span>
                         </button>
+                        <RoleBadgesRow
+                          isAdmin={Boolean(
+                            authorProfile?.isAdmin || adminUserIds?.has(story.authorId)
+                          )}
+                          isModerator={storySalonModeratorIds.has(story.authorId)}
+                          profileBadges={
+                            authorProfile?.badges ?? profilesByUserId.get(story.authorId)?.badges
+                          }
+                          compact
+                        />
                         {!isAuthor && (
                           <button
                             type="button"
@@ -2962,26 +3049,28 @@ export function StoryReaderModal({
               </form>
             )}
 
-            {/* Comments & Echoes Section */}
+            {/* Comments Section */}
             {!zenMode && story.visibility === 'public' && (
               <section
                 className="mt-10 pt-8 border-t border-stone-200"
-                aria-label="Commentaires et échos des lecteurs"
+                aria-label="Commentaires des lecteurs"
               >
                 <h2 className="font-display text-2xl font-medium text-stone-900 mb-2">
-                  Commentaires des lecteurs
+                  Commentaires
                 </h2>
                 <p className="text-sm text-stone-600 mb-6">
-                  Réactions, retours de lecture et échos sincères sous cette histoire.
+                  Réactions et retours de lecture sous cette histoire.
                 </p>
 
                 {visibleEchoes.length === 0 ? (
                   <p className="text-sm text-stone-500 italic py-4">
-                    Aucun commentaire pour l’instant. Soyez la première personne à réagir à cette histoire.
+                    Aucun commentaire pour l’instant. Soyez la première personne à commenter cette histoire.
                   </p>
                 ) : (
                   <div className="divide-y divide-stone-200 mb-8">
-                    {visibleEchoes.map((echo) => (
+                    {visibleEchoes.map((echo) => {
+                      const commenterProfile = profilesByUserId.get(echo.authorId);
+                      return (
                       <div key={echo.echoId} className="py-5">
                         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 mb-2">
                           <div className="flex flex-wrap items-center gap-2">
@@ -2995,73 +3084,76 @@ export function StoryReaderModal({
                             >
                               {echo.authorName}
                             </button>
-                            <span aria-hidden="true">·</span>
-                            <span className="text-[#1E3A8A] font-medium">
-                              {ECHO_TYPE_LABELS[echo.replyType]?.label ?? 'Commentaire'}
-                            </span>
+                            <RoleBadgesRow
+                              isAdmin={Boolean(
+                                commenterProfile?.isAdmin || adminUserIds?.has(echo.authorId)
+                              )}
+                              isModerator={storySalonModeratorIds.has(echo.authorId)}
+                              profileBadges={commenterProfile?.badges}
+                              compact
+                            />
                             <span aria-hidden="true">·</span>
                             <span>{formatFrenchDate(echo.createdAt?.toDate() ?? null)}</span>
                           </div>
-                          {onOpenReport && echo.authorId !== user?.uid && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                onOpenReport({
-                                  targetUserId: echo.authorId,
-                                  targetUserName: echo.authorName,
-                                  targetType: 'echo',
-                                  targetId: echo.echoId,
-                                  targetContextId: story.storyId,
-                                  targetExcerpt: echo.content,
-                                  targetSummaryLabel: `Signaler le commentaire de ${echo.authorName}`,
-                                })
-                              }
-                              title="Signaler ce commentaire"
-                              aria-label="Signaler ce commentaire"
-                              className="text-stone-400 hover:text-red-700 p-1 rounded"
-                            >
-                              <Flag className="w-3.5 h-3.5" />
-                            </button>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {onOpenReport && echo.authorId !== user?.uid && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  onOpenReport({
+                                    targetUserId: echo.authorId,
+                                    targetUserName: echo.authorName,
+                                    targetType: 'echo',
+                                    targetId: echo.echoId,
+                                    targetContextId: story.storyId,
+                                    targetExcerpt: echo.content,
+                                    targetSummaryLabel: `Signaler le commentaire de ${echo.authorName}`,
+                                  })
+                                }
+                                title="Signaler ce commentaire"
+                                aria-label="Signaler ce commentaire"
+                                className="text-stone-400 hover:text-red-700 p-1 rounded"
+                              >
+                                <Flag className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {isGlobalAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => void deleteStoryEcho(story.storyId, echo.echoId)}
+                                title="Supprimer ce commentaire (administration)"
+                                aria-label="Supprimer ce commentaire"
+                                className="text-stone-400 hover:text-red-700 p-1 rounded"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <p className="text-sm leading-relaxed text-stone-800 whitespace-pre-line">
                           {echo.content}
                         </p>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
                 <form
                   onSubmit={handleEchoSubmit}
-                  className="bg-white border border-stone-200 rounded-md p-5 space-y-4"
+                  className="bg-white border border-stone-200 rounded-md p-5 space-y-3.5"
                 >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs uppercase tracking-widest text-stone-500">
-                      Laisser un commentaire
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(Object.keys(ECHO_TYPE_LABELS) as EchoReplyType[]).map((type) => (
-                        <button
-                          key={type}
-                          type="button"
-                          onClick={() => setReplyType(type)}
-                          className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap shrink-0 ${
-                            replyType === type
-                              ? 'bg-stone-900 text-white border-stone-900'
-                              : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
-                          }`}
-                        >
-                          {ECHO_TYPE_LABELS[type].label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-xs text-stone-500">{ECHO_TYPE_LABELS[replyType].hint}</p>
+                  <label
+                    htmlFor="reader-comment-input"
+                    className="block text-xs uppercase tracking-widest text-stone-500"
+                  >
+                    Laisser un commentaire
+                  </label>
 
                   {user ? (
                     <>
                       <textarea
+                        id="reader-comment-input"
                         rows={3}
                         maxLength={FIELD_LIMITS.echoContent.max}
                         value={echoText}

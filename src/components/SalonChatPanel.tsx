@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Flag, MessageSquare, Send, ShieldCheck, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { checkLocalContentHygiene } from '../lib/contentRegulation';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import {
   deleteSalonMessage,
   runAutomatedContentBotGuard,
@@ -9,12 +10,17 @@ import {
   subscribeToSalonMessages,
 } from '../lib/storyService';
 import { formatFrenchDate, THEME_MAP } from '../lib/themes';
-import { FIELD_LIMITS, SalonMessage, StoryThemeId } from '../types/story';
+import { FIELD_LIMITS, PublicProfile, SalonMessage, StoryThemeId } from '../types/story';
 import type { ReportDraft } from './ReportModal';
+import { RoleBadgesRow } from './RoleBadge';
 
 interface SalonChatPanelProps {
   salonId: StoryThemeId;
   hiddenUserIds?: Set<string>;
+  adminUserIds?: Set<string>;
+  moderatorIds?: Set<string>;
+  profilesByUserId?: Map<string, PublicProfile>;
+  canModerate?: boolean;
   onOpenMemberWall: (userId: string) => void;
   onOpenReport?: (draft: ReportDraft) => void;
 }
@@ -22,10 +28,15 @@ interface SalonChatPanelProps {
 export function SalonChatPanel({
   salonId,
   hiddenUserIds,
+  adminUserIds,
+  moderatorIds,
+  profilesByUserId,
+  canModerate = false,
   onOpenMemberWall,
   onOpenReport,
 }: SalonChatPanelProps) {
   const { user, profile, signInWithGoogle } = useAuth();
+  const isGlobalAdmin = isModerationAdminEmail(user?.email);
   const [messages, setMessages] = useState<SalonMessage[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState('');
@@ -170,12 +181,16 @@ export function SalonChatPanel({
         ) : (
           visibleMessages.map((msg) => {
             const isMine = msg.senderId === user.uid;
+            const canDeleteMsg = isMine || canModerate || isGlobalAdmin;
+            const senderProfile = profilesByUserId?.get(msg.senderId);
+            const isMsgAdmin = Boolean(senderProfile?.isAdmin || adminUserIds?.has(msg.senderId));
+            const isMsgMod = Boolean(moderatorIds?.has(msg.senderId));
             return (
               <div
                 key={msg.messageId}
                 className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
               >
-                <div className="flex items-center gap-2 text-xs text-stone-500 mb-1">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs text-stone-500 mb-1">
                   <button
                     type="button"
                     onClick={() => onOpenMemberWall(msg.senderId)}
@@ -183,39 +198,47 @@ export function SalonChatPanel({
                   >
                     {msg.senderName}
                   </button>
+                  <RoleBadgesRow
+                    isAdmin={isMsgAdmin}
+                    isModerator={isMsgMod}
+                    profileBadges={senderProfile?.badges}
+                    compact
+                  />
                   <span aria-hidden="true">·</span>
                   <span>{formatFrenchDate(msg.createdAt?.toDate() ?? null)}</span>
-                  {isMine ? (
+                  {!isMine && onOpenReport && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenReport({
+                          targetUserId: msg.senderId,
+                          targetUserName: msg.senderName,
+                          targetType: 'salon_message',
+                          targetId: msg.messageId,
+                          targetContextId: salonId,
+                          targetExcerpt: msg.content,
+                          targetSummaryLabel: `Signaler un message dans ${salon.shortSalonName}`,
+                        })
+                      }
+                      title="Signaler ce message"
+                      aria-label="Signaler ce message"
+                      className="text-stone-400 hover:text-red-700 p-0.5 ml-0.5"
+                    >
+                      <Flag className="w-3 h-3" />
+                    </button>
+                  )}
+                  {canDeleteMsg && (
                     <button
                       type="button"
                       onClick={() => void deleteSalonMessage(salonId, msg.messageId)}
+                      title={
+                        isMine ? 'Supprimer ce message' : 'Supprimer ce message (modération)'
+                      }
                       aria-label="Supprimer ce message"
-                      className="text-stone-400 hover:text-red-700 p-0.5 ml-1"
+                      className="text-stone-400 hover:text-red-700 p-0.5 ml-0.5"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
-                  ) : (
-                    onOpenReport && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onOpenReport({
-                            targetUserId: msg.senderId,
-                            targetUserName: msg.senderName,
-                            targetType: 'salon_message',
-                            targetId: msg.messageId,
-                            targetContextId: salonId,
-                            targetExcerpt: msg.content,
-                            targetSummaryLabel: `Signaler un message dans ${salon.shortSalonName}`,
-                          })
-                        }
-                        title="Signaler ce message"
-                        aria-label="Signaler ce message"
-                        className="text-stone-400 hover:text-red-700 p-0.5 ml-1"
-                      >
-                        <Flag className="w-3 h-3" />
-                      </button>
-                    )
                   )}
                 </div>
 

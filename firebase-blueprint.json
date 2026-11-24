@@ -50,6 +50,24 @@
         "discoverable": {
           "type": "boolean"
         },
+        "isAdmin": {
+          "type": "boolean"
+        },
+        "badges": {
+          "type": "array",
+          "description": "Distinctive community and role badges assigned to the member profile by administration.",
+          "maxItems": 5,
+          "items": {
+            "type": "string",
+            "enum": [
+              "administrateur",
+              "moderateur",
+              "expert_litteraire",
+              "plume_confirmee",
+              "grand_lecteur"
+            ]
+          }
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time"
@@ -963,7 +981,7 @@
         },
         "role": {
           "type": "string",
-          "enum": ["owner", "member"]
+          "enum": ["owner", "moderator", "member"]
         },
         "createdAt": {
           "type": "string",
@@ -985,6 +1003,41 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "SalonModerator": {
+      "title": "SalonModerator",
+      "description": "Assigned moderator for an official predefined literary salon.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "salonId": {
+          "type": "string",
+          "enum": ["creation", "rencontres", "solitudes", "premiers-elans", "quotidien", "faq"]
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 60
+        },
+        "assignedById": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "salonId", "userName", "assignedById", "createdAt", "updatedAt"]
     },
     "CustomSalonMessage": {
       "title": "CustomSalonMessage",
@@ -1752,6 +1805,12 @@
         "$ref": "#/entities/SalonThreadReply"
       },
       "description": "Replies within a predefined salon discussion thread."
+    },
+    "/salons/{salonId}/moderators/{userId}": {
+      "schema": {
+        "$ref": "#/entities/SalonModerator"
+      },
+      "description": "Assigned moderators for each official predefined literary salon."
     },
     "/exchanges/{exchangeId}": {
       "schema": {

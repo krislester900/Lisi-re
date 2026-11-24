@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Camera, Globe, Lock, Music2, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { compressAvatarForProfile } from '../lib/storageService';
 import {
   syncUserRepostsVisibility,
@@ -9,6 +10,7 @@ import {
 } from '../lib/storyService';
 import { FIELD_LIMITS, StoryRepost } from '../types/story';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
+import { RoleBadgesRow } from './RoleBadge';
 
 interface ProfileSettingsPanelProps {
   reposts: StoryRepost[];
@@ -174,9 +176,28 @@ export function ProfileSettingsPanel({
       <h2 className="font-display text-2xl font-medium text-stone-900 mb-1">
         Paramètres du profil & musique préférée
       </h2>
-      <p className="text-xs text-stone-600 mb-6 leading-relaxed">
+      <p className="text-xs text-stone-600 mb-4 leading-relaxed">
         Ces informations s’affichent sur votre page de profil pour aider les autres membres à mieux vous connaître. Votre e-mail reste strictement privé.
       </p>
+
+      {(profile?.isAdmin ||
+        isModerationAdminEmail(user.email) ||
+        (profile?.badges && profile.badges.length > 0)) && (
+        <div className="mb-5 p-3.5 rounded-md border border-stone-200 bg-[#FBF9F5] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-stone-800">
+              Vos badges distinctifs sur Lisière
+            </p>
+            <RoleBadgesRow
+              isAdmin={Boolean(profile?.isAdmin || isModerationAdminEmail(user.email))}
+              profileBadges={profile?.badges}
+            />
+          </div>
+          <p className="text-[11px] text-stone-500">
+            Attribués par l’administration du site.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSaveProfile} className="space-y-5">
         {/* Profile Photo Uploader */}
