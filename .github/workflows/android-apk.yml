@@ -36,16 +36,21 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Installer les dépendances Node.js
-        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Configurer Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
-      - name: Valider les types TypeScript (npm run lint)
-        run: npm run lint
+      - name: Installer les dépendances (Bun + bun.lock)
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Valider les types TypeScript (lint)
+        run: bun run lint
 
       - name: Valider et compiler le build PWA Vite (dist/)
         env:
           VITE_GITHUB_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
-        run: npm run build
+        run: bun run build
 
       - name: Préparer l'archive et les artifacts dist/
         run: |
@@ -74,9 +79,9 @@ jobs:
       - name: Installer Capacitor Android & synchroniser dist/
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
-          npm install --legacy-peer-deps --no-audit --no-fund @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
-          npx cap add android
-          npx cap sync android
+          bun add @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
+          ./node_modules/.bin/cap add android
+          ./node_modules/.bin/cap sync android
 
       - name: Appliquer l'icône Lisière sur les ressources Android
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
