@@ -1705,6 +1705,33 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "MobileDistributionConfig": {
+      "title": "MobileDistributionConfig",
+      "description": "Public GitHub repository URL used to redirect mobile users to GitHub Releases and GitHub Actions APK builds.",
+      "type": "object",
+      "properties": {
+        "githubRepoUrl": {
+          "type": "string",
+          "minLength": 19,
+          "maxLength": 200,
+          "pattern": "^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$"
+        },
+        "updatedBy": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "githubRepoUrl",
+        "updatedBy",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -1869,6 +1896,12 @@
         "$ref": "#/entities/MemberWarning"
       },
       "description": "Official moderation warnings issued to members when a reported act is substantiated."
+    },
+    "/appConfig/{docId}": {
+      "schema": {
+        "$ref": "#/entities/MobileDistributionConfig"
+      },
+      "description": "Public mobile distribution configuration linking to GitHub Releases and Actions APK artifacts."
     }
   }
 }

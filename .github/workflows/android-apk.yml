@@ -1,0 +1,132 @@
+name: Build PWA Dist & Android APK/AAB (Lisière)
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      build_android_packages:
+        description: 'Packager la PWA en APK et AAB Android (Capacitor)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pwa-android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    name: Valider dist/, packager APK/AAB & publier le brouillon de Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Configurer Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Installer les dépendances Node.js
+        run: npm install --no-audit --no-fund
+
+      - name: Valider les types TypeScript (npm run lint)
+        run: npm run lint
+
+      - name: Valider et compiler le build PWA Vite (dist/)
+        env:
+          VITE_GITHUB_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: npm run build
+
+      - name: Préparer l'archive et les artifacts dist/
+        run: |
+          mkdir -p release-assets
+          (cd dist && zip -r ../release-assets/lisiere-dist.zip .)
+          ls -lh release-assets/lisiere-dist.zip
+
+      - name: Publier l'artifact dist/ dans GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: lisiere-pwa-dist
+          path: dist/
+          retention-days: 90
+
+      - name: Configurer Java 21 (Temurin) pour Android
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Configurer Android SDK
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        uses: android-actions/setup-android@v3
+
+      - name: Installer Capacitor Android & synchroniser dist/
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        run: |
+          npm install --no-save @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
+          npx cap add android
+          npx cap sync android
+
+      - name: Appliquer l'icône Lisière sur les ressources Android
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        run: |
+          if [ -f public/pwa-512x512.png ]; then
+            for dir in android/app/src/main/res/mipmap-*; do
+              [ -d "$dir" ] || continue
+              cp -f public/pwa-512x512.png "$dir/ic_launcher.png" 2>/dev/null || true
+              cp -f public/pwa-512x512.png "$dir/ic_launcher_round.png" 2>/dev/null || true
+              cp -f public/pwa-512x512.png "$dir/ic_launcher_foreground.png" 2>/dev/null || true
+            done
+          fi
+
+      - name: Compiler l'APK et l'AAB Android avec Gradle
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug bundleDebug --no-daemon
+
+      - name: Préparer Lisiere-mobile.apk et Lisiere-mobile.aab
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/Lisiere-mobile.apk
+          cp android/app/build/outputs/bundle/debug/app-debug.aab release-assets/Lisiere-mobile.aab
+          ls -lh release-assets/
+
+      - name: Publier les artifacts APK et AAB dans GitHub Actions
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lisiere-android-packages
+          path: |
+            release-assets/Lisiere-mobile.apk
+            release-assets/Lisiere-mobile.aab
+          retention-days: 90
+
+      - name: Créer/mettre à jour le brouillon de Release GitHub avec dist/, APK et AAB
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('main-build-{0}', github.run_number) }}
+          name: Lisière Build (${{ github.ref_name }} · #${{ github.run_number }})
+          draft: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          make_latest: ${{ startsWith(github.ref, 'refs/tags/') }}
+          body: |
+            Build automatique généré par GitHub Actions (`${{ github.sha }}`).
+
+            Contenu inclus :
+            - `lisiere-dist.zip` : build web PWA compilé (`dist/`)
+            - `Lisiere-mobile.apk` : paquet Android installable directement (si activé)
+            - `Lisiere-mobile.aab` : Android App Bundle pour Google Play (si activé)
+          files: release-assets/*
+          generate_release_notes: true

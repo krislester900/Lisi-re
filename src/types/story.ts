@@ -496,6 +496,12 @@ export interface StoryQuote {
   createdAt: Timestamp | null;
 }
 
+export interface MobileDistributionConfig {
+  githubRepoUrl: string;
+  updatedBy: string;
+  updatedAt: Timestamp | null;
+}
+
 export const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 export const FIELD_LIMITS = {
@@ -547,4 +553,5 @@ export const FIELD_LIMITS = {
   moderationDescription: { min: 10, max: 800 },
   moderationNotes: { max: 1000 },
   moderationDecisionReason: { min: 10, max: 800 },
+  githubRepoUrl: { min: 19, max: 200 },
 } as const;

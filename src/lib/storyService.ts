@@ -44,6 +44,7 @@ import {
   ID_PATTERN,
   MemberBadgeId,
   MemberWarning,
+  MobileDistributionConfig,
   ModerationAiAnalysis,
   ModerationCase,
   ModerationGravityLevel,
@@ -3744,3 +3745,80 @@ export async function acknowledgeUserWarning(warningId: string): Promise<void> {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
+
+// --- Mobile App Distribution (GitHub Releases & Actions APK Links) ---
+
+const GITHUB_REPO_URL_PATTERN = /^https:\/\/github\.com\/[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/;
+
+export function normalizeGitHubRepoUrl(rawUrl: string): string {
+  const trimmed = rawUrl.trim().replace(/\/+$/, '');
+  if (!trimmed) return '';
+  const match = trimmed.match(/^https:\/\/github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+?)(?:\.git)?(?:\/.*)?$/i);
+  if (!match) {
+    return trimmed;
+  }
+  const normalized = `https://github.com/${match[1]}/${match[2]}`;
+  return normalized.slice(0, FIELD_LIMITS.githubRepoUrl.max);
+}
+
+export function isValidGitHubRepoUrl(url: string): boolean {
+  return (
+    url.length >= FIELD_LIMITS.githubRepoUrl.min &&
+    url.length <= FIELD_LIMITS.githubRepoUrl.max &&
+    GITHUB_REPO_URL_PATTERN.test(url)
+  );
+}
+
+export function subscribeToMobileDistributionConfig(
+  onData: (config: MobileDistributionConfig | null) => void
+): () => void {
+  const path = 'appConfig/mobileDistribution';
+  return onSnapshot(
+    doc(db, 'appConfig', 'mobileDistribution'),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onData(null);
+        return;
+      }
+      onData(snapshot.data() as MobileDistributionConfig);
+    },
+    (error) => {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  );
+}
+
+export async function saveMobileDistributionConfig(params: {
+  githubRepoUrl: string;
+  updatedBy: string;
+}): Promise<string> {
+  assertValidId(params.updatedBy, 'updatedBy');
+  const normalized = normalizeGitHubRepoUrl(params.githubRepoUrl);
+  if (!isValidGitHubRepoUrl(normalized)) {
+    throw new Error(
+      'Entrez une URL GitHub valide au format https://github.com/utilisateur/depot'
+    );
+  }
+
+  const path = 'appConfig/mobileDistribution';
+  try {
+    await setDoc(doc(db, 'appConfig', 'mobileDistribution'), {
+      githubRepoUrl: normalized,
+      updatedBy: params.updatedBy,
+      updatedAt: serverTimestamp(),
+    });
+    return normalized;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function clearMobileDistributionConfig(): Promise<void> {
+  const path = 'appConfig/mobileDistribution';
+  try {
+    await deleteDoc(doc(db, 'appConfig', 'mobileDistribution'));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+

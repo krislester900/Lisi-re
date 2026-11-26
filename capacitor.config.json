@@ -1,0 +1,8 @@
+{
+  "appId": "app.lisiere.recits",
+  "appName": "Lisière",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}

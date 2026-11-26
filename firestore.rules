@@ -754,6 +754,17 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidMobileDistributionConfig(data) {
+      return data.keys().hasAll(['githubRepoUrl', 'updatedBy', 'updatedAt'])
+        && data.keys().hasOnly(['githubRepoUrl', 'updatedBy', 'updatedAt'])
+        && data.githubRepoUrl is string
+        && data.githubRepoUrl.size() >= 19
+        && data.githubRepoUrl.size() <= 200
+        && data.githubRepoUrl.matches('^https://github\\.com/[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$')
+        && isValidId(data.updatedBy)
+        && data.updatedAt is timestamp;
+    }
+
     // --- Collection Rules ---
 
     // Public author cards (no PII)
@@ -2157,6 +2168,31 @@ service cloud.firestore {
         ]);
 
       allow delete: if false;
+    }
+
+    // Public mobile distribution configuration (GitHub Releases / Actions APK URL, no PII)
+    match /appConfig/{docId} {
+      allow get: if isValidId(docId) && docId == 'mobileDistribution';
+      allow list: if false;
+
+      allow create: if isAdminEmail()
+        && isValidId(docId)
+        && docId == 'mobileDistribution'
+        && isValidMobileDistributionConfig(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time;
+
+      allow update: if isAdminEmail()
+        && isValidId(docId)
+        && docId == 'mobileDistribution'
+        && isValidMobileDistributionConfig(incoming())
+        && incoming().updatedBy == request.auth.uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['githubRepoUrl', 'updatedBy', 'updatedAt']);
+
+      allow delete: if isAdminEmail()
+        && isValidId(docId)
+        && docId == 'mobileDistribution';
     }
   }
 }
