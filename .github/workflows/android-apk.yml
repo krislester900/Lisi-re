@@ -71,7 +71,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: gradle
 
       - name: Accepter les licences Android SDK préinstallées
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
@@ -87,6 +86,16 @@ jobs:
           bun add @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
           ./node_modules/.bin/cap add android
           ./node_modules/.bin/cap sync android
+
+      - name: Cache Gradle
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
+          restore-keys: gradle-${{ runner.os }}-
 
       - name: Ajouter un miroir Maven de secours
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
