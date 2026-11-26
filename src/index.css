@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-display: "Fraunces", Georgia, serif;
@@ -14,6 +15,12 @@
     scroll-behavior: smooth;
     overscroll-behavior-y: contain;
     -webkit-tap-highlight-color: transparent;
+  }
+
+  html.dark {
+    background-color: #12100E;
+    color: #F2EFE9;
+    color-scheme: dark;
   }
 
   h1, h2, h3, .font-display {

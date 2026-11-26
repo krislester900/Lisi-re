@@ -59,8 +59,19 @@
       href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('lisiere_theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) meta.setAttribute('content', '#12100E');
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
-  <body class="bg-[#FBF9F5] text-stone-900 antialiased selection:bg-[#1E3A8A]/15 selection:text-[#1E3A8A]">
+  <body class="bg-[#FBF9F5] dark:bg-[#12100E] text-stone-900 dark:text-stone-100 antialiased selection:bg-[#1E3A8A]/15 dark:selection:bg-amber-400/20 selection:text-[#1E3A8A] dark:selection:text-amber-200">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

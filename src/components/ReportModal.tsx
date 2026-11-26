@@ -140,24 +140,24 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-900/50 p-4 overflow-y-auto"
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-stone-900/50 dark:bg-stone-950/75 p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="report-modal-title"
     >
-      <div className="bg-[#FBF9F5] border border-stone-300 rounded-lg w-full max-w-xl overflow-hidden shadow-xl my-auto">
-        <div className="px-6 py-4 bg-white border-b border-stone-200 flex items-center justify-between gap-4">
+      <div className="bg-[#FBF9F5] dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg w-full max-w-xl overflow-hidden shadow-xl my-auto">
+        <div className="px-6 py-4 bg-white dark:bg-stone-950 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-md bg-red-50 border border-red-200 text-red-800 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-md bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 flex items-center justify-center shrink-0">
               <Flag className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-widest text-stone-500">
+              <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">
                 Signalement &amp; étude de cas
               </p>
               <h2
                 id="report-modal-title"
-                className="font-display text-xl font-medium text-stone-900 truncate"
+                className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 truncate"
               >
                 {draft.targetSummaryLabel}
               </h2>
@@ -169,7 +169,7 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
             disabled={busy}
             onClick={onClose}
             aria-label="Fermer la fenêtre de signalement"
-            className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 hover:bg-stone-100"
+            className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
           >
             <X className="w-5 h-5" />
           </button>
@@ -177,14 +177,14 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
 
         {submittedId ? (
           <div className="p-6 sm:p-7 space-y-5">
-            <div className="flex items-start gap-3 bg-emerald-50 border border-emerald-200 rounded-md p-4 text-emerald-950">
-              <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-md p-4 text-emerald-950 dark:text-emerald-200">
+              <CheckCircle2 className="w-5 h-5 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5" />
               <div className="space-y-1.5 text-sm">
                 <p className="font-medium">Signalement transmis avec capture figée des faits</p>
-                <p className="text-xs leading-relaxed text-emerald-900">
+                <p className="text-xs leading-relaxed text-emerald-900 dark:text-emerald-300">
                   Votre dossier va suivre la procédure d’étude de cas en 4 étapes (réception, analyse des faits, qualification de la gravité et décision motivée). Si l’acte outrageant est avéré, un avertissement officiel sera adressé au membre concerné.
                 </p>
-                <p className="text-xs text-emerald-800">
+                <p className="text-xs text-emerald-800 dark:text-emerald-300">
                   Vous pouvez suivre l’avancement de ce dossier dans « Mon carnet → Signalements ».
                 </p>
               </div>
@@ -194,7 +194,7 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
               <button
                 type="button"
                 onClick={onClose}
-                className="min-h-[40px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                className="min-h-[40px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] dark:bg-[#3B629B] rounded-md hover:bg-[#132744] dark:hover:bg-[#2F5183]"
               >
                 Fermer
               </button>
@@ -202,21 +202,21 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
           </div>
         ) : !user ? (
           <div className="p-6 sm:p-7 space-y-4">
-            <p className="text-sm text-stone-700 leading-relaxed">
+            <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
               Connectez-vous avec votre compte Google pour soumettre un signalement et suivre l’étude de cas correspondante.
             </p>
             <div className="flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
-                className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-600 hover:text-stone-900"
+                className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
               >
                 Annuler
               </button>
               <button
                 type="button"
                 onClick={() => void signInWithGoogle()}
-                className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] dark:bg-[#3B629B] rounded-md hover:bg-[#132744] dark:hover:bg-[#2F5183]"
               >
                 Se connecter avec Google
               </button>
@@ -224,18 +224,18 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-5">
-            <div className="bg-white border border-stone-200 rounded-md p-4 space-y-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+            <div className="bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-md p-4 space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                 <span>Type : {MODERATION_TARGET_LABELS[draft.targetType]}</span>
                 <span>
                   Membre concerné :{' '}
-                  <strong className="text-stone-800">
+                  <strong className="text-stone-800 dark:text-stone-100">
                     {draft.isAnonymousTarget ? 'Auteur anonyme' : draft.targetUserName}
                   </strong>
                 </span>
               </div>
               {draft.targetExcerpt.trim() && (
-                <blockquote className="mt-2 pt-2 border-t border-stone-100 text-xs text-stone-700 italic leading-relaxed line-clamp-4 whitespace-pre-line">
+                <blockquote className="mt-2 pt-2 border-t border-stone-100 dark:border-stone-700 text-xs text-stone-700 dark:text-stone-300 italic leading-relaxed line-clamp-4 whitespace-pre-line">
                   « {draft.targetExcerpt} »
                 </blockquote>
               )}
@@ -244,7 +244,7 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
             <div>
               <label
                 htmlFor="report-category"
-                className="block text-xs font-medium text-stone-800 mb-1.5"
+                className="block text-xs font-medium text-stone-800 dark:text-stone-200 mb-1.5"
               >
                 Motif principal du signalement
               </label>
@@ -252,7 +252,7 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
                 id="report-category"
                 value={category}
                 onChange={(e) => setCategory(e.target.value as ModerationReportCategory)}
-                className="w-full min-h-[42px] px-3 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                className="w-full min-h-[42px] px-3 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
               >
                 {(Object.keys(MODERATION_CATEGORY_LABELS) as ModerationReportCategory[]).map((key) => (
                   <option key={key} value={key}>
@@ -260,7 +260,7 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
                   </option>
                 ))}
               </select>
-              <p className="text-xs text-stone-500 mt-1.5">
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1.5">
                 {MODERATION_CATEGORY_LABELS[category].hint}
               </p>
             </div>
@@ -269,11 +269,11 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <label
                   htmlFor="report-description"
-                  className="block text-xs font-medium text-stone-800"
+                  className="block text-xs font-medium text-stone-800 dark:text-stone-200"
                 >
                   Contexte et explication des faits
                 </label>
-                <span className="text-[11px] text-stone-400 tabular-nums">
+                <span className="text-[11px] text-stone-400 dark:text-stone-500 tabular-nums">
                   {description.length} / {FIELD_LIMITS.moderationDescription.max}
                 </span>
               </div>
@@ -286,20 +286,20 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Décrivez précisément ce qui s’est produit ou quels propos vous semblent outrageants…"
-                className="w-full px-3.5 py-2.5 bg-white border border-stone-200 rounded-md text-sm text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                className="w-full px-3.5 py-2.5 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
               />
             </div>
 
             {canOfferBlock && (
-              <label className="flex items-start gap-2.5 p-3.5 bg-white border border-stone-200 rounded-md text-xs text-stone-700 cursor-pointer">
+              <label className="flex items-start gap-2.5 p-3.5 bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-700 dark:text-stone-300 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={alsoBlock}
                   onChange={(e) => setAlsoBlock(e.target.checked)}
-                  className="mt-0.5 rounded border-stone-300 text-[#1B365D]"
+                  className="mt-0.5 rounded border-stone-300 dark:border-stone-600 text-[#1B365D]"
                 />
                 <span>
-                  <strong className="text-stone-900 block mb-0.5">
+                  <strong className="text-stone-900 dark:text-stone-100 block mb-0.5">
                     Bloquer également {draft.targetUserName}
                   </strong>
                   Empêche tout nouvel échange privé entre vous et masque ses écrits et commentaires de votre espace.
@@ -307,8 +307,8 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
               </label>
             )}
 
-            <div className="flex items-start gap-2 text-[11px] text-stone-500 leading-relaxed">
-              <ShieldAlert className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-2 text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">
+              <ShieldAlert className="w-4 h-4 text-stone-400 dark:text-stone-500 shrink-0 mt-0.5" />
               <span>
                 Une copie figée de l’extrait signalé est conservée pour l’étude de cas afin que l’équipe de modération puisse vérifier les faits même si le message d’origine est supprimé.
               </span>
@@ -317,25 +317,25 @@ export function ReportModal({ draft, onClose, onSubmitted }: ReportModalProps) {
             {error && (
               <p
                 role="alert"
-                className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+                className="text-xs text-red-800 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-md px-3.5 py-2"
               >
                 {error}
               </p>
             )}
 
-            <div className="pt-2 border-t border-stone-200 flex items-center justify-end gap-3">
+            <div className="pt-2 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
               <button
                 type="button"
                 disabled={busy}
                 onClick={onClose}
-                className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-600 hover:text-stone-900"
+                className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={busy}
-                className="min-h-[40px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-red-800 rounded-md hover:bg-red-900 disabled:opacity-60 inline-flex items-center gap-2"
+                className="min-h-[40px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-red-800 dark:bg-red-700 rounded-md hover:bg-red-900 dark:hover:bg-red-800 disabled:opacity-60 inline-flex items-center gap-2"
               >
                 <Flag className="w-3.5 h-3.5" />
                 <span>{busy ? 'Envoi…' : 'Transmettre le signalement'}</span>

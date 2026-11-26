@@ -325,18 +325,18 @@ export function SalonThreadsPanel({
       className="space-y-5"
     >
       {/* Top Toolbar */}
-      <div className="bg-white border border-stone-200 rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="space-y-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="font-display text-xl sm:text-2xl font-medium text-stone-900">
+            <h2 className="font-display text-xl sm:text-2xl font-medium text-stone-900 dark:text-stone-100">
               Fils &amp; thèmes de discussion
             </h2>
-            <span className="text-xs text-stone-500 tabular-nums">
+            <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
               ({visibleThreads.length})
             </span>
           </div>
-          <p className="text-xs text-stone-600 flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+          <p className="text-xs text-stone-600 dark:text-stone-400 flex items-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D] dark:text-sky-400 shrink-0" />
             <span>
               Charte bienveillante &amp; bot de régulation Lisière actifs : aucun propos haineux, offensant ou spam.
             </span>
@@ -365,14 +365,14 @@ export function SalonThreadsPanel({
       {botFeedback && (
         <p
           role="status"
-          className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3.5 py-2.5"
+          className="text-xs text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md px-3.5 py-2.5"
         >
           {botFeedback}
         </p>
       )}
 
       {hiddenByAgeCount > 0 && (
-        <div className="bg-stone-100 border border-stone-200 rounded-md px-4 py-2.5 text-xs text-stone-700">
+        <div className="bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md px-4 py-2.5 text-xs text-stone-700 dark:text-stone-300">
           {hiddenByAgeCount} fil{hiddenByAgeCount > 1 ? 's' : ''} classé
           {hiddenByAgeCount > 1 ? 's' : ''} pour un public plus âgé ou mature{' '}
           {viewerAge === null
@@ -385,23 +385,23 @@ export function SalonThreadsPanel({
       {showNewThreadForm && canPost && (
         <form
           onSubmit={handleCreateThread}
-          className="bg-white border border-stone-200 rounded-lg p-5 sm:p-6 space-y-4"
+          className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-5 sm:p-6 space-y-4"
         >
           <div className="space-y-1">
-            <p className="text-[11px] uppercase tracking-widest text-[#1B365D] font-semibold">
+            <p className="text-[11px] uppercase tracking-widest text-[#1B365D] dark:text-sky-300 font-semibold">
               Nouveau thème dans {salonTitle}
             </p>
-            <h3 className="font-display text-lg font-medium text-stone-900">
+            <h3 className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
               Lancer une question ou un sujet d’échange
             </h3>
           </div>
 
           <div>
             <div className="flex items-baseline justify-between mb-1">
-              <label htmlFor="new-thread-title" className="text-xs font-medium text-stone-800">
+              <label htmlFor="new-thread-title" className="text-xs font-medium text-stone-800 dark:text-stone-200">
                 Titre du fil ou thème
               </label>
-              <span className="text-[11px] text-stone-500 tabular-nums">
+              <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
                 {threadTitle.length}/{FIELD_LIMITS.threadTitle.max}
               </span>
             </div>
@@ -413,16 +413,16 @@ export function SalonThreadsPanel({
               value={threadTitle}
               onChange={(e) => setThreadTitle(e.target.value)}
               placeholder="Ex. Comment oser écrire sans chercher la perfection ?"
-              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
             />
           </div>
 
           <div>
             <div className="flex items-baseline justify-between mb-1">
-              <label htmlFor="new-thread-body" className="text-xs font-medium text-stone-800">
+              <label htmlFor="new-thread-body" className="text-xs font-medium text-stone-800 dark:text-stone-200">
                 Message d’ouverture (facultatif)
               </label>
-              <span className="text-[11px] text-stone-500 tabular-nums">
+              <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
                 {threadBody.length}/{FIELD_LIMITS.threadBody.max}
               </span>
             </div>
@@ -433,13 +433,13 @@ export function SalonThreadsPanel({
               value={threadBody}
               onChange={(e) => setThreadBody(e.target.value)}
               placeholder="Donnez le contexte, posez une question précise ou invitez les membres à réagir…"
-              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
             <div>
-              <label htmlFor="new-thread-age" className="block text-xs font-medium text-stone-800 mb-1">
+              <label htmlFor="new-thread-age" className="block text-xs font-medium text-stone-800 dark:text-stone-200 mb-1">
                 Âge minimum conseillé
               </label>
               <select
@@ -450,7 +450,7 @@ export function SalonThreadsPanel({
                   setThreadMinAge(val);
                   if (val >= 16) setThreadIsMature(true);
                 }}
-                className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
               >
                 {AGE_RATING_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -461,7 +461,7 @@ export function SalonThreadsPanel({
             </div>
 
             <div className="flex flex-col justify-end gap-1.5">
-              <label className="inline-flex items-center gap-2 text-xs font-medium text-stone-800 cursor-pointer min-h-[38px]">
+              <label className="inline-flex items-center gap-2 text-xs font-medium text-stone-800 dark:text-stone-200 cursor-pointer min-h-[38px]">
                 <input
                   type="checkbox"
                   checked={threadIsMature || threadMinAge >= 16}
@@ -475,7 +475,7 @@ export function SalonThreadsPanel({
 
           {(threadIsMature || threadMinAge >= 16) && (
             <div>
-              <label htmlFor="new-thread-mature-reason" className="block text-xs font-medium text-stone-800 mb-1">
+              <label htmlFor="new-thread-mature-reason" className="block text-xs font-medium text-stone-800 dark:text-stone-200 mb-1">
                 Précision de l’avertissement mature (facultatif)
               </label>
               <input
@@ -485,12 +485,12 @@ export function SalonThreadsPanel({
                 value={threadMatureReason}
                 onChange={(e) => setThreadMatureReason(e.target.value)}
                 placeholder="Ex. Deuil difficile, santé mentale, thème adulte…"
-                className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                className="w-full px-3 py-2 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
               />
             </div>
           )}
 
-          <label className="flex items-start gap-2 text-xs text-stone-700 cursor-pointer pt-1">
+          <label className="flex items-start gap-2 text-xs text-stone-700 dark:text-stone-300 cursor-pointer pt-1">
             <input
               type="checkbox"
               checked={threadCharterChecked}
@@ -505,7 +505,7 @@ export function SalonThreadsPanel({
           {threadError && (
             <p
               role="alert"
-              className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+              className="text-xs text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md px-3.5 py-2"
             >
               {threadError}
             </p>
@@ -515,7 +515,7 @@ export function SalonThreadsPanel({
             <button
               type="button"
               onClick={() => setShowNewThreadForm(false)}
-              className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
+              className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             >
               Annuler
             </button>
@@ -532,12 +532,12 @@ export function SalonThreadsPanel({
 
       {/* Selected Thread Detail OR Thread List */}
       {activeThread ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-5 sm:p-7 space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-stone-200">
+        <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-5 sm:p-7 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-stone-200 dark:border-stone-800">
             <button
               type="button"
               onClick={() => setSelectedThreadId(null)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-700 hover:text-stone-900"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Tous les fils du salon</span>
@@ -548,7 +548,7 @@ export function SalonThreadsPanel({
                 <button
                   type="button"
                   onClick={() => onWriteFromThread(activeThread.title, activeThread.body)}
-                  className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                  className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] dark:text-sky-300 bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
                 >
                   <Feather className="w-3.5 h-3.5" />
                   <span>Écrire un récit sur ce fil</span>
@@ -568,7 +568,7 @@ export function SalonThreadsPanel({
                       targetSummaryLabel: `Signaler le fil « ${activeThread.title} »`,
                     })
                   }
-                  className="min-h-[34px] px-2.5 py-1 text-xs text-stone-600 border border-stone-200 rounded-md hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1"
+                  className="min-h-[34px] px-2.5 py-1 text-xs text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 rounded-md hover:border-red-300 hover:text-red-800 dark:hover:text-red-300 inline-flex items-center gap-1"
                 >
                   <Flag className="w-3.5 h-3.5" />
                   <span>Signaler</span>
@@ -582,7 +582,7 @@ export function SalonThreadsPanel({
                   <button
                     type="button"
                     onClick={() => void handleDeleteThread(activeThread)}
-                    className="min-h-[34px] px-2.5 py-1 text-xs text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1"
+                    className="min-h-[34px] px-2.5 py-1 text-xs text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Supprimer</span>
@@ -595,26 +595,26 @@ export function SalonThreadsPanel({
           {shouldShowMatureWarning(activeThread) && (
             <div
               role="note"
-              className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-xs text-amber-950 flex items-start gap-2.5"
+              className="rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-xs text-amber-950 dark:text-amber-200 flex items-start gap-2.5"
             >
-              <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="space-y-0.5">
                 <p className="font-semibold">
                   Contenu mature — Même si ce fil est adapté à votre âge, il aborde des thèmes sensibles.
                 </p>
                 {activeThread.matureReason && (
-                  <p className="text-amber-900">Motif signalé : {activeThread.matureReason}</p>
+                  <p className="text-amber-900 dark:text-amber-300">Motif signalé : {activeThread.matureReason}</p>
                 )}
               </div>
             </div>
           )}
 
           <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
               <button
                 type="button"
                 onClick={() => onOpenMemberWall(activeThread.authorId)}
-                className="font-semibold text-stone-900 hover:text-[#1B365D] hover:underline"
+                className="font-semibold text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
               >
                 {activeThread.authorName}
               </button>
@@ -633,31 +633,31 @@ export function SalonThreadsPanel({
               <MatureContentBadge minAge={activeThread.minAge} isMature={activeThread.isMature} />
             </div>
 
-            <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+            <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
               {activeThread.title}
             </h3>
 
             {activeThread.body && (
-              <p className="text-sm sm:text-base text-stone-700 leading-relaxed whitespace-pre-line">
+              <p className="text-sm sm:text-base text-stone-700 dark:text-stone-300 leading-relaxed whitespace-pre-line">
                 {activeThread.body}
               </p>
             )}
           </div>
 
           {/* Replies */}
-          <div className="pt-5 border-t border-stone-200 space-y-4">
-            <p className="text-xs uppercase tracking-widest text-stone-500">
+          <div className="pt-5 border-t border-stone-200 dark:border-stone-800 space-y-4">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Réponses ({repliesLoaded ? replies.length : activeThread.replyCount})
             </p>
 
             {!repliesLoaded ? (
-              <p className="text-xs text-stone-500">Chargement des réponses…</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">Chargement des réponses…</p>
             ) : replies.length === 0 ? (
-              <p className="text-sm text-stone-500 italic">
+              <p className="text-sm text-stone-500 dark:text-stone-400 italic">
                 Aucune réponse pour l’instant. Lancez la discussion ci-dessous.
               </p>
             ) : (
-              <div className="divide-y divide-stone-100">
+              <div className="divide-y divide-stone-100 dark:divide-stone-800">
                 {replies.map((reply) => {
                   const canDeleteReply = Boolean(
                     user &&
@@ -668,12 +668,12 @@ export function SalonThreadsPanel({
                   );
                   return (
                     <div key={reply.replyId} className="py-3.5 space-y-1.5">
-                      <div className="flex items-center justify-between gap-2 text-xs text-stone-500">
+                      <div className="flex items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(reply.authorId)}
-                            className="font-semibold text-stone-900 hover:text-[#1B365D] hover:underline"
+                            className="font-semibold text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                           >
                             {reply.authorName}
                           </button>
@@ -706,7 +706,7 @@ export function SalonThreadsPanel({
                                 })
                               }
                               title="Signaler cette réponse"
-                              className="p-1 text-stone-400 hover:text-red-700 rounded"
+                              className="p-1 text-stone-400 hover:text-red-700 dark:hover:text-red-400 rounded"
                             >
                               <Flag className="w-3.5 h-3.5" />
                             </button>
@@ -716,14 +716,14 @@ export function SalonThreadsPanel({
                               type="button"
                               onClick={() => void handleDeleteReply(activeThread.threadId, reply.replyId)}
                               title="Supprimer cette réponse"
-                              className="p-1 text-stone-400 hover:text-red-700 rounded"
+                              className="p-1 text-stone-400 hover:text-red-700 dark:hover:text-red-400 rounded"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
                       </div>
-                      <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-line">
+                      <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed whitespace-pre-line">
                         {reply.content}
                       </p>
                     </div>
@@ -742,10 +742,10 @@ export function SalonThreadsPanel({
                       value={replyText}
                       onChange={(e) => setReplyText(e.target.value)}
                       placeholder="Contribuer à ce fil de discussion (vérifié par le bot anti-haine Lisière)…"
-                      className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                      className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
                     />
                     {replyError && (
-                      <p role="alert" className="text-xs text-red-700">
+                      <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                         {replyError}
                       </p>
                     )}
@@ -761,8 +761,8 @@ export function SalonThreadsPanel({
                     </div>
                   </>
                 ) : (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[#FBF9F5] border border-stone-200 rounded-md">
-                    <p className="text-xs text-stone-600">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md">
+                    <p className="text-xs text-stone-600 dark:text-stone-400">
                       Connectez-vous avec Google pour participer à ce fil de discussion.
                     </p>
                     <button
@@ -779,16 +779,16 @@ export function SalonThreadsPanel({
           </div>
         </div>
       ) : !threadsLoaded ? (
-        <div className="py-8 text-center text-sm text-stone-500">
+        <div className="py-8 text-center text-sm text-stone-500 dark:text-stone-400">
           Chargement des fils de discussion…
         </div>
       ) : visibleThreads.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
+        <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
           <MessageSquare className="w-6 h-6 text-stone-400 mx-auto" />
-          <p className="font-display text-xl text-stone-900">
+          <p className="font-display text-xl text-stone-900 dark:text-stone-100">
             Aucun fil de discussion ouvert ici pour le moment
           </p>
-          <p className="text-sm text-stone-600 max-w-md mx-auto">
+          <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto">
             Proposez un thème de conversation, une question d’écriture ou un point de vue à partager avec les membres de {salonTitle}.
           </p>
           {canPost && (
@@ -809,15 +809,15 @@ export function SalonThreadsPanel({
           )}
         </div>
       ) : (
-        <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+        <div className="divide-y divide-stone-200 dark:divide-stone-800 bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg">
           {visibleThreads.map((thread) => (
             <article key={thread.threadId} className="p-5 sm:p-6 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => onOpenMemberWall(thread.authorId)}
-                    className="font-medium text-stone-800 hover:text-[#1B365D] hover:underline"
+                    className="font-medium text-stone-800 dark:text-stone-200 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                   >
                     {thread.authorName}
                   </button>
@@ -836,7 +836,7 @@ export function SalonThreadsPanel({
                   <MatureContentBadge minAge={thread.minAge} isMature={thread.isMature} compact />
                 </div>
 
-                <span className="inline-flex items-center gap-1 text-xs text-stone-600 tabular-nums">
+                <span className="inline-flex items-center gap-1 text-xs text-stone-600 dark:text-stone-400 tabular-nums">
                   <MessageSquare className="w-3.5 h-3.5 text-stone-400" />
                   <span>
                     {thread.replyCount} réponse{thread.replyCount > 1 ? 's' : ''}
@@ -849,11 +849,11 @@ export function SalonThreadsPanel({
                 onClick={() => setSelectedThreadId(thread.threadId)}
                 className="text-left block w-full group"
               >
-                <h3 className="font-display text-lg sm:text-xl font-medium text-stone-900 group-hover:text-[#1B365D] transition-colors">
+                <h3 className="font-display text-lg sm:text-xl font-medium text-stone-900 dark:text-stone-100 group-hover:text-[#1B365D] dark:group-hover:text-amber-300 transition-colors">
                   {thread.title}
                 </h3>
                 {thread.body && (
-                  <p className="text-sm text-stone-600 leading-relaxed line-clamp-2 mt-1">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2 mt-1">
                     {thread.body}
                   </p>
                 )}
@@ -863,7 +863,7 @@ export function SalonThreadsPanel({
                 <button
                   type="button"
                   onClick={() => setSelectedThreadId(thread.threadId)}
-                  className="text-xs font-medium text-[#1B365D] hover:underline"
+                  className="text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:underline"
                 >
                   Ouvrir le fil &rarr;
                 </button>
@@ -872,7 +872,7 @@ export function SalonThreadsPanel({
                   <button
                     type="button"
                     onClick={() => onWriteFromThread(thread.title, thread.body)}
-                    className="text-xs text-stone-600 hover:text-[#1B365D] inline-flex items-center gap-1"
+                    className="text-xs text-stone-600 dark:text-stone-400 hover:text-[#1B365D] dark:hover:text-sky-300 inline-flex items-center gap-1"
                   >
                     <Feather className="w-3 h-3" />
                     <span>Écrire un récit sur ce fil</span>

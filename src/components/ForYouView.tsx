@@ -11,6 +11,7 @@ import {
   MessageCircle,
   Repeat2,
   Search,
+  Share2,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -19,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { isStoryCompliantForPublicFeed } from '../lib/contentRegulation';
 import { evaluateStorySearch } from '../lib/storyFilter';
 import {
   formatFriendlyFirestoreError,
@@ -54,6 +56,7 @@ interface ForYouViewProps {
   repostedStoryIds: Set<string>;
   onToggleBookmark: (story: Story) => void;
   onOpenRepost: (story: Story) => void;
+  onShareStory?: (story: Story) => void;
   onReadStory: (story: Story) => void;
   onEnterSalon: (salonId: StoryThemeId) => void;
   onEnterCustomSalon: (customSalonId: string) => void;
@@ -89,6 +92,7 @@ export function ForYouView({
   repostedStoryIds,
   onToggleBookmark,
   onOpenRepost,
+  onShareStory,
   onReadStory,
   onEnterSalon,
   onEnterCustomSalon,
@@ -312,20 +316,20 @@ export function ForYouView({
 
   if (!user) {
     return (
-      <section className="space-y-8" aria-label="Flux personnalisé Pour vous">
-        <div className="bg-white border border-stone-200 rounded-lg p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <section className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-10 space-y-8" aria-label="Flux personnalisé Pour vous">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-7 space-y-4">
-            <p className="text-xs uppercase tracking-widest text-[#1B365D] inline-flex items-center gap-1.5 font-medium">
+            <p className="text-xs uppercase tracking-widest text-[#1B365D] dark:text-amber-300 inline-flex items-center gap-1.5 font-medium">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Espace personnalisé · Pour vous</span>
             </p>
             <h2
-              className="font-display text-2xl sm:text-4xl font-medium text-stone-900 leading-tight"
+              className="font-display text-2xl sm:text-4xl font-medium text-stone-900 dark:text-stone-100 leading-tight"
               style={{ textWrap: 'balance' }}
             >
               Un cahier composé selon vos thèmes et vos auteurs favoris.
             </h2>
-            <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-2xl">
+            <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 leading-relaxed max-w-2xl">
               Connectez-vous pour choisir vos salons favoris et suivre les plumes que vous appréciez. Votre onglet « Pour vous » réunira automatiquement leurs prochains récits et chapitres.
             </p>
             <div className="pt-2 flex flex-wrap items-center gap-3">
@@ -339,15 +343,15 @@ export function ForYouView({
               <button
                 type="button"
                 onClick={onOpenPeleMele}
-                className="min-h-[42px] px-4 py-2 text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 transition-colors whitespace-nowrap"
+                className="min-h-[42px] px-4 py-2 text-sm font-medium text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 transition-colors whitespace-nowrap"
               >
                 Parcourir Histoires pêle-mêle
               </button>
             </div>
           </div>
 
-          <div className="lg:col-span-5 bg-[#FBF9F5] border border-stone-200 rounded-lg p-5 space-y-3">
-            <p className="text-xs uppercase tracking-widest text-stone-500">
+          <div className="lg:col-span-5 bg-[#FBF9F5] dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-lg p-5 space-y-3">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Six thèmes disponibles
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -355,7 +359,7 @@ export function ForYouView({
                 <div
                   key={theme.id}
                   style={{ borderColor: theme.palette.borderTint }}
-                  className="bg-white border rounded-md px-3 py-2 flex items-center gap-2 text-xs text-stone-800"
+                  className="bg-white dark:bg-stone-900 border rounded-md px-3 py-2 flex items-center gap-2 text-xs text-stone-800 dark:text-stone-200"
                 >
                   <SalonEmblem
                     type={theme.emblem}
@@ -373,19 +377,19 @@ export function ForYouView({
   }
 
   return (
-    <section className="space-y-8" aria-label="Flux personnalisé Pour vous">
+    <section className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-10 space-y-8" aria-label="Flux personnalisé Pour vous">
       {/* Header & Preferences Summary Bar */}
-      <div className="bg-white border border-stone-200 rounded-lg p-6 sm:p-8 space-y-5">
+      <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 sm:p-8 space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1.5 max-w-2xl">
-            <p className="text-xs uppercase tracking-widest text-[#1B365D] inline-flex items-center gap-1.5 font-medium">
+            <p className="text-xs uppercase tracking-widest text-[#1B365D] dark:text-amber-300 inline-flex items-center gap-1.5 font-medium">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Sélection personnalisée · Pour vous</span>
             </p>
-            <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900">
+            <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100">
               Vos récits sur mesure
             </h2>
-            <p className="text-sm text-stone-600 leading-relaxed">
+            <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
               {hasPreferences
                 ? `Flux composé à partir de ${favoriteThemes.length} thème${
                     favoriteThemes.length > 1 ? 's' : ''
@@ -406,7 +410,7 @@ export function ForYouView({
               className={`min-h-[40px] px-4 py-2 text-xs font-medium rounded-md border transition-colors inline-flex items-center gap-2 whitespace-nowrap ${
                 showPrefsPanel
                   ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                  : 'bg-[#FBF9F5] text-stone-800 border-stone-300 hover:border-[#1B365D] hover:text-[#1B365D]'
+                  : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-800 dark:text-stone-200 border-stone-300 dark:border-stone-700 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -420,7 +424,7 @@ export function ForYouView({
             <button
               type="button"
               onClick={onOpenDirectory}
-              className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
             >
               <Users className="w-3.5 h-3.5" />
               <span>Explorer les profils</span>
@@ -430,10 +434,10 @@ export function ForYouView({
 
         {/* Active preferences summary strip when collapsed */}
         {hasPreferences && !showPrefsPanel && (
-          <div className="pt-4 border-t border-stone-100 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-stone-600">
+          <div className="pt-4 border-t border-stone-100 dark:border-stone-800 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-stone-600 dark:text-stone-400">
             {favoriteThemes.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-stone-500 font-medium">Thèmes :</span>
+                <span className="text-stone-500 dark:text-stone-400 font-medium">Thèmes :</span>
                 {favoriteThemes.map((tId) => {
                   const info = THEME_MAP[tId];
                   if (!info) return null;
@@ -443,11 +447,11 @@ export function ForYouView({
                       type="button"
                       onClick={() => onEnterSalon(tId)}
                       style={{
-                        backgroundColor: info.palette.softBg,
+                        ['--pill-bg' as string]: info.palette.softBg,
                         borderColor: info.palette.borderTint,
                         color: info.palette.textAccent,
                       }}
-                      className="px-2 py-0.5 rounded border text-[11px] font-medium hover:brightness-95 transition"
+                      className="px-2 py-0.5 rounded border text-[11px] font-medium bg-[var(--pill-bg)] dark:bg-stone-800 dark:brightness-125 hover:brightness-95 transition"
                     >
                       {info.shortSalonName}
                     </button>
@@ -458,19 +462,19 @@ export function ForYouView({
 
             {favoriteAuthors.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-stone-500 font-medium">Auteurs :</span>
+                <span className="text-stone-500 dark:text-stone-400 font-medium">Auteurs :</span>
                 {favoriteAuthors.slice(0, 5).map((fav) => (
                   <button
                     key={fav.authorId}
                     type="button"
                     onClick={() => onOpenMemberWall(fav.authorId)}
-                    className="px-2 py-0.5 rounded border border-stone-200 bg-[#FBF9F5] text-stone-800 text-[11px] font-medium hover:border-[#1B365D] hover:text-[#1B365D] transition"
+                    className="px-2 py-0.5 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-stone-800 dark:text-stone-200 text-[11px] font-medium hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition"
                   >
                     {fav.authorName}
                   </button>
                 ))}
                 {favoriteAuthors.length > 5 && (
-                  <span className="text-[11px] text-stone-500 tabular-nums">
+                  <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
                     +{favoriteAuthors.length - 5}
                   </span>
                 )}
@@ -481,11 +485,11 @@ export function ForYouView({
 
         {/* Collapsible Preferences Editor (Themes + Authors) */}
         {showPrefsPanel && (
-          <div className="pt-5 border-t border-stone-200 space-y-6">
+          <div className="pt-5 border-t border-stone-200 dark:border-stone-800 space-y-6">
             {prefError && (
               <p
                 role="alert"
-                className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-md px-3.5 py-2.5"
+                className="text-xs text-red-800 dark:text-red-200 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-md px-3.5 py-2.5"
               >
                 {prefError}
               </p>
@@ -495,14 +499,14 @@ export function ForYouView({
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-stone-900">
+                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                     1. Vos thèmes &amp; salons favoris
                   </h3>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
                     Cliquez sur les salons dont vous souhaitez suivre les nouveaux récits.
                   </p>
                 </div>
-                <span className="text-xs text-stone-500 tabular-nums shrink-0">
+                <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums shrink-0">
                   {favoriteThemes.length}/{STORY_THEMES.length}
                 </span>
               </div>
@@ -521,15 +525,15 @@ export function ForYouView({
                       style={
                         selected
                           ? {
-                              backgroundColor: salon.palette.softBg,
+                              ['--pill-bg' as string]: salon.palette.softBg,
                               borderColor: salon.palette.swatch,
                             }
                           : undefined
                       }
                       className={`text-left p-3.5 rounded-lg border transition-colors flex items-start justify-between gap-3 ${
                         selected
-                          ? 'shadow-xs'
-                          : 'bg-[#FBF9F5] border-stone-200 hover:border-stone-400'
+                          ? 'bg-[var(--pill-bg)] dark:bg-stone-800 shadow-xs'
+                          : 'bg-[#FBF9F5] dark:bg-stone-950/60 border-stone-200 dark:border-stone-800 hover:border-stone-400'
                       } disabled:opacity-60`}
                     >
                       <div className="flex items-start gap-2.5 min-w-0">
@@ -539,10 +543,10 @@ export function ForYouView({
                           className="w-5 h-5 shrink-0 mt-0.5"
                         />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-stone-900 truncate">
+                          <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
                             {salon.romanIndex} · {salon.shortSalonName}
                           </p>
-                          <p className="text-xs text-stone-500 line-clamp-1">
+                          <p className="text-xs text-stone-500 dark:text-stone-400 line-clamp-1">
                             {salon.atmosphere}
                           </p>
                         </div>
@@ -551,7 +555,7 @@ export function ForYouView({
                         className={`w-5 h-5 rounded flex items-center justify-center shrink-0 mt-0.5 border ${
                           selected
                             ? 'bg-[#1B365D] border-[#1B365D] text-white'
-                            : 'bg-white border-stone-300 text-transparent'
+                            : 'bg-white dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-transparent'
                         }`}
                       >
                         <Check className="w-3.5 h-3.5" />
@@ -563,17 +567,17 @@ export function ForYouView({
             </div>
 
             {/* 2. Favorite Authors Manager */}
-            <div className="pt-4 border-t border-stone-100 space-y-3">
+            <div className="pt-4 border-t border-stone-100 dark:border-stone-800 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-stone-900">
+                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                     2. Vos auteurs favoris
                   </h3>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
                     Suivez des plumes pour retrouver leurs confessions et chapitres publiés sous leur nom (les textes publiés anonymement restent anonymes).
                   </p>
                 </div>
-                <span className="text-xs text-stone-500 tabular-nums shrink-0">
+                <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums shrink-0">
                   {favoriteAuthors.length} suivi{favoriteAuthors.length > 1 ? 's' : ''}
                 </span>
               </div>
@@ -583,7 +587,7 @@ export function ForYouView({
                   {favoriteAuthors.map((fav) => (
                     <div
                       key={fav.authorId}
-                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-md border border-[#1B365D]/30 bg-[#F3F6FA] text-xs text-[#1B365D]"
+                      className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-md border border-[#1B365D]/30 dark:border-sky-800 bg-[#F3F6FA] dark:bg-sky-950/50 text-xs text-[#1B365D] dark:text-sky-200"
                     >
                       <Star className="w-3.5 h-3.5 fill-current shrink-0" />
                       <button
@@ -598,7 +602,7 @@ export function ForYouView({
                         disabled={busyAuthorId === fav.authorId}
                         onClick={() => void handleRemoveAuthor(fav.authorId, fav.authorName)}
                         aria-label={`Retirer ${fav.authorName} des auteurs favoris`}
-                        className="p-0.5 rounded hover:bg-[#1B365D]/15 text-[#1B365D] disabled:opacity-50"
+                        className="p-0.5 rounded hover:bg-[#1B365D]/15 text-[#1B365D] dark:text-sky-200 disabled:opacity-50"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -608,9 +612,9 @@ export function ForYouView({
               )}
 
               {/* Quick pick among discoverable community authors */}
-              <div className="bg-[#FBF9F5] border border-stone-200 rounded-lg p-3.5 space-y-3">
+              <div className="bg-[#FBF9F5] dark:bg-stone-950/60 border border-stone-200 dark:border-stone-800 rounded-lg p-3.5 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <span className="text-xs font-medium text-stone-700">
+                  <span className="text-xs font-medium text-stone-700 dark:text-stone-300">
                     Ajouter ou gérer un auteur de la communauté :
                   </span>
                   <div className="relative w-full sm:w-64">
@@ -621,13 +625,13 @@ export function ForYouView({
                       onChange={(e) => setAuthorPickerSearch(e.target.value)}
                       placeholder="Chercher un membre…"
                       aria-label="Chercher un auteur à suivre"
-                      className="w-full min-h-[34px] pl-8 pr-2.5 py-1 bg-white border border-stone-200 rounded text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                      className="w-full min-h-[34px] pl-8 pr-2.5 py-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                     />
                   </div>
                 </div>
 
                 {availableAuthorsToPick.length === 0 ? (
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
                     {authorPickerSearch.trim()
                       ? 'Aucun membre public ne correspond à cette recherche.'
                       : 'Aucun autre profil public disponible pour le moment.'}
@@ -642,14 +646,14 @@ export function ForYouView({
                           key={member.userId}
                           className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded border text-xs ${
                             isFav
-                              ? 'bg-white border-[#1B365D]/40'
-                              : 'bg-white border-stone-200'
+                              ? 'bg-white dark:bg-stone-900 border-[#1B365D]/40 dark:border-amber-400/50'
+                              : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-800'
                           }`}
                         >
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(member.userId)}
-                            className="min-w-0 flex-1 text-left truncate font-medium text-stone-800 hover:text-[#1B365D] hover:underline"
+                            className="min-w-0 flex-1 text-left truncate font-medium text-stone-800 dark:text-stone-200 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                           >
                             {member.displayName}
                           </button>
@@ -663,7 +667,7 @@ export function ForYouView({
                             className={`min-h-[28px] px-2 py-1 rounded text-[11px] font-medium inline-flex items-center gap-1 shrink-0 transition-colors ${
                               isFav
                                 ? 'bg-[#1B365D] text-white hover:bg-[#132744]'
-                                : 'bg-[#FBF9F5] text-stone-700 border border-stone-200 hover:border-[#1B365D] hover:text-[#1B365D]'
+                                : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300'
                             } disabled:opacity-50`}
                           >
                             {isFav ? (
@@ -691,17 +695,17 @@ export function ForYouView({
 
       {/* Personalized Feed Content */}
       {!storiesLoaded ? (
-        <div className="py-12 text-center text-sm text-stone-500">
+        <div className="py-12 text-center text-sm text-stone-500 dark:text-stone-400">
           Composition de votre flux personnalisé…
         </div>
       ) : !hasPreferences ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-4">
-          <Sparkles className="w-7 h-7 text-[#1B365D] mx-auto" />
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10 text-center space-y-4">
+          <Sparkles className="w-7 h-7 text-[#1B365D] dark:text-amber-300 mx-auto" />
           <div className="space-y-1.5 max-w-lg mx-auto">
-            <h3 className="font-display text-2xl font-medium text-stone-900">
+            <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
               Votre flux attend vos premiers choix
             </h3>
-            <p className="text-sm text-stone-600 leading-relaxed">
+            <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
               Cochez au moins un thème ci-dessus ou suivez un auteur de la communauté pour voir apparaître ici les récits qui vous ressemblent.
             </p>
           </div>
@@ -709,7 +713,7 @@ export function ForYouView({
             <button
               type="button"
               onClick={onOpenPeleMele}
-              className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500"
+              className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
             >
               Découvrir Histoires pêle-mêle
             </button>
@@ -726,7 +730,7 @@ export function ForYouView({
       ) : (
         <div className="space-y-6">
           {/* Feed Focus + Search + Format + Sort Toolbar */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-stone-200">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-4 border-b border-stone-200 dark:border-stone-800">
             <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par source favorite">
               {(
                 [
@@ -741,8 +745,8 @@ export function ForYouView({
                   onClick={() => setFocus(item.id)}
                   className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap ${
                     focus === item.id
-                      ? 'bg-stone-900 text-white border-stone-900'
-                      : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                      ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 border-stone-900 dark:border-amber-400'
+                      : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                   }`}
                 >
                   {item.label}
@@ -759,14 +763,14 @@ export function ForYouView({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Filtrer ce flux…"
                   aria-label="Filtrer le flux Pour vous"
-                  className="w-full min-h-[36px] pl-8 pr-3 py-1 bg-white border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full min-h-[36px] pl-8 pr-3 py-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                 />
               </div>
 
               <div
                 role="group"
                 aria-label="Filtrer par catégorie : confessions ou romans"
-                className="inline-flex items-center rounded-md border border-stone-200 bg-[#FBF9F5] p-0.5 shrink-0"
+                className="inline-flex items-center rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 p-0.5 shrink-0"
               >
                 {(
                   [
@@ -788,8 +792,8 @@ export function ForYouView({
                             ? 'bg-[#9A3B29] text-white'
                             : cat.id === 'roman'
                               ? 'bg-[#1B365D] text-white'
-                              : 'bg-stone-900 text-white'
-                          : 'text-stone-700 hover:text-stone-950'
+                              : 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900'
+                          : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-stone-100'
                       }`}
                     >
                       {cat.id === 'confession' && <Feather className="w-3 h-3 shrink-0" />}
@@ -804,7 +808,7 @@ export function ForYouView({
                 aria-label="Trier le flux Pour vous"
                 value={sortMode}
                 onChange={(e) => setSortMode(e.target.value as ForYouSort)}
-                className="min-h-[36px] px-2.5 py-1 bg-white border border-stone-200 rounded-md text-xs font-medium text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                className="min-h-[36px] px-2.5 py-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs font-medium text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
               >
                 <option value="personalized">Pertinence pour vous</option>
                 <option value="recent">Plus récents</option>
@@ -815,11 +819,11 @@ export function ForYouView({
           </div>
 
           {displayedEntries.length === 0 ? (
-            <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-3">
-              <p className="font-display text-xl text-stone-900">
+            <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-3">
+              <p className="font-display text-xl text-stone-900 dark:text-stone-100">
                 Aucun récit ne correspond encore à cette sélection
               </p>
-              <p className="text-sm text-stone-600 max-w-lg mx-auto">
+              <p className="text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
                 {focus === 'authors' && favoriteAuthors.length === 0
                   ? 'Vous n’avez pas encore ajouté d’auteur favori. Ajoutez des auteurs depuis la configuration ci-dessus ou depuis leurs profils.'
                   : focus === 'themes' && favoriteThemes.length === 0
@@ -834,7 +838,7 @@ export function ForYouView({
                     setFormatFilter('all');
                     setSearchQuery('');
                   }}
-                  className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                  className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                 >
                   Réinitialiser les filtres
                 </button>
@@ -870,12 +874,12 @@ export function ForYouView({
                 return (
                   <article
                     key={story.storyId}
-                    className="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                    className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 flex flex-col justify-between space-y-5"
                   >
                     <div className="space-y-3">
                       {/* Reason banner */}
-                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100">
-                        <span className="text-[11px] font-medium text-[#1B365D] inline-flex items-center gap-1.5 truncate">
+                      <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100 dark:border-stone-800">
+                        <span className="text-[11px] font-medium text-[#1B365D] dark:text-amber-300 inline-flex items-center gap-1.5 truncate">
                           <Sparkles className="w-3 h-3 shrink-0" />
                           <span className="truncate">{reasonText}</span>
                         </span>
@@ -894,8 +898,8 @@ export function ForYouView({
                             }
                             className={`text-[11px] font-medium inline-flex items-center gap-1 shrink-0 transition-colors ${
                               isFavAuthor
-                                ? 'text-[#1B365D] hover:text-stone-700'
-                                : 'text-stone-500 hover:text-[#1B365D]'
+                                ? 'text-[#1B365D] dark:text-amber-300 hover:text-stone-700'
+                                : 'text-stone-500 dark:text-stone-400 hover:text-[#1B365D] dark:hover:text-amber-300'
                             }`}
                           >
                             <Star
@@ -906,7 +910,7 @@ export function ForYouView({
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                         <button
                           type="button"
                           onClick={() =>
@@ -917,11 +921,11 @@ export function ForYouView({
                                 : onEnterSalon(story.theme)
                           }
                           style={{
-                            backgroundColor: originPalette?.softBg ?? '#F5F5F4',
+                            ['--pill-bg' as string]: originPalette?.softBg ?? '#F5F5F4',
                             borderColor: originPalette?.borderTint ?? '#E7E5E4',
                             color: originPalette?.textAccent ?? '#1B365D',
                           }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium hover:brightness-95 transition cursor-pointer"
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium bg-[var(--pill-bg)] dark:bg-stone-800 dark:brightness-125 hover:brightness-95 transition cursor-pointer"
                         >
                           <span>{originLabel}</span>
                           <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80" />
@@ -930,12 +934,12 @@ export function ForYouView({
                         <StoryFormatKicker story={story} showDetails={true} />
                         <span aria-hidden="true">·</span>
                         {story.isAnonymous ? (
-                          <span className="text-stone-600">Auteur anonyme</span>
+                          <span className="text-stone-600 dark:text-stone-300">Auteur anonyme</span>
                         ) : (
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(story.authorId)}
-                            className="hover:underline hover:text-stone-900"
+                            className="hover:underline hover:text-stone-900 dark:hover:text-stone-100"
                           >
                             {story.authorName}
                           </button>
@@ -961,28 +965,28 @@ export function ForYouView({
                             size="sm"
                           />
                           <div className="min-w-0 flex-1 space-y-2">
-                            <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                            <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                               {story.title}
                             </h3>
-                            <p className="text-sm text-stone-600 leading-relaxed">
+                            <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
                               {story.excerpt}
                             </p>
                           </div>
                         </div>
                       ) : (
                         <>
-                          <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                          <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                             {story.title}
                           </h3>
-                          <p className="text-sm text-stone-600 leading-relaxed">
+                          <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
                             {story.excerpt}
                           </p>
                         </>
                       )}
                     </div>
 
-                    <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-3.5 text-xs text-stone-500 tabular-nums">
+                    <div className="pt-4 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3.5 text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         <span className="inline-flex items-center gap-1" title="Vues">
                           <Eye className="w-3.5 h-3.5" />
                           {story.viewCount ?? 0}
@@ -1009,8 +1013,8 @@ export function ForYouView({
                           aria-label="Enregistrer pour lire plus tard"
                           className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                             bookmarkedStoryIds.has(story.storyId)
-                              ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                              : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                              ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                              : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800 dark:hover:text-stone-100'
                           }`}
                         >
                           <Bookmark
@@ -1031,17 +1035,32 @@ export function ForYouView({
                           aria-label="Repartager"
                           className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                             repostedStoryIds.has(story.storyId)
-                              ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                              : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                              ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                              : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800 dark:hover:text-stone-100'
                           }`}
                         >
                           <Repeat2 className="w-3.5 h-3.5" />
                         </button>
 
+                        {onShareStory &&
+                          story.visibility === 'public' &&
+                          story.customSalonVisibility !== 'private' &&
+                          isStoryCompliantForPublicFeed(story) && (
+                            <button
+                              type="button"
+                              onClick={() => onShareStory(story)}
+                              title="Partager ce récit"
+                              aria-label={`Partager ${story.title}`}
+                              className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                         <button
                           type="button"
                           onClick={() => onReadStory(story)}
-                          className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                          className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
                         >
                           <span>Lire et commenter</span>
                           <ArrowRight className="w-3.5 h-3.5" />

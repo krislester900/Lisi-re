@@ -306,7 +306,7 @@ export function LaunchIntro({ onComplete }: LaunchIntroProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 bg-white flex flex-col items-center justify-center px-6 transition-opacity duration-500 ${
+      className={`fixed inset-0 z-50 bg-white dark:bg-stone-950 flex flex-col items-center justify-center px-6 transition-opacity duration-500 ${
         fadingOut ? 'opacity-0 pointer-events-none' : 'opacity-100'
       }`}
       aria-label="Animation d’ouverture Lisière"
@@ -316,7 +316,7 @@ export function LaunchIntro({ onComplete }: LaunchIntroProps) {
           viewBox="-8 -38 205 112"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-auto overflow-visible text-stone-900"
+          className="w-full h-auto overflow-visible text-stone-900 dark:text-stone-100"
           role="img"
           aria-label="Lisière"
         >
@@ -366,21 +366,21 @@ export function LaunchIntro({ onComplete }: LaunchIntroProps) {
             {/* Nib tip & collar (exact tip at 0,0) */}
             <path
               d="M0 0 L4.8 -9.5 L8.8 -7.2 Z"
-              fill="#1C1917"
+              className="fill-[#1C1917] dark:fill-stone-100"
             />
             <path
               d="M2.4 -4.8 L6.2 -7.8"
-              stroke="#FFFFFF"
+              className="stroke-white dark:stroke-stone-950"
               strokeWidth="0.7"
               strokeLinecap="round"
               opacity="0.7"
             />
-            <circle cx="4.5" cy="-5.2" r="0.7" fill="#FFFFFF" opacity="0.85" />
+            <circle cx="4.5" cy="-5.2" r="0.7" className="fill-white dark:fill-stone-950" opacity="0.85" />
 
             {/* Feather shaft (rachis) curving upward-right */}
             <path
               d="M6.8 -8.4 C12 -18, 22 -30, 38 -40"
-              stroke="#1C1917"
+              className="stroke-[#1C1917] dark:stroke-stone-100"
               strokeWidth="1.5"
               strokeLinecap="round"
             />
@@ -394,14 +394,14 @@ export function LaunchIntro({ onComplete }: LaunchIntroProps) {
                  C22.5 -18, 20.5 -17.5, 19 -17
                  L21.5 -19.5
                  C17 -16, 13 -12, 8 -8.5 Z"
-              fill="#1C1917"
+              className="fill-[#1C1917] dark:fill-stone-100"
               opacity="0.92"
             />
 
             {/* Subtle feather barb slits */}
             <path
               d="M17 -24 L21 -21.5 M23 -30 L27 -27 M29 -35 L33 -32"
-              stroke="#FFFFFF"
+              className="stroke-white dark:stroke-stone-950"
               strokeWidth="0.9"
               strokeLinecap="round"
               opacity="0.85"
@@ -410,14 +410,14 @@ export function LaunchIntro({ onComplete }: LaunchIntroProps) {
         </svg>
       </div>
 
-      <p className="mt-6 text-xs text-stone-500 tracking-wide">
+      <p className="mt-6 text-xs text-stone-500 dark:text-stone-400 tracking-wide">
         Créé par Kris Ivan N’dri
       </p>
 
       <button
         type="button"
         onClick={handleSkip}
-        className="mt-4 text-xs text-stone-400 hover:text-stone-700 transition-colors tracking-wide"
+        className="mt-4 text-xs text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-200 transition-colors tracking-wide"
       >
         Passer
       </button>

@@ -19,6 +19,7 @@ import {
   Pencil,
   Repeat2,
   Send,
+  Share2,
   ShieldCheck,
   Trash2,
   UserCheck,
@@ -30,8 +31,10 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   checkLocalContentHygiene,
   isContentAllowedForAge,
+  isStoryCompliantForPublicFeed,
 } from '../lib/contentRegulation';
 import { isModerationAdminEmail } from '../lib/moderationLabels';
+import { stripSharedStoryUrlFromText } from '../lib/storyShare';
 import {
   createDefaultStoryFilterState,
   filterAndSortStories,
@@ -70,6 +73,7 @@ import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
 import { RoleBadge, RoleBadgesRow } from './RoleBadge';
 import { SalonThreadsPanel } from './SalonThreadsPanel';
+import { SharedStoryPreviewCard } from './SharedStoryPreviewCard';
 import { StoryFilterBar } from './StoryFilterBar';
 import { StoryFormatKicker } from './StoryFormatKicker';
 
@@ -85,9 +89,11 @@ interface CustomSalonRoomViewProps {
   discoverableProfiles?: PublicProfile[];
   onToggleBookmark?: (story: Story) => void;
   onOpenRepost?: (story: Story) => void;
+  onShareStory?: (story: Story) => void;
   onBackToSalons: () => void;
   onEditSalon: (salon: CustomSalon) => void;
   onReadStory: (story: Story) => void;
+  onOpenStoryById?: (storyId: string) => void;
   onWriteInCustomSalon: (salon: CustomSalon, initialPrompt?: string, starter?: string) => void;
   onOpenMemberWall: (userId: string) => void;
   onOpenReport?: (draft: ReportDraft) => void;
@@ -105,9 +111,11 @@ export function CustomSalonRoomView({
   discoverableProfiles = [],
   onToggleBookmark,
   onOpenRepost,
+  onShareStory,
   onBackToSalons,
   onEditSalon,
   onReadStory,
+  onOpenStoryById,
   onWriteInCustomSalon,
   onOpenMemberWall,
   onOpenReport,
@@ -282,7 +290,7 @@ export function CustomSalonRoomView({
 
   if (!salonsLoaded && !salon) {
     return (
-      <div className="max-w-6xl mx-auto px-6 py-16 text-center text-sm text-stone-500">
+      <div className="max-w-6xl mx-auto px-6 py-16 text-center text-sm text-stone-500 dark:text-stone-400">
         Ouverture du salon de la communauté…
       </div>
     );
@@ -291,11 +299,11 @@ export function CustomSalonRoomView({
   if (!salon) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-16 text-center space-y-5">
-        <p className="font-display text-2xl text-stone-900">Ce salon n’existe plus ou a été fermé</p>
+        <p className="font-display text-2xl text-stone-900 dark:text-stone-100">Ce salon n’existe plus ou a été fermé</p>
         <button
           type="button"
           onClick={onBackToSalons}
-          className="min-h-[40px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+          className="min-h-[40px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744]"
         >
           Retour aux salons
         </button>
@@ -480,11 +488,11 @@ export function CustomSalonRoomView({
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8">
       {/* Top Rail */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-stone-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-stone-200 dark:border-stone-800">
         <button
           type="button"
           onClick={onBackToSalons}
-          className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 hover:text-stone-900 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+          className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 hover:text-stone-900 dark:hover:text-stone-100 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Tous les salons</span>
@@ -495,7 +503,7 @@ export function CustomSalonRoomView({
             <button
               type="button"
               onClick={() => onEditSalon(salon)}
-              className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
             >
               <Pencil className="w-3.5 h-3.5" />
               <span>Modifier règles et accès</span>
@@ -505,26 +513,26 @@ export function CustomSalonRoomView({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-red-800 bg-white border border-red-200 rounded-md hover:border-red-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-red-800 dark:text-red-300 bg-white dark:bg-stone-900 border border-red-200 dark:border-red-900/60 rounded-md hover:border-red-400 inline-flex items-center gap-1.5 whitespace-nowrap"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Fermer le salon</span>
               </button>
             ) : (
-              <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-1">
-                <span className="text-xs text-red-900">Confirmer ?</span>
+              <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-md px-3 py-1">
+                <span className="text-xs text-red-900 dark:text-red-200">Confirmer ?</span>
                 <button
                   type="button"
                   disabled={deletingSalon}
                   onClick={() => void handleDeleteSalon()}
-                  className="text-xs font-semibold text-red-800 hover:underline"
+                  className="text-xs font-semibold text-red-800 dark:text-red-300 hover:underline"
                 >
                   {deletingSalon ? 'Fermeture…' : 'Oui, fermer'}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(false)}
-                  className="text-xs text-stone-600 hover:text-stone-900"
+                  className="text-xs text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
                 >
                   Annuler
                 </button>
@@ -537,11 +545,11 @@ export function CustomSalonRoomView({
       {/* Compact Salon Identity & Admission Rules Banner */}
       <section
         style={{
-          backgroundColor: palette.softBg,
+          ['--salon-bg' as string]: palette.softBg,
           borderColor: palette.borderTint,
           borderTopColor: palette.swatch,
         }}
-        className="border border-t-2 rounded-lg p-5 sm:p-7 space-y-4"
+        className="bg-[var(--salon-bg)] dark:bg-stone-900 border border-t-2 rounded-lg p-5 sm:p-7 space-y-4"
       >
         <div className="space-y-3">
           <div className="flex items-center gap-4">
@@ -550,12 +558,12 @@ export function CustomSalonRoomView({
                 src={salon.avatarUrl}
                 alt={`Photo du salon ${salon.name}`}
                 onError={() => setAvatarFailed(true)}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-md object-cover border border-stone-200 bg-white shrink-0"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-md object-cover border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 shrink-0"
               />
             ) : (
               <div
-                style={{ borderColor: palette.borderTint, backgroundColor: '#FFFFFF' }}
-                className="w-16 h-16 sm:w-20 sm:h-20 rounded-md border flex items-center justify-center shrink-0"
+                style={{ borderColor: palette.borderTint }}
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-md border bg-white dark:bg-stone-800 flex items-center justify-center shrink-0"
               >
                 {salon.visibility === 'private' ? (
                   <Lock className="w-6 h-6" style={{ color: palette.textAccent }} />
@@ -569,7 +577,7 @@ export function CustomSalonRoomView({
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span
                   style={{ color: palette.textAccent }}
-                  className="uppercase tracking-widest font-semibold inline-flex items-center gap-1.5"
+                  className="uppercase tracking-widest font-semibold inline-flex items-center gap-1.5 dark:brightness-125"
                 >
                   {salon.visibility === 'private' ? (
                     <>
@@ -586,7 +594,7 @@ export function CustomSalonRoomView({
                 <span aria-hidden="true" className="text-stone-400">
                   ·
                 </span>
-                <span className="text-stone-600 tabular-nums inline-flex items-center gap-1">
+                <span className="text-stone-600 dark:text-stone-300 tabular-nums inline-flex items-center gap-1">
                   <Users className="w-3.5 h-3.5" />
                   {salon.memberCount} membre{salon.memberCount > 1 ? 's' : ''}
                 </span>
@@ -596,7 +604,7 @@ export function CustomSalonRoomView({
                 <button
                   type="button"
                   onClick={() => onOpenMemberWall(salon.ownerId)}
-                  className="text-stone-700 hover:underline font-medium"
+                  className="text-stone-700 dark:text-stone-200 hover:underline font-medium"
                 >
                   Animé par {salon.ownerName}
                 </button>
@@ -606,7 +614,7 @@ export function CustomSalonRoomView({
                   compact
                 />
                 {moderatorIds.size > 0 && (
-                  <span className="inline-flex items-center gap-1 text-stone-600">
+                  <span className="inline-flex items-center gap-1 text-stone-600 dark:text-stone-300">
                     <span aria-hidden="true">·</span>
                     <RoleBadge role="moderator" compact />
                     <span className="tabular-nums">{moderatorIds.size}</span>
@@ -616,7 +624,7 @@ export function CustomSalonRoomView({
               </div>
 
               <h1
-                className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-tight"
+                className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100 leading-tight"
                 style={{ textWrap: 'balance' }}
               >
                 {salon.name}
@@ -625,13 +633,13 @@ export function CustomSalonRoomView({
           </div>
 
           {salon.description && (
-            <p className="text-sm sm:text-base text-stone-700 leading-relaxed max-w-2xl">
+            <p className="text-sm sm:text-base text-stone-700 dark:text-stone-300 leading-relaxed max-w-2xl">
               {salon.description}
             </p>
           )}
 
           {salon.promptQuestion && (
-            <p className="text-sm text-stone-700 italic">« {salon.promptQuestion} »</p>
+            <p className="text-sm text-stone-700 dark:text-stone-300 italic">« {salon.promptQuestion} »</p>
           )}
 
           {/* Actions for members / visitors */}
@@ -653,12 +661,12 @@ export function CustomSalonRoomView({
                 type="button"
                 aria-expanded={showRulesPanel}
                 onClick={() => setShowRulesPanel((prev) => !prev)}
-                className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
+                className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
               >
                 <ShieldCheck className="w-3.5 h-3.5" style={{ color: palette.textAccent }} />
                 <span>Règles d’admission</span>
                 <ChevronDown
-                  className={`w-3.5 h-3.5 text-stone-500 transition-transform duration-200 ${
+                  className={`w-3.5 h-3.5 text-stone-500 dark:text-stone-400 transition-transform duration-200 ${
                     showRulesPanel ? 'rotate-180' : ''
                   }`}
                 />
@@ -671,9 +679,9 @@ export function CustomSalonRoomView({
                   type="button"
                   disabled={actionBusy}
                   onClick={() => void handleLeaveOrCancel()}
-                  className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
+                  className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
                 >
-                  <UserCheck className="w-4 h-4 text-emerald-700" />
+                  <UserCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                   <span>Membre · Quitter</span>
                 </button>
               ) : (
@@ -681,7 +689,7 @@ export function CustomSalonRoomView({
                   type="button"
                   disabled={actionBusy}
                   onClick={() => void handleJoinOrRequest()}
-                  className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
+                  className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-800 dark:text-stone-100 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
                 >
                   <Users className="w-4 h-4" />
                   <span>{actionBusy ? 'Adhésion…' : 'Rejoindre ce salon'}</span>
@@ -694,9 +702,9 @@ export function CustomSalonRoomView({
                 type="button"
                 disabled={actionBusy}
                 onClick={() => void handleLeaveOrCancel()}
-                className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
+                className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 inline-flex items-center gap-2 whitespace-nowrap"
               >
-                <UserCheck className="w-4 h-4 text-emerald-700" />
+                <UserCheck className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
                 <span>Membre admis · Quitter</span>
               </button>
             )}
@@ -705,12 +713,12 @@ export function CustomSalonRoomView({
 
         {/* Admission Rules Card: always visible when requesting admission, collapsible once inside */}
         {(!canViewContent || showRulesPanel) && (
-          <aside className="bg-white border border-stone-200 rounded-md p-4 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500">
+          <aside className="bg-white dark:bg-stone-950/70 border border-stone-200 dark:border-stone-700 rounded-md p-4 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               <ShieldCheck className="w-3.5 h-3.5" style={{ color: palette.textAccent }} />
               <span>Règles d’admission</span>
             </div>
-            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-line">
+            <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed whitespace-pre-line">
               {salon.admissionRules.trim()
                 ? salon.admissionRules
                 : salon.visibility === 'private'
@@ -722,14 +730,14 @@ export function CustomSalonRoomView({
       </section>
 
       {actionFeedback && (
-        <div className="bg-white border border-stone-300 rounded-md px-4 py-3 text-sm text-stone-900">
+        <div className="bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-md px-4 py-3 text-sm text-stone-900 dark:text-stone-100">
           {actionFeedback}
         </div>
       )}
       {actionError && (
         <div
           role="alert"
-          className="bg-red-50 border border-red-200 rounded-md px-4 py-3 text-sm text-red-800"
+          className="bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 rounded-md px-4 py-3 text-sm text-red-800 dark:text-red-200"
         >
           {actionError}
         </div>
@@ -737,16 +745,16 @@ export function CustomSalonRoomView({
 
       {/* Private Salon Gate (when visitor is not yet approved) */}
       {!canViewContent ? (
-        <section className="bg-white border border-stone-200 rounded-lg p-7 sm:p-10 max-w-2xl mx-auto space-y-6">
+        <section className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-7 sm:p-10 max-w-2xl mx-auto space-y-6">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-md bg-stone-100 flex items-center justify-center shrink-0">
-              <Lock className="w-5 h-5 text-stone-700" />
+            <div className="w-10 h-10 rounded-md bg-stone-100 dark:bg-stone-800 flex items-center justify-center shrink-0">
+              <Lock className="w-5 h-5 text-stone-700 dark:text-stone-300" />
             </div>
             <div className="space-y-1.5">
-              <h2 className="font-display text-2xl font-medium text-stone-900">
+              <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
                 Ce salon privé demande une admission
               </h2>
-              <p className="text-sm text-stone-600 leading-relaxed">
+              <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
                 Les récits et le fil de discussion de « {salon.name} » sont réservés aux membres acceptés par {salon.ownerName}.
               </p>
             </div>
@@ -762,13 +770,13 @@ export function CustomSalonRoomView({
               Se connecter pour demander l’accès
             </button>
           ) : memberRecord?.status === 'pending' ? (
-            <div className="bg-[#FBF9F5] border border-stone-200 rounded-md p-5 space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-stone-900">
-                <Clock className="w-4 h-4 text-amber-700" />
+            <div className="bg-[#FBF9F5] dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 rounded-md p-5 space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium text-stone-900 dark:text-stone-100">
+                <Clock className="w-4 h-4 text-amber-700 dark:text-amber-400" />
                 <span>Votre demande d’admission est en attente de validation</span>
               </div>
               {memberRecord.requestNote && (
-                <p className="text-xs text-stone-600 italic">
+                <p className="text-xs text-stone-600 dark:text-stone-400 italic">
                   Votre message : « {memberRecord.requestNote} »
                 </p>
               )}
@@ -776,7 +784,7 @@ export function CustomSalonRoomView({
                 type="button"
                 disabled={actionBusy}
                 onClick={() => void handleLeaveOrCancel()}
-                className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500"
+                className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
               >
                 Retirer ma demande
               </button>
@@ -784,14 +792,14 @@ export function CustomSalonRoomView({
           ) : (
             <form onSubmit={handleJoinOrRequest} className="space-y-4">
               {memberRecord?.status === 'rejected' && (
-                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3.5 py-2.5">
+                <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-md px-3.5 py-2.5">
                   Votre précédente demande n’avait pas été retenue. Vous pouvez préciser votre démarche et soumettre une nouvelle demande.
                 </p>
               )}
               <div>
                 <label
                   htmlFor="admission-request-note"
-                  className="block text-sm font-medium text-stone-800 mb-1.5"
+                  className="block text-sm font-medium text-stone-800 dark:text-stone-200 mb-1.5"
                 >
                   Mot de présentation pour {salon.ownerName} (facultatif)
                 </label>
@@ -802,7 +810,7 @@ export function CustomSalonRoomView({
                   value={requestNote}
                   onChange={(e) => setRequestNote(e.target.value)}
                   placeholder="Expliquez brièvement pourquoi ce salon vous parle ou répondez aux règles d’admission ci-dessus…"
-                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-amber-400"
                 />
               </div>
               <button
@@ -819,15 +827,15 @@ export function CustomSalonRoomView({
       ) : (
         <>
           {/* Section Switcher */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
-            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 rounded-md w-fit">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-stone-800 pb-4">
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-800 rounded-md w-fit">
               <button
                 type="button"
                 onClick={() => setRoomSection('stories')}
                 className={`min-h-[38px] px-4 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                   roomSection === 'stories'
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
+                    ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                    : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100'
                 }`}
               >
                 <BookOpen className="w-3.5 h-3.5" />
@@ -838,8 +846,8 @@ export function CustomSalonRoomView({
                 onClick={() => setRoomSection('threads')}
                 className={`min-h-[38px] px-4 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                   roomSection === 'threads'
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
+                    ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                    : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100'
                 }`}
               >
                 <MessagesSquare className="w-3.5 h-3.5" />
@@ -850,8 +858,8 @@ export function CustomSalonRoomView({
                 onClick={() => setRoomSection('chat')}
                 className={`min-h-[38px] px-4 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                   roomSection === 'chat'
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
+                    ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                    : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100'
                 }`}
               >
                 <MessageSquare className="w-3.5 h-3.5" />
@@ -863,8 +871,8 @@ export function CustomSalonRoomView({
                   onClick={() => setRoomSection('members')}
                   className={`min-h-[38px] px-4 py-1.5 text-xs font-medium rounded transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                     roomSection === 'members'
-                      ? 'bg-white text-stone-900 shadow-sm'
-                      : 'text-stone-600 hover:text-stone-900'
+                      ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                      : 'text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100'
                   }`}
                 >
                   <Users className="w-3.5 h-3.5" />
@@ -881,7 +889,7 @@ export function CustomSalonRoomView({
           {roomSection === 'stories' && (
             <section className="space-y-6">
               {hiddenByAgeCount > 0 && (
-                <div className="bg-amber-50/80 border border-amber-200 rounded-md px-4 py-2.5 text-xs text-amber-950">
+                <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/70 rounded-md px-4 py-2.5 text-xs text-amber-950 dark:text-amber-200">
                   {hiddenByAgeCount} récit{hiddenByAgeCount > 1 ? 's' : ''} classé{hiddenByAgeCount > 1 ? 's' : ''} pour un public plus âgé ou mature {hiddenByAgeCount > 1 ? 'sont masqués' : 'est masqué'} selon votre profil d’âge{viewerAge === null ? ' (renseignez votre âge dans Profils pour adapter le filtre)' : ''}.
                 </div>
               )}
@@ -899,11 +907,11 @@ export function CustomSalonRoomView({
               )}
 
               {stories.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
-                  <p className="font-display text-2xl text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-4">
+                  <p className="font-display text-2xl text-stone-900 dark:text-stone-100">
                     Ce salon attend sa première histoire
                   </p>
-                  <p className="text-sm text-stone-600 max-w-lg mx-auto">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
                     Déposez une confession ou le premier chapitre d’un roman pour lancer la vie littéraire de ce lieu.
                   </p>
                   <button
@@ -916,14 +924,14 @@ export function CustomSalonRoomView({
                   </button>
                 </div>
               ) : filteredStories.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-                  <p className="text-sm text-stone-600">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
                     Aucun récit ne correspond à ce filtre dans ce salon.
                   </p>
                   <button
                     type="button"
                     onClick={() => setFilterState(createDefaultStoryFilterState('recent'))}
-                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                   >
                     Réinitialiser les filtres
                   </button>
@@ -933,20 +941,20 @@ export function CustomSalonRoomView({
                   {filteredStories.map((story) => (
                     <article
                       key={story.storyId}
-                      className="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                      className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 flex flex-col justify-between space-y-5"
                     >
                       <div className="space-y-3">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                           <StoryFormatKicker story={story} showDetails={true} />
                           <span aria-hidden="true">·</span>
                           {story.isAnonymous ? (
-                            <span className="font-medium text-stone-600">Auteur anonyme</span>
+                            <span className="font-medium text-stone-600 dark:text-stone-300">Auteur anonyme</span>
                           ) : (
                             <>
                               <button
                                 type="button"
                                 onClick={() => onOpenMemberWall(story.authorId)}
-                                className="font-medium text-stone-800 hover:underline"
+                                className="font-medium text-stone-800 dark:text-stone-200 hover:underline"
                               >
                                 {story.authorName}
                               </button>
@@ -983,26 +991,26 @@ export function CustomSalonRoomView({
                               size="sm"
                             />
                             <div className="min-w-0 flex-1 space-y-2">
-                              <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                              <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                                 {story.title}
                               </h3>
-                              <p className="text-sm text-stone-600 leading-relaxed">
+                              <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
                                 {story.excerpt}
                               </p>
                             </div>
                           </div>
                         ) : (
                           <>
-                            <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                            <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                               {story.title}
                             </h3>
-                            <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
+                            <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">{story.excerpt}</p>
                           </>
                         )}
                       </div>
 
-                      <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-3.5 text-xs text-stone-500 tabular-nums">
+                      <div className="pt-4 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3.5 text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                           <span className="inline-flex items-center gap-1" title="Vues">
                             <Eye className="w-3.5 h-3.5" />
                             {story.viewCount ?? 0}
@@ -1030,8 +1038,8 @@ export function CustomSalonRoomView({
                               aria-label="Enregistrer pour lire plus tard"
                               className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                 bookmarkedStoryIds?.has(story.storyId)
-                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                  : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                  ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800 dark:hover:text-stone-100'
                               }`}
                             >
                               <Bookmark
@@ -1053,18 +1061,31 @@ export function CustomSalonRoomView({
                               aria-label="Repartager"
                               className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                 repostedStoryIds?.has(story.storyId)
-                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                  : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                  ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800 dark:hover:text-stone-100'
                               }`}
                             >
                               <Repeat2 className="w-3.5 h-3.5" />
                             </button>
                           )}
+                          {onShareStory &&
+                            salon.visibility !== 'private' &&
+                            isStoryCompliantForPublicFeed(story) && (
+                              <button
+                                type="button"
+                                onClick={() => onShareStory(story)}
+                                title="Partager ce récit"
+                                aria-label={`Partager ${story.title}`}
+                                className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           <button
                             type="button"
                             onClick={() => onReadStory(story)}
                             style={{ color: palette.textAccent }}
-                            className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap dark:brightness-125"
                           >
                             <span>Lire</span>
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -1105,13 +1126,13 @@ export function CustomSalonRoomView({
 
           {/* Section 2: Custom Salon Chat */}
           {roomSection === 'chat' && (
-            <section className="bg-white border border-stone-200 rounded-lg overflow-hidden">
-              <div className="px-6 py-4 border-b border-stone-200 bg-[#FBF9F5] flex items-center justify-between gap-3">
+            <section className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg overflow-hidden">
+              <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-800 bg-[#FBF9F5] dark:bg-stone-950 flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-display text-xl font-medium text-stone-900">
+                  <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                     Discussion du salon
                   </h2>
-                  <p className="text-xs text-stone-500 mt-0.5">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                     {salon.visibility === 'private'
                       ? 'Échange réservé aux membres admis dans ce salon privé.'
                       : 'Échange écrit ouvert aux membres du salon.'}
@@ -1121,7 +1142,7 @@ export function CustomSalonRoomView({
 
               {!user ? (
                 <div className="p-8 text-center space-y-4">
-                  <p className="text-sm text-stone-600">
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
                     Connectez-vous pour lire et participer au chat de ce salon.
                   </p>
                   <button
@@ -1137,24 +1158,25 @@ export function CustomSalonRoomView({
                 <>
                   <div className="p-6 space-y-4 max-h-[440px] overflow-y-auto">
                     {visibleMessages.length === 0 ? (
-                      <p className="text-sm text-stone-500 italic text-center py-8">
+                      <p className="text-sm text-stone-500 dark:text-stone-400 italic text-center py-8">
                         Aucun message pour le moment. Ouvrez la conversation !
                       </p>
                     ) : (
                       visibleMessages.map((msg) => {
                         const canDeleteMsg = msg.senderId === user.uid || canModerateSalon;
                         const canReportMsg = Boolean(onOpenReport && msg.senderId !== user.uid);
+                        const cleanText = stripSharedStoryUrlFromText(msg.content);
                         return (
                           <div
                             key={msg.messageId}
-                            className="p-4 rounded-md border border-stone-200 bg-[#FBF9F5] space-y-1.5"
+                            className="p-4 rounded-md border border-stone-200 dark:border-stone-800 bg-[#FBF9F5] dark:bg-stone-950 space-y-1.5"
                           >
                             <div className="flex items-center justify-between gap-3 text-xs">
                               <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
                                   onClick={() => onOpenMemberWall(msg.senderId)}
-                                  className="font-semibold text-stone-900 hover:underline"
+                                  className="font-semibold text-stone-900 dark:text-stone-100 hover:underline"
                                 >
                                   {msg.senderName}
                                 </button>
@@ -1169,7 +1191,7 @@ export function CustomSalonRoomView({
                                   compact
                                 />
                                 <span className="text-stone-400">·</span>
-                                <span className="text-stone-500">
+                                <span className="text-stone-500 dark:text-stone-400">
                                   {formatFrenchDate(msg.createdAt?.toDate() ?? null)}
                                 </span>
                               </div>
@@ -1190,7 +1212,7 @@ export function CustomSalonRoomView({
                                     }
                                     title="Signaler ce message"
                                     aria-label="Signaler ce message"
-                                    className="text-stone-400 hover:text-red-700 p-1"
+                                    className="text-stone-400 hover:text-red-700 dark:hover:text-red-400 p-1"
                                   >
                                     <Flag className="w-3.5 h-3.5" />
                                   </button>
@@ -1202,16 +1224,24 @@ export function CustomSalonRoomView({
                                       void deleteCustomSalonMessage(salon.salonId, msg.messageId)
                                     }
                                     aria-label="Supprimer le message"
-                                    className="text-stone-400 hover:text-red-700 p-1"
+                                    className="text-stone-400 hover:text-red-700 dark:hover:text-red-400 p-1"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 )}
                               </div>
                             </div>
-                            <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-wrap">
-                              {msg.content}
-                            </p>
+                            {cleanText && (
+                              <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed whitespace-pre-wrap">
+                                {cleanText}
+                              </p>
+                            )}
+                            <SharedStoryPreviewCard
+                              content={msg.content}
+                              stories={publicStories.length > 0 ? publicStories : stories}
+                              onReadStory={onReadStory}
+                              onOpenStoryById={onOpenStoryById}
+                            />
                           </div>
                         );
                       })
@@ -1220,10 +1250,10 @@ export function CustomSalonRoomView({
 
                   <form
                     onSubmit={handleSendChat}
-                    className="p-4 sm:p-5 border-t border-stone-200 bg-[#FBF9F5] space-y-3"
+                    className="p-4 sm:p-5 border-t border-stone-200 dark:border-stone-800 bg-[#FBF9F5] dark:bg-stone-950 space-y-3"
                   >
                     {chatError && (
-                      <p role="alert" className="text-xs text-red-800">
+                      <p role="alert" className="text-xs text-red-800 dark:text-red-300">
                         {chatError}
                       </p>
                     )}
@@ -1234,7 +1264,7 @@ export function CustomSalonRoomView({
                         value={chatInput}
                         onChange={(e) => setChatInput(e.target.value)}
                         placeholder={`Écrire dans ${salon.name}…`}
-                        className="flex-1 px-3.5 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+                        className="flex-1 px-3.5 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-amber-400"
                       />
                       <button
                         type="submit"
@@ -1255,12 +1285,12 @@ export function CustomSalonRoomView({
           {/* Section 3: Owner & Moderator Admission & Members Management */}
           {roomSection === 'members' && canModerateSalon && (
             <section className="space-y-8">
-              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
-                <h2 className="font-display text-2xl font-medium text-stone-900">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 space-y-4">
+                <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
                   Demandes d’admission en attente ({pendingRequests.length})
                 </h2>
                 {pendingRequests.length === 0 ? (
-                  <p className="text-sm text-stone-600">
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
                     Aucune demande d’admission en attente pour ce salon.
                   </p>
                 ) : (
@@ -1268,22 +1298,22 @@ export function CustomSalonRoomView({
                     {pendingRequests.map((req) => (
                       <div
                         key={req.userId}
-                        className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                        className="p-4 bg-[#FBF9F5] dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                       >
                         <div className="space-y-1">
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(req.userId)}
-                            className="text-sm font-semibold text-stone-900 hover:underline"
+                            className="text-sm font-semibold text-stone-900 dark:text-stone-100 hover:underline"
                           >
                             {req.userName}
                           </button>
                           {req.requestNote ? (
-                            <p className="text-sm text-stone-700 leading-relaxed">
+                            <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
                               « {req.requestNote} »
                             </p>
                           ) : (
-                            <p className="text-xs text-stone-500 italic">
+                            <p className="text-xs text-stone-500 dark:text-stone-400 italic">
                               Aucun mot de présentation joint.
                             </p>
                           )}
@@ -1300,7 +1330,7 @@ export function CustomSalonRoomView({
                           <button
                             type="button"
                             onClick={() => void handleOwnerDecision(req, 'rejected')}
-                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-red-400 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-red-400 hover:text-red-800 dark:hover:text-red-300 inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <X className="w-3.5 h-3.5" />
                             <span>Refuser</span>
@@ -1312,18 +1342,18 @@ export function CustomSalonRoomView({
                 )}
               </div>
 
-              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 space-y-4">
                 <div className="space-y-1">
-                  <h2 className="font-display text-2xl font-medium text-stone-900">
+                  <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
                     Membres admis ({approvedMembers.length})
                   </h2>
                   {(isOwner || isGlobalAdmin) && (
-                    <p className="text-xs text-stone-600">
+                    <p className="text-xs text-stone-600 dark:text-stone-400">
                       Vous pouvez nommer des modérateurs parmi les membres admis pour veiller sur les discussions et les admissions de ce salon.
                     </p>
                   )}
                 </div>
-                <div className="divide-y divide-stone-100">
+                <div className="divide-y divide-stone-100 dark:divide-stone-800">
                   {approvedMembers.map((member) => {
                     const canPromoteOrDemote =
                       (isOwner || isGlobalAdmin) && member.role !== 'owner';
@@ -1341,7 +1371,7 @@ export function CustomSalonRoomView({
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(member.userId)}
-                            className="text-sm font-medium text-stone-900 hover:underline"
+                            className="text-sm font-medium text-stone-900 dark:text-stone-100 hover:underline"
                           >
                             {member.userName}
                           </button>
@@ -1356,7 +1386,7 @@ export function CustomSalonRoomView({
                             compact
                           />
                           {member.role === 'member' && (
-                            <span className="text-xs text-stone-500">Membre</span>
+                            <span className="text-xs text-stone-500 dark:text-stone-400">Membre</span>
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1367,8 +1397,8 @@ export function CustomSalonRoomView({
                               onClick={() => void handleToggleModeratorRole(member)}
                               className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded-md border transition-colors inline-flex items-center gap-1.5 whitespace-nowrap ${
                                 member.role === 'moderator'
-                                  ? 'border-stone-300 bg-white text-stone-700 hover:border-stone-500'
-                                  : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D] hover:border-[#1B365D]'
+                                  ? 'border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:border-stone-500'
+                                  : 'border-[#CBD6E6] dark:border-sky-800 bg-[#F3F6FA] dark:bg-sky-950/50 text-[#1B365D] dark:text-sky-200 hover:border-[#1B365D]'
                               }`}
                             >
                               <ShieldCheck className="w-3.5 h-3.5" />
@@ -1383,7 +1413,7 @@ export function CustomSalonRoomView({
                             <button
                               type="button"
                               onClick={() => void handleRemoveMember(member)}
-                              className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-600 hover:text-red-800 inline-flex items-center gap-1"
+                              className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-red-800 dark:hover:text-red-400 inline-flex items-center gap-1"
                             >
                               <UserMinus className="w-3.5 h-3.5" />
                               <span>Retirer</span>

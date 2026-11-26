@@ -109,16 +109,16 @@ export function AppSidebar({
     const isCompact = !isMobileDrawer && collapsed;
 
     return (
-      <div className="flex flex-col h-full bg-[#F7F4EE] text-stone-800">
+      <div className="flex flex-col h-full bg-[#F7F4EE] dark:bg-stone-900 text-stone-800 dark:text-stone-200">
         {/* Drawer header (mobile only) or Desktop collapse toggle */}
         {isMobileDrawer ? (
-          <div className="px-4 py-3.5 border-b border-stone-200 flex items-center justify-between gap-2 bg-[#FBF9F5]">
-            <span className="font-display text-lg font-medium text-stone-900">Navigation</span>
+          <div className="px-4 py-3.5 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-2 bg-[#FBF9F5] dark:bg-stone-950">
+            <span className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">Navigation</span>
             <button
               type="button"
               onClick={onCloseMobile}
               aria-label="Fermer le menu latéral"
-              className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100"
+              className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-md text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-stone-800"
             >
               <X className="w-5 h-5" />
             </button>
@@ -130,7 +130,7 @@ export function AppSidebar({
             }`}
           >
             {!isCompact && (
-              <span className="px-2 text-[11px] uppercase tracking-widest text-stone-500 font-medium">
+              <span className="px-2 text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-medium">
                 Espaces
               </span>
             )}
@@ -139,7 +139,7 @@ export function AppSidebar({
               onClick={onToggleCollapse}
               title={isCompact ? 'Déployer le menu latéral' : 'Réduire le menu latéral'}
               aria-label={isCompact ? 'Déployer le menu latéral' : 'Réduire le menu latéral'}
-              className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-200/70 transition-colors"
+              className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/70 dark:hover:bg-stone-800 transition-colors"
             >
               {isCompact ? (
                 <PanelLeftOpen className="w-4 h-4" />
@@ -180,19 +180,19 @@ export function AppSidebar({
                   } ${
                     isActive
                       ? item.tone === 'danger'
-                        ? 'bg-red-50 text-red-900 font-semibold'
-                        : 'bg-white text-[#1E3A8A] font-semibold shadow-xs border border-stone-200/80'
-                      : 'text-stone-700 hover:bg-stone-200/60 hover:text-stone-900'
+                        ? 'bg-red-50 dark:bg-red-950/50 text-red-900 dark:text-red-200 font-semibold'
+                        : 'bg-white dark:bg-stone-800 text-[#1E3A8A] dark:text-amber-300 font-semibold shadow-xs border border-stone-200/80 dark:border-stone-700'
+                      : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/70 hover:text-stone-900 dark:hover:text-stone-100'
                   }`}
                 >
                   <span className="inline-flex items-center gap-2.5 min-w-0">
                     <Icon
                       className={`w-4 h-4 shrink-0 ${
                         item.tone === 'danger'
-                          ? 'text-red-700'
+                          ? 'text-red-700 dark:text-red-400'
                           : isActive
-                            ? 'text-[#1E3A8A]'
-                            : 'text-stone-500'
+                            ? 'text-[#1E3A8A] dark:text-amber-300'
+                            : 'text-stone-500 dark:text-stone-400'
                       }`}
                     />
                     {!isCompact && <span className="truncate">{item.label}</span>}
@@ -202,7 +202,7 @@ export function AppSidebar({
                       className={`px-1.5 py-0.5 text-[11px] leading-none rounded tabular-nums ${
                         item.tone === 'danger'
                           ? 'bg-red-700 text-white'
-                          : 'bg-stone-200 text-stone-700'
+                          : 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-200'
                       }`}
                     >
                       {item.badge}
@@ -214,10 +214,10 @@ export function AppSidebar({
           </nav>
 
           {/* The 6 Salons */}
-          <div className="pt-3 border-t border-stone-200/80 space-y-1">
+          <div className="pt-3 border-t border-stone-200/80 dark:border-stone-800 space-y-1">
             {!isCompact && (
               <div className="px-2.5 pb-1 flex items-center justify-between gap-2">
-                <span className="text-[11px] uppercase tracking-widest text-stone-500 font-medium">
+                <span className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-medium">
                   Les 6 salons
                 </span>
               </div>
@@ -241,7 +241,6 @@ export function AppSidebar({
                     style={
                       isSelected
                         ? {
-                            backgroundColor: '#FFFFFF',
                             borderColor: salon.palette.borderTint,
                             color: salon.palette.textAccent,
                           }
@@ -251,8 +250,8 @@ export function AppSidebar({
                       isCompact ? 'justify-center' : 'justify-between gap-2'
                     } ${
                       isSelected
-                        ? 'border shadow-xs font-semibold'
-                        : 'text-stone-700 hover:bg-stone-200/60 hover:text-stone-900 border border-transparent'
+                        ? 'bg-white dark:bg-stone-800 border shadow-xs font-semibold dark:brightness-125'
+                        : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/70 hover:text-stone-900 dark:hover:text-stone-100 border border-transparent'
                     }`}
                   >
                     <span className="inline-flex items-center gap-2 min-w-0">
@@ -268,7 +267,7 @@ export function AppSidebar({
                       )}
                     </span>
                     {!isCompact && count > 0 && (
-                      <span className="text-[11px] text-stone-500 tabular-nums shrink-0">
+                      <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums shrink-0">
                         {count}
                       </span>
                     )}
@@ -280,9 +279,9 @@ export function AppSidebar({
 
           {/* Community Salons (compact list when available) */}
           {!isCompact && (
-            <div className="pt-3 border-t border-stone-200/80 space-y-1">
+            <div className="pt-3 border-t border-stone-200/80 dark:border-stone-800 space-y-1">
               <div className="px-2.5 pb-1 flex items-center justify-between gap-2">
-                <span className="text-[11px] uppercase tracking-widest text-stone-500 font-medium">
+                <span className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 font-medium">
                   Communauté
                 </span>
                 <button
@@ -292,7 +291,7 @@ export function AppSidebar({
                     if (isMobileDrawer) onCloseMobile();
                   }}
                   title="Créer un salon"
-                  className="text-[11px] font-medium text-[#1E3A8A] hover:underline inline-flex items-center gap-0.5"
+                  className="text-[11px] font-medium text-[#1E3A8A] dark:text-amber-300 hover:underline inline-flex items-center gap-0.5"
                 >
                   <Plus className="w-3 h-3" />
                   <span>Créer</span>
@@ -306,9 +305,9 @@ export function AppSidebar({
                     onCreateCustomSalon();
                     if (isMobileDrawer) onCloseMobile();
                   }}
-                  className="w-full px-2.5 py-2 rounded-md text-xs text-stone-600 hover:bg-stone-200/60 hover:text-stone-900 flex items-center gap-2 transition-colors text-left"
+                  className="w-full px-2.5 py-2 rounded-md text-xs text-stone-600 dark:text-stone-400 hover:bg-stone-200/60 dark:hover:bg-stone-800/70 hover:text-stone-900 dark:hover:text-stone-100 flex items-center gap-2 transition-colors text-left"
                 >
-                  <Feather className="w-3.5 h-3.5 text-stone-500 shrink-0" />
+                  <Feather className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400 shrink-0" />
                   <span>Ouvrir un salon…</span>
                 </button>
               ) : (
@@ -327,8 +326,8 @@ export function AppSidebar({
                         }}
                         className={`w-full min-h-[34px] px-2.5 py-1.5 rounded-md text-xs transition-colors flex items-center gap-2 text-left ${
                           isSelected
-                            ? 'bg-white text-stone-900 font-semibold border border-stone-200 shadow-xs'
-                            : 'text-stone-700 hover:bg-stone-200/60'
+                            ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-semibold border border-stone-200 dark:border-stone-700 shadow-xs'
+                            : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/70'
                         }`}
                       >
                         {hasAvatar ? (
@@ -338,7 +337,7 @@ export function AppSidebar({
                             onError={() =>
                               setBrokenAvatarIds((prev) => ({ ...prev, [cs.salonId]: true }))
                             }
-                            className="w-5 h-5 rounded-sm object-cover shrink-0 border border-stone-200 bg-white"
+                            className="w-5 h-5 rounded-sm object-cover shrink-0 border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800"
                           />
                         ) : cs.visibility === 'private' ? (
                           <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: pal.textAccent }} />
@@ -358,7 +357,7 @@ export function AppSidebar({
         {/* Mobile Version & PWA Install Link */}
         {onOpenMobileAppGuide && (
           <div
-            className={`p-2.5 border-t border-stone-200/80 shrink-0 bg-[#F7F4EE] ${
+            className={`p-2.5 border-t border-stone-200/80 dark:border-stone-800 shrink-0 bg-[#F7F4EE] dark:bg-stone-900 ${
               isMobileDrawer ? 'pb-[max(0.75rem,env(safe-area-inset-bottom))]' : ''
             }`}
           >
@@ -368,7 +367,7 @@ export function AppSidebar({
                 onClick={onOpenMobileAppGuide}
                 title="Version mobile & installation"
                 aria-label="Version mobile et installation"
-                className="w-full min-h-[36px] inline-flex items-center justify-center rounded-md border border-[#CBD6E6] bg-white text-[#1B365D] hover:border-[#1B365D] transition-colors"
+                className="w-full min-h-[36px] inline-flex items-center justify-center rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-white dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 hover:border-[#1B365D] transition-colors"
               >
                 <Smartphone className="w-4 h-4" />
               </button>
@@ -392,7 +391,7 @@ export function AppSidebar({
       {/* Desktop Sticky Collapsible Sidebar */}
       <aside
         aria-label="Barre latérale des salons"
-        className={`hidden lg:flex lg:flex-col shrink-0 border-r border-stone-200 bg-[#F7F4EE] sticky top-[65px] h-[calc(100dvh-65px)] transition-[width] duration-200 ease-out motion-reduce:transition-none ${
+        className={`hidden lg:flex lg:flex-col shrink-0 border-r border-stone-200 dark:border-stone-800 bg-[#F7F4EE] dark:bg-stone-900 sticky top-[65px] h-[calc(100dvh-65px)] transition-[width] duration-200 ease-out motion-reduce:transition-none ${
           collapsed ? 'w-[68px]' : 'w-64'
         }`}
       >
@@ -404,10 +403,10 @@ export function AppSidebar({
         <div className="fixed inset-0 z-50 lg:hidden flex" role="dialog" aria-modal="true" aria-label="Menu latéral">
           <div
             onClick={onCloseMobile}
-            className="fixed inset-0 bg-stone-900/40 backdrop-blur-[1px]"
+            className="fixed inset-0 bg-stone-900/40 dark:bg-black/60 backdrop-blur-[1px]"
             aria-hidden="true"
           />
-          <aside className="relative z-10 w-[min(84vw,296px)] h-full border-r border-stone-200 bg-[#F7F4EE] shadow-xl flex flex-col">
+          <aside className="relative z-10 w-[min(84vw,296px)] h-full border-r border-stone-200 dark:border-stone-800 bg-[#F7F4EE] dark:bg-stone-900 shadow-xl flex flex-col">
             {renderSidebarBody(true)}
           </aside>
         </div>

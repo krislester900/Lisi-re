@@ -256,20 +256,20 @@ export function ModerationCenterView({
   if (!user) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-16">
-        <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 space-y-4">
-          <p className="text-xs uppercase tracking-widest text-stone-500">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10 space-y-4">
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
             Modération &amp; étude de cas
           </p>
-          <h1 className="font-display text-3xl font-medium text-stone-900">
+          <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100">
             Espace de suivi des signalements
           </h1>
-          <p className="text-sm text-stone-600 leading-relaxed">
+          <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
             Connectez-vous avec votre compte Google pour consulter l’état de vos signalements ou accéder au centre d’étude de cas si vous êtes administrateur.
           </p>
           <button
             type="button"
             onClick={() => void signInWithGoogle()}
-            className="min-h-[42px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+            className="min-h-[42px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] dark:bg-[#2C4F82] rounded-md hover:bg-[#132744] dark:hover:bg-[#3A639E]"
           >
             Se connecter avec Google
           </button>
@@ -281,29 +281,29 @@ export function ModerationCenterView({
   if (!isAdmin) {
     return (
       <div className="max-w-4xl mx-auto px-6 py-10 space-y-8">
-        <div className="bg-white border border-stone-200 rounded-lg p-7 space-y-3">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500">
-            <ShieldCheck className="w-4 h-4 text-[#1B365D]" />
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-7 space-y-3">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
+            <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
             <span>Accès réservé à la modération</span>
           </div>
-          <h1 className="font-display text-2xl font-medium text-stone-900">
+          <h1 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
             Centre d’étude de cas réservé à l’administration
           </h1>
-          <p className="text-sm text-stone-600 leading-relaxed">
+          <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
             L’instruction des signalements et l’émission des avertissements officiels sont gérées exclusivement par l’administrateur de Lisière. Vous pouvez néanmoins consulter ci-dessous vos propres signalements et éventuels avertissements reçus.
           </p>
         </div>
 
         {userWarnings.length > 0 && (
           <section className="space-y-3">
-            <h2 className="font-display text-xl font-medium text-stone-900">
+            <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
               Avertissements officiels reçus ({userWarnings.length})
             </h2>
             <div className="space-y-3">
               {userWarnings.map((w) => (
                 <div
                   key={w.warningId}
-                  className="bg-white border border-red-200 rounded-lg p-5 space-y-2.5"
+                  className="bg-white dark:bg-stone-900 border border-red-200 dark:border-red-900/70 rounded-lg p-5 space-y-2.5"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span
@@ -313,11 +313,11 @@ export function ModerationCenterView({
                     >
                       {WARNING_SEVERITY_LABELS[w.severity].label}
                     </span>
-                    <span className="text-xs text-stone-500">
+                    <span className="text-xs text-stone-500 dark:text-stone-400">
                       {formatFrenchDate(w.createdAt?.toDate() ?? null)}
                     </span>
                   </div>
-                  <p className="text-sm text-stone-800 leading-relaxed">{w.justification}</p>
+                  <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed">{w.justification}</p>
                   {!w.acknowledged ? (
                     <button
                       type="button"
@@ -327,7 +327,7 @@ export function ModerationCenterView({
                       Accuser réception
                     </button>
                   ) : (
-                    <p className="text-xs text-emerald-800 inline-flex items-center gap-1">
+                    <p className="text-xs text-emerald-800 dark:text-emerald-400 inline-flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Pris connaissance</span>
                     </p>
@@ -339,19 +339,19 @@ export function ModerationCenterView({
         )}
 
         <section className="space-y-3">
-          <h2 className="font-display text-xl font-medium text-stone-900">
+          <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
             Mes signalements transmis ({myCases.length})
           </h2>
           {myCases.length === 0 ? (
-            <p className="text-sm text-stone-500 bg-white border border-stone-200 rounded-lg p-6">
+            <p className="text-sm text-stone-500 dark:text-stone-400 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6">
               Vous n’avez soumis aucun signalement pour le moment.
             </p>
           ) : (
-            <div className="bg-white border border-stone-200 rounded-lg divide-y divide-stone-200">
+            <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg divide-y divide-stone-200 dark:divide-stone-800">
               {myCases.map((c) => (
                 <div key={c.caseId} className="p-5 space-y-2">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <span className="font-medium text-stone-900">
+                    <span className="font-medium text-stone-900 dark:text-stone-100">
                       {MODERATION_CATEGORY_LABELS[c.category].label}
                     </span>
                     <span
@@ -363,7 +363,7 @@ export function ModerationCenterView({
                     </span>
                   </div>
                   {c.decisionReason && (
-                    <p className="text-xs text-stone-700 bg-[#FBF9F5] border border-stone-200 rounded px-3 py-2">
+                    <p className="text-xs text-stone-700 dark:text-stone-300 bg-[#FBF9F5] dark:bg-stone-800/70 border border-stone-200 dark:border-stone-700 rounded px-3 py-2">
                       Décision : {c.decisionReason}
                     </p>
                   )}
@@ -671,22 +671,22 @@ export function ModerationCenterView({
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 sm:py-10 space-y-6">
       {/* Header + Live Counters */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-stone-200">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-stone-200 dark:border-stone-800">
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5">
-              <Scale className="w-3.5 h-3.5 text-[#1B365D]" />
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 inline-flex items-center gap-1.5">
+              <Scale className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2]" />
               <span>Administration · Modération hybride (IA + votre contrôle)</span>
             </p>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[11px] font-medium text-emerald-900">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70 text-[11px] font-medium text-emerald-900 dark:text-emerald-300">
               <Lock className="w-3 h-3" />
               <span>Onglet visible uniquement par {MODERATION_ADMIN_EMAIL}</span>
             </span>
           </div>
-          <h1 className="font-display text-3xl font-medium text-stone-900">
+          <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100">
             Modération &amp; avertissements officiels
           </h1>
-          <p className="text-sm text-stone-600 max-w-2xl">
+          <p className="text-sm text-stone-600 dark:text-stone-300 max-w-2xl">
             La modération artificielle pré-étudie chaque signalement et prépare l’évaluation. Les cas ambigus ou sensibles sont marqués pour votre intervention manuelle, et vous gardez toujours le dernier mot.
           </p>
         </div>
@@ -694,10 +694,30 @@ export function ModerationCenterView({
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 shrink-0">
           {(
             [
-              { id: 'open', label: 'À étudier', value: counts.open, tone: 'text-amber-900 bg-amber-50 border-amber-200' },
-              { id: 'under_review', label: 'En étude', value: counts.under_review, tone: 'text-[#1B365D] bg-[#F3F6FA] border-[#CBD6E6]' },
-              { id: 'resolved_warned', label: 'Avertis', value: counts.resolved_warned, tone: 'text-red-900 bg-red-50 border-red-200' },
-              { id: 'resolved_dismissed', label: 'Classés', value: counts.resolved_dismissed, tone: 'text-stone-700 bg-stone-100 border-stone-200' },
+              {
+                id: 'open',
+                label: 'À étudier',
+                value: counts.open,
+                tone: 'text-amber-900 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/60',
+              },
+              {
+                id: 'under_review',
+                label: 'En étude',
+                value: counts.under_review,
+                tone: 'text-[#1B365D] dark:text-[#93B4E2] bg-[#F3F6FA] dark:bg-stone-800 border-[#CBD6E6] dark:border-stone-700',
+              },
+              {
+                id: 'resolved_warned',
+                label: 'Avertis',
+                value: counts.resolved_warned,
+                tone: 'text-red-900 dark:text-red-200 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800/60',
+              },
+              {
+                id: 'resolved_dismissed',
+                label: 'Classés',
+                value: counts.resolved_dismissed,
+                tone: 'text-stone-700 dark:text-stone-300 bg-stone-100 dark:bg-stone-800/80 border-stone-200 dark:border-stone-700',
+              },
             ] as const
           ).map((kpi) => (
             <button
@@ -716,16 +736,16 @@ export function ModerationCenterView({
       </div>
 
       {/* Retroactive Format Regulation Audit */}
-      <section className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
+      <section className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="space-y-0.5">
-            <p className="text-xs font-semibold text-stone-900 inline-flex items-center gap-1.5">
-              <ShieldCheck className="w-4 h-4 text-[#1B365D]" />
+            <p className="text-xs font-semibold text-stone-900 dark:text-stone-100 inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
               <span>
                 Régulation rétroactive des formats (&gt; 3 lignes confessions · ≥ 2 pages romans)
               </span>
             </p>
-            <p className="text-xs text-stone-600 tabular-nums">
+            <p className="text-xs text-stone-600 dark:text-stone-400 tabular-nums">
               {retroactivelySuspendedStories.length === 0
                 ? 'Tous les récits publics actuels respectent les seuils de longueur.'
                 : `${retroactivelySuspendedStories.length} récit${retroactivelySuspendedStories.length > 1 ? 's' : ''} antérieur${retroactivelySuspendedStories.length > 1 ? 's' : ''} à la mise à jour ${retroactivelySuspendedStories.length > 1 ? 'sont automatiquement masqués' : 'est automatiquement masqué'} des salons publics jusqu’à régularisation par leur auteur.`}
@@ -735,7 +755,7 @@ export function ModerationCenterView({
             <button
               type="button"
               onClick={() => setShowRetroactiveAudit((prev) => !prev)}
-              className="min-h-[32px] px-3 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-[#1B365D] hover:border-[#1B365D] whitespace-nowrap self-start sm:self-center"
+              className="min-h-[32px] px-3 py-1 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] hover:border-[#1B365D] dark:hover:border-[#93B4E2] whitespace-nowrap self-start sm:self-center"
             >
               {showRetroactiveAudit ? 'Masquer la liste' : 'Voir les textes suspendus'}
             </button>
@@ -743,15 +763,15 @@ export function ModerationCenterView({
         </div>
 
         {showRetroactiveAudit && retroactivelySuspendedStories.length > 0 && (
-          <div className="pt-2 border-t border-stone-100 divide-y divide-stone-100 max-h-64 overflow-y-auto">
+          <div className="pt-2 border-t border-stone-100 dark:border-stone-800 divide-y divide-stone-100 dark:divide-stone-800 max-h-64 overflow-y-auto">
             {retroactivelySuspendedStories.map(({ story, compliance }) => (
               <div
                 key={story.storyId}
                 className="py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
               >
                 <div className="min-w-0">
-                  <p className="font-medium text-stone-900 truncate">{story.title}</p>
-                  <p className="text-stone-500">
+                  <p className="font-medium text-stone-900 dark:text-stone-100 truncate">{story.title}</p>
+                  <p className="text-stone-500 dark:text-stone-400">
                     {story.isAnonymous ? 'Auteur anonyme' : story.authorName} ·{' '}
                     {compliance.shortReason}
                   </p>
@@ -760,7 +780,7 @@ export function ModerationCenterView({
                   <button
                     type="button"
                     onClick={() => onOpenMemberWall(story.authorId)}
-                    className="text-[#1B365D] hover:underline font-medium whitespace-nowrap self-start sm:self-center"
+                    className="text-[#1B365D] dark:text-[#93B4E2] hover:underline font-medium whitespace-nowrap self-start sm:self-center"
                   >
                     Voir le membre
                   </button>
@@ -772,30 +792,30 @@ export function ModerationCenterView({
       </section>
 
       {/* Official Salon Moderators Management (Admin only) */}
-      <section className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
+      <section className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="space-y-0.5">
             <div className="flex flex-wrap items-center gap-2">
               <RoleBadge role="admin" compact />
-              <p className="text-xs font-semibold text-stone-900">
+              <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">
                 Modérateurs des salons officiels ({totalOfficialModerators})
               </p>
             </div>
-            <p className="text-xs text-stone-600">
+            <p className="text-xs text-stone-600 dark:text-stone-400">
               Désignez ou révoquez des modérateurs pour chacun des six salons officiels (badge Modérateur + suppression des messages, fils et réponses).
             </p>
           </div>
           <button
             type="button"
             onClick={() => setShowSalonModManager((prev) => !prev)}
-            className="min-h-[32px] px-3 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-[#1B365D] hover:border-[#1B365D] whitespace-nowrap self-start sm:self-center"
+            className="min-h-[32px] px-3 py-1 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] hover:border-[#1B365D] dark:hover:border-[#93B4E2] whitespace-nowrap self-start sm:self-center"
           >
             {showSalonModManager ? 'Fermer la gestion' : 'Gérer les modérateurs'}
           </button>
         </div>
 
         {showSalonModManager && (
-          <div className="pt-3 border-t border-stone-200 space-y-4">
+          <div className="pt-3 border-t border-stone-200 dark:border-stone-800 space-y-4">
             <div className="flex flex-wrap items-center gap-1.5">
               {STORY_THEMES.map((t) => {
                 const modCount = predefinedSalonModerators?.[t.id]?.length ?? 0;
@@ -809,8 +829,8 @@ export function ModerationCenterView({
                     }}
                     className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap ${
                       selectedModSalonId === t.id
-                        ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                        ? 'bg-[#1B365D] dark:bg-[#2C4F82] text-white border-[#1B365D] dark:border-[#2C4F82]'
+                        : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
                     }`}
                   >
                     {t.shortSalonName}
@@ -824,8 +844,8 @@ export function ModerationCenterView({
               <p
                 className={`text-xs px-3 py-2 rounded border ${
                   modFeedback.kind === 'error'
-                    ? 'text-red-800 bg-red-50 border-red-200'
-                    : 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                    ? 'text-red-800 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800/60'
+                    : 'text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60'
                 }`}
               >
                 {modFeedback.message}
@@ -834,15 +854,15 @@ export function ModerationCenterView({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-stone-500">
+                <p className="text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400">
                   Modérateurs actuels ({activeSalonModerators.length})
                 </p>
                 {activeSalonModerators.length === 0 ? (
-                  <p className="text-xs text-stone-500 italic bg-[#FBF9F5] border border-stone-200 rounded-md p-3">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 italic bg-[#FBF9F5] dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 rounded-md p-3">
                     Aucun modérateur assigné à ce salon pour le moment.
                   </p>
                 ) : (
-                  <div className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5]">
+                  <div className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-700 rounded-md bg-[#FBF9F5] dark:bg-stone-800/60">
                     {activeSalonModerators.map((mod) => (
                       <div
                         key={mod.userId}
@@ -852,7 +872,7 @@ export function ModerationCenterView({
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(mod.userId)}
-                            className="text-xs font-semibold text-stone-900 hover:underline truncate"
+                            className="text-xs font-semibold text-stone-900 dark:text-stone-100 hover:underline truncate"
                           >
                             {mod.userName}
                           </button>
@@ -883,7 +903,7 @@ export function ModerationCenterView({
                               setModActionBusyId(null);
                             }
                           }}
-                          className="min-h-[28px] px-2 py-1 text-xs font-medium text-red-800 bg-white border border-red-200 rounded hover:border-red-400 inline-flex items-center gap-1 whitespace-nowrap"
+                          className="min-h-[28px] px-2 py-1 text-xs font-medium text-red-800 dark:text-red-300 bg-white dark:bg-stone-900 border border-red-200 dark:border-red-800/60 rounded hover:border-red-400 dark:hover:border-red-600 inline-flex items-center gap-1 whitespace-nowrap"
                         >
                           <X className="w-3 h-3" />
                           <span>Retirer</span>
@@ -897,7 +917,7 @@ export function ModerationCenterView({
               <div className="space-y-2">
                 <label
                   htmlFor="admin-mod-member-search"
-                  className="block text-xs font-medium uppercase tracking-wider text-stone-500"
+                  className="block text-xs font-medium uppercase tracking-wider text-stone-500 dark:text-stone-400"
                 >
                   Nommer un modérateur
                 </label>
@@ -907,20 +927,20 @@ export function ModerationCenterView({
                   value={modMemberSearch}
                   onChange={(e) => setModMemberSearch(e.target.value)}
                   placeholder="Rechercher un membre par nom…"
-                  className="w-full min-h-[34px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full min-h-[34px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                 />
-                <div className="divide-y divide-stone-200 border border-stone-200 rounded-md max-h-44 overflow-y-auto">
+                <div className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-700 rounded-md max-h-44 overflow-y-auto">
                   {moderatorCandidates.length === 0 ? (
-                    <p className="p-3 text-xs text-stone-500">
+                    <p className="p-3 text-xs text-stone-500 dark:text-stone-400 bg-white dark:bg-stone-900">
                       Aucun profil public disponible à nommer.
                     </p>
                   ) : (
                     moderatorCandidates.map((candidate) => (
                       <div
                         key={candidate.userId}
-                        className="px-3 py-2 flex items-center justify-between gap-2 bg-white"
+                        className="px-3 py-2 flex items-center justify-between gap-2 bg-white dark:bg-stone-900"
                       >
-                        <span className="text-xs font-medium text-stone-900 truncate">
+                        <span className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">
                           {candidate.displayName}
                         </span>
                         <button
@@ -953,7 +973,7 @@ export function ModerationCenterView({
                               setModActionBusyId(null);
                             }
                           }}
-                          className="min-h-[28px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded hover:border-[#1B365D] inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                          className="min-h-[28px] px-2.5 py-1 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded hover:border-[#1B365D] dark:hover:border-[#93B4E2] inline-flex items-center gap-1 whitespace-nowrap shrink-0"
                         >
                           <UserPlus className="w-3 h-3" />
                           <span>Nommer</span>
@@ -969,16 +989,16 @@ export function ModerationCenterView({
       </section>
 
       {/* Distinctive Firestore Profile Badges Management (Admin only) */}
-      <section className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
+      <section className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="space-y-0.5">
             <div className="flex flex-wrap items-center gap-2">
-              <Award className="w-4 h-4 text-[#6E2438]" />
-              <p className="text-xs font-semibold text-stone-900">
+              <Award className="w-4 h-4 text-[#6E2438] dark:text-[#E598AC]" />
+              <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">
                 Badges distinctifs des membres ({badgedMembersCount})
               </p>
             </div>
-            <p className="text-xs text-stone-600">
+            <p className="text-xs text-stone-600 dark:text-stone-400">
               Attribuez des badges visibles dans le répertoire, sur les profils et dans les commentaires (Expert littéraire, Modérateur, Administrateur, Plume confirmée, Grand lecteur).
             </p>
           </div>
@@ -988,27 +1008,27 @@ export function ModerationCenterView({
               setShowProfileBadgesManager((prev) => !prev);
               setBadgeFeedback(null);
             }}
-            className="min-h-[32px] px-3 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-[#1B365D] hover:border-[#1B365D] whitespace-nowrap self-start sm:self-center"
+            className="min-h-[32px] px-3 py-1 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] hover:border-[#1B365D] dark:hover:border-[#93B4E2] whitespace-nowrap self-start sm:self-center"
           >
             {showProfileBadgesManager ? 'Fermer la gestion' : 'Gérer les badges'}
           </button>
         </div>
 
         {showProfileBadgesManager && (
-          <div className="pt-3 border-t border-stone-200 space-y-3">
+          <div className="pt-3 border-t border-stone-200 dark:border-stone-800 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="relative w-full sm:w-80">
-                <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="search"
                   value={badgeMemberSearch}
                   onChange={(e) => setBadgeMemberSearch(e.target.value)}
                   placeholder="Chercher un membre ou un badge…"
                   aria-label="Rechercher un membre pour gérer ses badges"
-                  className="w-full min-h-[34px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full min-h-[34px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                 />
               </div>
-              <p className="text-[11px] text-stone-500">
+              <p className="text-[11px] text-stone-500 dark:text-stone-400">
                 Jusqu’à {FIELD_LIMITS.memberBadgesMax} badges par profil · Stockés sur Firestore
               </p>
             </div>
@@ -1017,8 +1037,8 @@ export function ModerationCenterView({
               <p
                 className={`text-xs px-3 py-2 rounded border ${
                   badgeFeedback.kind === 'error'
-                    ? 'text-red-800 bg-red-50 border-red-200'
-                    : 'text-emerald-800 bg-emerald-50 border-emerald-200'
+                    ? 'text-red-800 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800/60'
+                    : 'text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60'
                 }`}
               >
                 {badgeFeedback.message}
@@ -1026,11 +1046,11 @@ export function ModerationCenterView({
             )}
 
             {badgeFilteredProfiles.length === 0 ? (
-              <p className="text-xs text-stone-500 italic bg-[#FBF9F5] border border-stone-200 rounded-md p-3">
+              <p className="text-xs text-stone-500 dark:text-stone-400 italic bg-[#FBF9F5] dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 rounded-md p-3">
                 Aucun membre trouvé pour cette recherche.
               </p>
             ) : (
-              <div className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5]">
+              <div className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-700 rounded-md bg-[#FBF9F5] dark:bg-stone-800/60">
                 {badgeFilteredProfiles.map((member) => {
                   const activeBadges = getProfileBadges(member);
                   return (
@@ -1043,7 +1063,7 @@ export function ModerationCenterView({
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(member.userId)}
-                            className="text-xs font-semibold text-stone-900 hover:text-[#1B365D] hover:underline truncate"
+                            className="text-xs font-semibold text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-[#93B4E2] hover:underline truncate"
                           >
                             {member.displayName}
                           </button>
@@ -1054,7 +1074,7 @@ export function ModerationCenterView({
                           />
                         </div>
                         {member.bio && (
-                          <p className="text-[11px] text-stone-500 line-clamp-1">{member.bio}</p>
+                          <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-1">{member.bio}</p>
                         )}
                       </div>
 
@@ -1101,13 +1121,13 @@ export function ModerationCenterView({
                               }}
                               className={`min-h-[28px] px-2 py-0.5 rounded border text-[11px] font-medium inline-flex items-center gap-1 transition-colors disabled:opacity-60 ${
                                 hasBadge
-                                  ? 'border-[#1B365D] bg-white ring-1 ring-[#1B365D]/30'
-                                  : 'border-stone-200 bg-white/75 opacity-75 hover:opacity-100 hover:border-stone-400'
+                                  ? 'border-[#1B365D] dark:border-[#93B4E2] bg-white dark:bg-stone-900 ring-1 ring-[#1B365D]/30 dark:ring-[#93B4E2]/30'
+                                  : 'border-stone-200 dark:border-stone-700 bg-white/75 dark:bg-stone-900/75 opacity-75 hover:opacity-100 hover:border-stone-400 dark:hover:border-stone-500'
                               }`}
                             >
-                              {hasBadge && <Check className="w-2.5 h-2.5 text-[#1B365D]" />}
+                              {hasBadge && <Check className="w-2.5 h-2.5 text-[#1B365D] dark:text-[#93B4E2]" />}
                               <ProfileBadgeChip badgeId={def.id} compact />
-                              {busy && <span className="text-[10px] text-stone-500">…</span>}
+                              {busy && <span className="text-[10px] text-stone-500 dark:text-stone-400">…</span>}
                             </button>
                           );
                         })}
@@ -1122,7 +1142,7 @@ export function ModerationCenterView({
       </section>
 
       {/* Filters, Batch AI Triage & Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-3.5">
         <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
@@ -1140,8 +1160,8 @@ export function ModerationCenterView({
               onClick={() => setStatusFilter(tab.id)}
               className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap ${
                 statusFilter === tab.id
-                  ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                  : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                  ? 'bg-[#1B365D] dark:bg-[#2C4F82] text-white border-[#1B365D] dark:border-[#2C4F82]'
+                  : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
               }`}
             >
               {tab.label}
@@ -1155,7 +1175,7 @@ export function ModerationCenterView({
               type="button"
               disabled={batchAiBusy || aiBusy}
               onClick={() => void handleBatchAnalyzePending()}
-              className="min-h-[36px] px-3 py-1.5 rounded-md bg-[#F3F6FA] border border-[#CBD6E6] text-[#1B365D] hover:border-[#1B365D] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-60 whitespace-nowrap"
+              className="min-h-[36px] px-3 py-1.5 rounded-md bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 text-[#1B365D] dark:text-[#93B4E2] hover:border-[#1B365D] dark:hover:border-[#93B4E2] text-xs font-medium inline-flex items-center gap-1.5 disabled:opacity-60 whitespace-nowrap"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>
@@ -1167,35 +1187,35 @@ export function ModerationCenterView({
           )}
 
           <div className="relative w-full sm:w-60 shrink-0">
-            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Membre, motif, extrait…"
               aria-label="Rechercher un dossier de signalement"
-              className="w-full min-h-[36px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+              className="w-full min-h-[36px] pl-8 pr-3 py-1 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
             />
           </div>
         </div>
       </div>
 
       {allCases.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-12 text-center space-y-2">
-          <ShieldCheck className="w-8 h-8 text-emerald-700 mx-auto" />
-          <h2 className="font-display text-2xl text-stone-900">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-12 text-center space-y-2">
+          <ShieldCheck className="w-8 h-8 text-emerald-700 dark:text-emerald-400 mx-auto" />
+          <h2 className="font-display text-2xl text-stone-900 dark:text-stone-100">
             Aucun signalement enregistré
           </h2>
-          <p className="text-sm text-stone-600 max-w-md mx-auto">
+          <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto">
             Lorsqu’un membre signalera un propos outrageant, un message privé ou un commentaire, le dossier apparaîtra ici pour instruction.
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Case List Sidebar */}
-          <div className="lg:col-span-4 bg-white border border-stone-200 rounded-lg divide-y divide-stone-200 overflow-hidden max-h-[760px] overflow-y-auto">
+          <div className="lg:col-span-4 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg divide-y divide-stone-200 dark:divide-stone-800 overflow-hidden max-h-[760px] overflow-y-auto">
             {filteredCases.length === 0 ? (
-              <div className="p-6 text-center text-xs text-stone-500">
+              <div className="p-6 text-center text-xs text-stone-500 dark:text-stone-400">
                 Aucun dossier ne correspond à ce filtre.
               </div>
             ) : (
@@ -1210,7 +1230,9 @@ export function ModerationCenterView({
                     type="button"
                     onClick={() => setSelectedCaseId(c.caseId)}
                     className={`w-full text-left p-4 space-y-2 transition-colors block ${
-                      isSelected ? 'bg-[#F4F0E8]' : 'bg-white hover:bg-stone-50'
+                      isSelected
+                        ? 'bg-[#F4F0E8] dark:bg-stone-800'
+                        : 'bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800/60'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1221,23 +1243,23 @@ export function ModerationCenterView({
                       >
                         {MODERATION_STATUS_LABELS[c.status].label}
                       </span>
-                      <span className="text-[11px] text-stone-500 whitespace-nowrap">
+                      <span className="text-[11px] text-stone-500 dark:text-stone-400 whitespace-nowrap">
                         {formatFrenchDate(c.createdAt?.toDate() ?? null)}
                       </span>
                     </div>
 
                     <div>
-                      <p className="text-sm font-medium text-stone-900 truncate">
+                      <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
                         Visé : {c.targetUserName}
                       </p>
-                      <p className="text-xs text-[#1B365D] truncate">
+                      <p className="text-xs text-[#1B365D] dark:text-[#93B4E2] truncate">
                         {MODERATION_CATEGORY_LABELS[c.category].label}
                       </p>
                     </div>
 
-                    <p className="text-xs text-stone-600 line-clamp-2">{c.description}</p>
+                    <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2">{c.description}</p>
 
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-500 pt-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-stone-500 dark:text-stone-400 pt-1">
                       <span>{MODERATION_TARGET_LABELS[c.targetType]}</span>
                       <div className="flex items-center gap-1.5">
                         {c.aiAnalysis && (
@@ -1250,7 +1272,7 @@ export function ModerationCenterView({
                           </span>
                         )}
                         {priorWarnCount > 0 && (
-                          <span className="text-red-800 font-medium tabular-nums">
+                          <span className="text-red-800 dark:text-red-400 font-medium tabular-nums">
                             {priorWarnCount} avert.
                           </span>
                         )}
@@ -1264,9 +1286,9 @@ export function ModerationCenterView({
 
           {/* 4-Step Case Study Workspace */}
           {activeCase && (
-            <div className="lg:col-span-8 bg-white border border-stone-200 rounded-lg p-6 space-y-6">
+            <div className="lg:col-span-8 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 space-y-6">
               {/* Case Header */}
-              <div className="pb-5 border-b border-stone-200 space-y-3">
+              <div className="pb-5 border-b border-stone-200 dark:border-stone-800 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span
@@ -1283,28 +1305,28 @@ export function ModerationCenterView({
                     >
                       {MODERATION_GRAVITY_LABELS[activeCase.gravityLevel].label}
                     </span>
-                    <span className="text-xs text-stone-500">
+                    <span className="text-xs text-stone-500 dark:text-stone-400">
                       {MODERATION_TARGET_LABELS[activeCase.targetType]}
                     </span>
                   </div>
 
-                  <span className="text-xs text-stone-500">
+                  <span className="text-xs text-stone-500 dark:text-stone-400">
                     Signalé le {formatFrenchDate(activeCase.createdAt?.toDate() ?? null)}
                   </span>
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h2 className="font-display text-2xl font-medium text-stone-900">
+                    <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
                       {MODERATION_CATEGORY_LABELS[activeCase.category].label}
                     </h2>
-                    <p className="text-xs text-stone-600 mt-1">
-                      Signalé par <strong className="text-stone-900">{activeCase.reporterName}</strong>{' '}
+                    <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
+                      Signalé par <strong className="text-stone-900 dark:text-stone-100">{activeCase.reporterName}</strong>{' '}
                       à l’encontre de{' '}
                       <button
                         type="button"
                         onClick={() => onOpenMemberWall(activeCase.targetUserId)}
-                        className="font-semibold text-[#1B365D] hover:underline inline-flex items-center gap-1"
+                        className="font-semibold text-[#1B365D] dark:text-[#93B4E2] hover:underline inline-flex items-center gap-1"
                       >
                         <UserIcon className="w-3 h-3" />
                         <span>{activeCase.targetUserName}</span>
@@ -1313,15 +1335,15 @@ export function ModerationCenterView({
                   </div>
 
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="px-2.5 py-1 rounded bg-[#FBF9F5] border border-stone-200 text-stone-700 tabular-nums">
+                    <span className="px-2.5 py-1 rounded bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 tabular-nums">
                       {targetHistory.priorCases} autre{targetHistory.priorCases > 1 ? 's' : ''} dossier
                       {targetHistory.priorCases > 1 ? 's' : ''}
                     </span>
                     <span
                       className={`px-2.5 py-1 rounded border tabular-nums ${
                         targetHistory.priorWarnings > 0
-                          ? 'bg-red-50 border-red-200 text-red-900 font-medium'
-                          : 'bg-[#FBF9F5] border-stone-200 text-stone-700'
+                          ? 'bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-800/70 text-red-900 dark:text-red-200 font-medium'
+                          : 'bg-[#FBF9F5] dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300'
                       }`}
                     >
                       {targetHistory.priorWarnings} avertissement
@@ -1341,14 +1363,14 @@ export function ModerationCenterView({
                       key={step.id}
                       className={`p-3 rounded-md border text-xs space-y-1 ${
                         isCurrent
-                          ? 'bg-[#F3F6FA] border-[#1B365D] text-stone-900'
+                          ? 'bg-[#F3F6FA] dark:bg-stone-800 border-[#1B365D] dark:border-[#93B4E2] text-stone-900 dark:text-stone-100'
                           : isDone
-                            ? 'bg-emerald-50/60 border-emerald-200 text-emerald-950'
-                            : 'bg-[#FBF9F5] border-stone-200 text-stone-500'
+                            ? 'bg-emerald-50/60 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800/60 text-emerald-950 dark:text-emerald-200'
+                            : 'bg-[#FBF9F5] dark:bg-stone-800/50 border-stone-200 dark:border-stone-700 text-stone-500 dark:text-stone-400'
                       }`}
                     >
                       <p className="font-semibold flex items-center gap-1.5">
-                        {isDone && <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />}
+                        {isDone && <Check className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />}
                         <span className="truncate">{step.label}</span>
                       </p>
                       <p className="text-[11px] opacity-85 leading-snug">{step.description}</p>
@@ -1362,8 +1384,8 @@ export function ModerationCenterView({
                   role={feedback.kind === 'error' ? 'alert' : 'status'}
                   className={`px-4 py-3 rounded-md border text-xs font-medium ${
                     feedback.kind === 'error'
-                      ? 'bg-red-50 border-red-200 text-red-900'
-                      : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800/60 text-red-900 dark:text-red-200'
+                      : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200'
                   }`}
                 >
                   {feedback.message}
@@ -1371,11 +1393,11 @@ export function ModerationCenterView({
               )}
 
               {/* AI-Assisted Moderation Panel ("Modération artificielle" + Admin Override) */}
-              <section className="rounded-md border border-[#CBD6E6] bg-[#F3F6FA]/70 p-4 space-y-3">
+              <section className="rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA]/70 dark:bg-stone-800/70 p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <Bot className="w-4 h-4 text-[#1B365D]" />
-                    <span className="text-xs uppercase tracking-widest font-semibold text-[#1B365D]">
+                    <Bot className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
+                    <span className="text-xs uppercase tracking-widest font-semibold text-[#1B365D] dark:text-[#93B4E2]">
                       Modération artificielle · Pré-analyse IA
                     </span>
                   </div>
@@ -1385,7 +1407,7 @@ export function ModerationCenterView({
                       type="button"
                       disabled={aiBusy || Boolean(busyAction)}
                       onClick={() => void handleRunAiAnalysis()}
-                      className="min-h-[32px] px-3 py-1 rounded border border-[#1B365D]/30 bg-white text-xs font-medium text-[#1B365D] hover:border-[#1B365D] inline-flex items-center gap-1.5 disabled:opacity-60"
+                      className="min-h-[32px] px-3 py-1 rounded border border-[#1B365D]/30 dark:border-stone-600 bg-white dark:bg-stone-900 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] hover:border-[#1B365D] dark:hover:border-[#93B4E2] inline-flex items-center gap-1.5 disabled:opacity-60"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${aiBusy ? 'animate-spin' : ''}`} />
                       <span>
@@ -1409,26 +1431,26 @@ export function ModerationCenterView({
                       >
                         {MODERATION_AI_VERDICT_LABELS[activeCase.aiAnalysis.verdict].label}
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700 tabular-nums">
+                      <span className="px-2 py-0.5 rounded bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 tabular-nums">
                         Confiance : {activeCase.aiAnalysis.confidencePercent} %
                       </span>
-                      <span className="px-2 py-0.5 rounded bg-white border border-stone-200 text-stone-700">
+                      <span className="px-2 py-0.5 rounded bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300">
                         Gravité suggérée :{' '}
                         {MODERATION_GRAVITY_LABELS[activeCase.aiAnalysis.suggestedGravity].label}
                       </span>
                       {activeCase.aiAnalysis.needsAdminIntervention && (
-                        <span className="px-2.5 py-0.5 rounded bg-amber-100 border border-amber-300 text-amber-950 font-semibold">
+                        <span className="px-2.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-800/70 text-amber-950 dark:text-amber-200 font-semibold">
                           Intervention manuelle recommandée
                         </span>
                       )}
                     </div>
 
-                    <p className="text-xs sm:text-sm text-stone-800 leading-relaxed bg-white border border-stone-200 rounded p-3">
+                    <p className="text-xs sm:text-sm text-stone-800 dark:text-stone-200 leading-relaxed bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded p-3">
                       {activeCase.aiAnalysis.summary}
                     </p>
 
                     {activeCase.aiAnalysis.interventionReason && (
-                      <p className="text-xs text-stone-600">
+                      <p className="text-xs text-stone-600 dark:text-stone-400">
                         <strong>Note de triage :</strong> {activeCase.aiAnalysis.interventionReason}
                       </p>
                     )}
@@ -1438,7 +1460,7 @@ export function ModerationCenterView({
                         <button
                           type="button"
                           onClick={() => applyAiSuggestionsToForm(activeCase.aiAnalysis!)}
-                          className="min-h-[34px] px-3 py-1.5 rounded bg-white border border-stone-300 text-xs font-medium text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5"
+                          className="min-h-[34px] px-3 py-1.5 rounded bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-[#1B365D] dark:hover:border-[#93B4E2] hover:text-[#1B365D] dark:hover:text-[#93B4E2] inline-flex items-center gap-1.5"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
                           <span>Pré-remplir &amp; reprendre la main manuellement</span>
@@ -1455,7 +1477,7 @@ export function ModerationCenterView({
                             className={`min-h-[34px] px-3.5 py-1.5 rounded text-xs font-medium text-white inline-flex items-center gap-1.5 disabled:opacity-60 ${
                               activeCase.aiAnalysis.recommendedAction === 'avertir'
                                 ? 'bg-red-800 hover:bg-red-900'
-                                : 'bg-[#1B365D] hover:bg-[#132744]'
+                                : 'bg-[#1B365D] dark:bg-[#2C4F82] hover:bg-[#132744] dark:hover:bg-[#3A639E]'
                             }`}
                           >
                             <Check className="w-3.5 h-3.5" />
@@ -1472,17 +1494,17 @@ export function ModerationCenterView({
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-stone-600 leading-relaxed">
+                  <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
                     Ce dossier n’a pas encore été pré-analysé par l’IA. Cliquez sur « Analyser avec l’IA » pour obtenir un résumé factuel, les critères suggérés et une proposition de décision, ou instruisez-le directement manuellement ci-dessous.
                   </p>
                 )}
               </section>
 
               {/* Step 1: Preserved Facts & Reporter Statement */}
-              <section className="bg-[#FBF9F5] border border-stone-200 rounded-md p-4 space-y-3">
+              <section className="bg-[#FBF9F5] dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700 rounded-md p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5">
-                    <FileSearch className="w-3.5 h-3.5 text-[#1B365D]" />
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 inline-flex items-center gap-1.5">
+                    <FileSearch className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2]" />
                     <span>Étape 1 · Pièce conservée &amp; récit du signalant</span>
                   </p>
                   {activeCase.status === 'open' && (
@@ -1495,7 +1517,7 @@ export function ModerationCenterView({
                           'Étude de cas démarrée. Vous pouvez consigner votre analyse des faits.'
                         )
                       }
-                      className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] rounded hover:bg-[#132744] disabled:opacity-60"
+                      className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] dark:bg-[#2C4F82] rounded hover:bg-[#132744] dark:hover:bg-[#3A639E] disabled:opacity-60"
                     >
                       {busyAction === 'analyse_faits' ? 'Ouverture…' : 'Démarrer l’étude de cas'}
                     </button>
@@ -1503,21 +1525,21 @@ export function ModerationCenterView({
                 </div>
 
                 {activeCase.targetExcerpt.trim() && (
-                  <div className="bg-white border border-stone-200 rounded p-3.5 space-y-1">
-                    <p className="text-[11px] uppercase tracking-widest text-stone-400">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded p-3.5 space-y-1">
+                    <p className="text-[11px] uppercase tracking-widest text-stone-400 dark:text-stone-500">
                       Extrait figé au moment du signalement
                     </p>
-                    <p className="text-sm text-stone-800 italic leading-relaxed whitespace-pre-line">
+                    <p className="text-sm text-stone-800 dark:text-stone-200 italic leading-relaxed whitespace-pre-line">
                       « {activeCase.targetExcerpt} »
                     </p>
                   </div>
                 )}
 
-                <div className="bg-white border border-stone-200 rounded p-3.5 space-y-1">
-                  <p className="text-[11px] uppercase tracking-widest text-stone-400">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded p-3.5 space-y-1">
+                  <p className="text-[11px] uppercase tracking-widest text-stone-400 dark:text-stone-500">
                     Description de {activeCase.reporterName}
                   </p>
-                  <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-line">
+                  <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed whitespace-pre-line">
                     {activeCase.description}
                   </p>
                 </div>
@@ -1528,12 +1550,12 @@ export function ModerationCenterView({
                 <div className="flex items-center justify-between gap-2">
                   <label
                     htmlFor="case-notes"
-                    className="text-xs uppercase tracking-widest text-stone-500 font-medium inline-flex items-center gap-1.5"
+                    className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-medium inline-flex items-center gap-1.5"
                   >
-                    <ClipboardCheck className="w-3.5 h-3.5 text-[#1B365D]" />
+                    <ClipboardCheck className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2]" />
                     <span>Étape 2 · Analyse des faits &amp; contexte</span>
                   </label>
-                  <span className="text-[11px] text-stone-400 tabular-nums">
+                  <span className="text-[11px] text-stone-400 dark:text-stone-500 tabular-nums">
                     {caseNotes.length} / {FIELD_LIMITS.moderationNotes.max}
                   </span>
                 </div>
@@ -1546,7 +1568,7 @@ export function ModerationCenterView({
                   value={caseNotes}
                   onChange={(e) => setCaseNotes(e.target.value)}
                   placeholder="Consignez vos observations factuelles (récidive, contexte de la conversation, tonalité des propos…)"
-                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 disabled:opacity-75 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 disabled:opacity-75 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                 />
 
                 {!isResolved && (
@@ -1560,7 +1582,7 @@ export function ModerationCenterView({
                           'Analyse enregistrée. Passez à la qualification des critères et de la gravité.'
                         )
                       }
-                      className="min-h-[34px] px-3.5 py-1 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded hover:border-[#1B365D] disabled:opacity-60"
+                      className="min-h-[34px] px-3.5 py-1 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded hover:border-[#1B365D] dark:hover:border-[#93B4E2] disabled:opacity-60"
                     >
                       {busyAction === 'evaluation_gravite'
                         ? 'Enregistrement…'
@@ -1571,9 +1593,9 @@ export function ModerationCenterView({
               </section>
 
               {/* Step 3: Objective Criteria Checklist & Gravity */}
-              <section className="space-y-3 pt-2 border-t border-stone-200">
-                <p className="text-xs uppercase tracking-widest text-stone-500 font-medium inline-flex items-center gap-1.5">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-700" />
+              <section className="space-y-3 pt-2 border-t border-stone-200 dark:border-stone-800">
+                <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-medium inline-flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
                   <span>Étape 3 · Critères retenus &amp; niveau de gravité</span>
                 </p>
 
@@ -1585,8 +1607,8 @@ export function ModerationCenterView({
                         key={criterion.id}
                         className={`flex items-start gap-2.5 p-2.5 rounded-md border text-xs cursor-pointer transition-colors ${
                           checked
-                            ? 'bg-[#F3F6FA] border-[#1B365D]/40 text-stone-900'
-                            : 'bg-[#FBF9F5] border-stone-200 text-stone-700'
+                            ? 'bg-[#F3F6FA] dark:bg-stone-800 border-[#1B365D]/40 dark:border-[#93B4E2]/50 text-stone-900 dark:text-stone-100'
+                            : 'bg-[#FBF9F5] dark:bg-stone-800/50 border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300'
                         } ${isResolved ? 'cursor-default opacity-85' : ''}`}
                       >
                         <input
@@ -1594,7 +1616,7 @@ export function ModerationCenterView({
                           disabled={isResolved}
                           checked={checked}
                           onChange={() => toggleCriterion(criterion.id)}
-                          className="mt-0.5 rounded border-stone-300 text-[#1B365D]"
+                          className="mt-0.5 rounded border-stone-300 dark:border-stone-600 text-[#1B365D]"
                         />
                         <span>{criterion.label}</span>
                       </label>
@@ -1604,7 +1626,7 @@ export function ModerationCenterView({
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-stone-600 mr-1">Gravité retenue :</span>
+                    <span className="text-xs text-stone-600 dark:text-stone-400 mr-1">Gravité retenue :</span>
                     {(
                       [
                         { id: 'aucune', label: 'Non qualifiée' },
@@ -1620,8 +1642,8 @@ export function ModerationCenterView({
                         onClick={() => setGravityLevel(g.id)}
                         className={`min-h-[32px] px-3 py-1 rounded border text-xs font-medium transition-colors ${
                           gravityLevel === g.id
-                            ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                            : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                            ? 'bg-[#1B365D] dark:bg-[#2C4F82] text-white border-[#1B365D] dark:border-[#2C4F82]'
+                            : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
                         } disabled:opacity-75`}
                       >
                         {g.label}
@@ -1639,7 +1661,7 @@ export function ModerationCenterView({
                           'Critères et niveau de gravité enregistrés.'
                         )
                       }
-                      className="min-h-[32px] px-3 py-1 text-xs font-medium text-stone-700 border border-stone-300 rounded hover:border-stone-500"
+                      className="min-h-[32px] px-3 py-1 text-xs font-medium text-stone-700 dark:text-stone-300 border border-stone-300 dark:border-stone-700 rounded hover:border-stone-500 dark:hover:border-stone-500"
                     >
                       Sauvegarder l’évaluation
                     </button>
@@ -1648,18 +1670,18 @@ export function ModerationCenterView({
               </section>
 
               {/* Step 4: Justification & Official Decision */}
-              <section className="space-y-3 pt-4 border-t border-stone-200">
+              <section className="space-y-3 pt-4 border-t border-stone-200 dark:border-stone-800">
                 <div className="flex items-center justify-between gap-2">
                   <label
                     htmlFor="decision-reason"
-                    className="text-xs uppercase tracking-widest text-stone-500 font-medium inline-flex items-center gap-1.5"
+                    className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-medium inline-flex items-center gap-1.5"
                   >
-                    <ShieldAlert className="w-3.5 h-3.5 text-red-800" />
+                    <ShieldAlert className="w-3.5 h-3.5 text-red-800 dark:text-red-400" />
                     <span>
                       Étape 4 · Justification de l’acte outrageant &amp; décision finale
                     </span>
                   </label>
-                  <span className="text-[11px] text-stone-400 tabular-nums">
+                  <span className="text-[11px] text-stone-400 dark:text-stone-500 tabular-nums">
                     {decisionReason.length} / {FIELD_LIMITS.moderationDecisionReason.max}
                   </span>
                 </div>
@@ -1672,14 +1694,14 @@ export function ModerationCenterView({
                   value={decisionReason}
                   onChange={(e) => setDecisionReason(e.target.value)}
                   placeholder="Rédigez la motivation claire qui expliquera au membre pourquoi son comportement est sanctionné d’un avertissement (ou le motif du classement sans suite)…"
-                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 disabled:opacity-75 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 disabled:opacity-75 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                 />
 
                 {!isResolved ? (
                   <div className="space-y-3 pt-1">
                     {confirmWarn ? (
-                      <div className="bg-red-50 border border-red-200 rounded-md p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <p className="text-xs text-red-950 leading-relaxed">
+                      <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/70 rounded-md p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <p className="text-xs text-red-950 dark:text-red-200 leading-relaxed">
                           Confirmer l’envoi d’un <strong>avertissement officiel ({MODERATION_GRAVITY_LABELS[gravityLevel].label})</strong> à <strong>{activeCase.targetUserName}</strong> ? Ce membre verra l’avertissement et votre justification dans son espace.
                         </p>
                         <div className="flex items-center gap-2 shrink-0">
@@ -1695,7 +1717,7 @@ export function ModerationCenterView({
                             type="button"
                             disabled={Boolean(busyAction)}
                             onClick={() => setConfirmWarn(false)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-700 hover:text-stone-900"
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
                           >
                             Annuler
                           </button>
@@ -1707,7 +1729,7 @@ export function ModerationCenterView({
                           type="button"
                           disabled={Boolean(busyAction)}
                           onClick={() => void handleDismissCase()}
-                          className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 bg-white border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5"
+                          className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 dark:hover:border-stone-500 inline-flex items-center gap-1.5"
                         >
                           <XCircle className="w-4 h-4" />
                           <span>
@@ -1750,9 +1772,9 @@ export function ModerationCenterView({
                     )}
                   </div>
                 ) : (
-                  <div className="bg-[#FBF9F5] border border-stone-200 rounded-md p-4 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-700">
+                  <div className="bg-[#FBF9F5] dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 rounded-md p-4 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-700 dark:text-stone-300">
                     <div>
-                      <p className="font-medium text-stone-900">
+                      <p className="font-medium text-stone-900 dark:text-stone-100">
                         Dossier clôturé par {activeCase.reviewerName || 'Modérateur'} le{' '}
                         {formatFrenchDate(activeCase.reviewedAt?.toDate() ?? null)}
                       </p>
@@ -1762,7 +1784,7 @@ export function ModerationCenterView({
                         );
                         if (!matchedWarn) return null;
                         return (
-                          <p className="text-xs text-stone-600 mt-1">
+                          <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
                             Statut côté membre :{' '}
                             {matchedWarn.acknowledged
                               ? `Accusé de réception confirmé (${formatFrenchDate(

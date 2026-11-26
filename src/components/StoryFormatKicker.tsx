@@ -32,7 +32,7 @@ export function StoryFormatKicker({
     >
       <span
         className={`inline-flex items-center gap-1 font-semibold ${
-          isRoman ? 'text-[#1B365D]' : 'text-[#9A3B29]'
+          isRoman ? 'text-[#1B365D] dark:text-sky-300' : 'text-[#9A3B29] dark:text-amber-300'
         }`}
       >
         {isRoman ? (
@@ -45,10 +45,10 @@ export function StoryFormatKicker({
 
       {showDetails && isRoman && story.novelGenre && (
         <>
-          <span aria-hidden="true" className="text-stone-400">
+          <span aria-hidden="true" className="text-stone-400 dark:text-stone-500">
             ·
           </span>
-          <span className="text-stone-700 font-medium">
+          <span className="text-stone-700 dark:text-stone-300 font-medium">
             {NOVEL_GENRE_LABELS[story.novelGenre]}
           </span>
         </>
@@ -56,10 +56,10 @@ export function StoryFormatKicker({
 
       {showDetails && isRoman && (
         <>
-          <span aria-hidden="true" className="text-stone-400">
+          <span aria-hidden="true" className="text-stone-400 dark:text-stone-500">
             ·
           </span>
-          <span className="text-stone-600 tabular-nums">
+          <span className="text-stone-600 dark:text-stone-400 tabular-nums">
             {story.chapterCount ?? 1} chap. ·{' '}
             {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']}
           </span>

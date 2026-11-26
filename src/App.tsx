@@ -15,11 +15,14 @@ import {
   Lock,
   Menu,
   MessageCircle,
+  Moon,
   Plus,
   Repeat2,
+  Share2,
   ShieldAlert,
   ShieldCheck,
   Star,
+  Sun,
   Users,
   X,
 } from 'lucide-react';
@@ -49,6 +52,7 @@ import { ReportDraft, ReportModal } from './components/ReportModal';
 import { RepostModal } from './components/RepostModal';
 import { SalonEmblem } from './components/SalonEmblem';
 import { SalonRoomView } from './components/SalonRoomView';
+import { ShareStoryModal } from './components/ShareStoryModal';
 import { StoryComposerModal } from './components/StoryComposerModal';
 import { StoryFilterBar } from './components/StoryFilterBar';
 import { StoryFormatKicker } from './components/StoryFormatKicker';
@@ -292,6 +296,28 @@ function SalonApp() {
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showMobileAppModal, setShowMobileAppModal] = useState(false);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
+    try {
+      const saved = window.localStorage.getItem('lisiere_theme');
+      if (saved === 'dark' || saved === 'light') return saved;
+      return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    } catch {
+      return 'light';
+    }
+  });
+  useEffect(() => {
+    const isDark = themeMode === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    try {
+      window.localStorage.setItem('lisiere_theme', themeMode);
+    } catch {
+      // Ignore storage errors
+    }
+    const themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (themeMeta) {
+      themeMeta.content = isDark ? '#12100E' : '#FBF9F5';
+    }
+  }, [themeMode]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return window.localStorage.getItem('lisiere_sidebar_collapsed') === 'true';
@@ -357,6 +383,7 @@ function SalonApp() {
 
   const [readingStory, setReadingStory] = useState<Story | null>(null);
   const [repostingStory, setRepostingStory] = useState<Story | null>(null);
+  const [sharingStory, setSharingStory] = useState<Story | null>(null);
   const [selectedExchangeId, setSelectedExchangeId] = useState<string | null>(null);
   const [pendingDirectRecipientId, setPendingDirectRecipientId] = useState<string | null>(null);
 
@@ -979,9 +1006,9 @@ function SalonApp() {
   const authorDisplayName = profile?.displayName || user?.displayName || 'Auteur';
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#FBF9F5] text-stone-900">
+    <div className="min-h-screen flex flex-col bg-[#FBF9F5] dark:bg-[#12100E] text-stone-900 dark:text-stone-100 transition-colors">
       {/* Clean Single-Row Sticky Header (sidebar handles all destination & salon navigation) */}
-      <header className="sticky top-0 z-40 min-h-[65px] pt-[env(safe-area-inset-top)] border-b border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-xs">
+      <header className="sticky top-0 z-40 min-h-[65px] pt-[env(safe-area-inset-top)] border-b border-stone-200 dark:border-stone-800 bg-[#FBF9F5]/95 dark:bg-[#12100E]/95 backdrop-blur-xs">
         <div className="h-[64px] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <button
@@ -989,7 +1016,7 @@ function SalonApp() {
               onClick={() => setMobileMenuOpen((prev) => !prev)}
               aria-expanded={mobileMenuOpen}
               aria-label={mobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
-              className="lg:hidden min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md border border-stone-300 bg-white text-stone-800 hover:border-stone-500 transition-colors shrink-0"
+              className="lg:hidden min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 hover:border-stone-500 transition-colors shrink-0"
             >
               {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
@@ -999,7 +1026,7 @@ function SalonApp() {
               onClick={handleToggleSidebarCollapsed}
               aria-label={sidebarCollapsed ? 'Déployer le menu latéral' : 'Réduire le menu latéral'}
               title={sidebarCollapsed ? 'Déployer le menu latéral' : 'Réduire le menu latéral'}
-              className="hidden lg:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-md border border-stone-200 bg-white text-stone-700 hover:border-stone-400 hover:text-stone-900 transition-colors shrink-0"
+              className="hidden lg:inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-md border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:border-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors shrink-0"
             >
               <Menu className="w-4 h-4" />
             </button>
@@ -1008,13 +1035,31 @@ function SalonApp() {
               type="button"
               onClick={() => enterSalon(null)}
               aria-label="Lisière — Retour aux salons"
-              className="text-stone-900 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
+              className="text-stone-900 dark:text-stone-100 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
             >
               <LisiereLogo className="h-7 sm:h-8 w-auto" />
             </button>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setThemeMode((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+              aria-pressed={themeMode === 'dark'}
+              aria-label={themeMode === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+              title={themeMode === 'dark' ? 'Mode clair' : 'Mode sombre'}
+              className="min-h-[38px] min-w-[38px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-amber-300 hover:border-stone-400 dark:hover:border-stone-500 transition-colors shrink-0"
+            >
+              {themeMode === 'dark' ? (
+                <Sun className="w-4 h-4" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+              <span className="hidden md:inline text-xs font-medium text-stone-700 dark:text-stone-200">
+                {themeMode === 'dark' ? 'Clair' : 'Sombre'}
+              </span>
+            </button>
+
             <PWAInstallButton
               variant="header"
               onOpenMobileGuide={() => setShowMobileAppModal(true)}
@@ -1028,7 +1073,7 @@ function SalonApp() {
                   void openComposer();
                 }}
                 aria-label="Écrire un récit"
-                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
               >
                 <Feather className="w-3.5 h-3.5" />
                 <span className="sm:hidden">Écrire</span>
@@ -1041,7 +1086,7 @@ function SalonApp() {
                   setMobileMenuOpen(false);
                   void signInWithGoogle();
                 }}
-                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 transition-colors whitespace-nowrap shrink-0"
               >
                 Se connecter
               </button>
@@ -1082,14 +1127,14 @@ function SalonApp() {
         <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
           <div
             role="alert"
-            className="flex items-center justify-between gap-4 bg-red-50 border border-red-200 text-red-900 px-4 py-3 rounded-md text-sm"
+            className="flex items-center justify-between gap-4 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 text-red-900 dark:text-red-200 px-4 py-3 rounded-md text-sm"
           >
             <span>{authError}</span>
             <button
               type="button"
               onClick={clearAuthError}
               aria-label="Fermer l’alerte"
-              className="text-red-700 hover:text-red-900 p-1"
+              className="text-red-700 dark:text-red-300 hover:text-red-900 p-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1099,13 +1144,13 @@ function SalonApp() {
 
       {toastNotice && (
         <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
-          <div className="flex items-center justify-between gap-4 bg-white border border-stone-300 text-stone-900 px-4 py-3 rounded-md text-sm">
+          <div className="flex items-center justify-between gap-4 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 px-4 py-3 rounded-md text-sm shadow-sm">
             <span>{toastNotice}</span>
             <button
               type="button"
               onClick={() => setToastNotice(null)}
               aria-label="Fermer la notification"
-              className="text-stone-500 hover:text-stone-900 p-1"
+              className="text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 p-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -1120,11 +1165,11 @@ function SalonApp() {
           <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
             <div
               role="alert"
-              className="bg-red-50 border border-red-300 rounded-md p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+              className="bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-900/60 rounded-md p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4"
             >
               <div className="space-y-1.5 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1.5 font-semibold text-red-900">
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-red-900 dark:text-red-200">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <span>Avertissement officiel de modération</span>
                   </span>
@@ -1132,12 +1177,12 @@ function SalonApp() {
                     {sev.label}
                   </span>
                   {unacknowledgedWarnings.length > 1 && (
-                    <span className="text-red-800 tabular-nums">
+                    <span className="text-red-800 dark:text-red-300 tabular-nums">
                       ({unacknowledgedWarnings.length} avertissements en attente)
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-red-950 leading-relaxed">{latestWarning.justification}</p>
+                <p className="text-sm text-red-950 dark:text-red-100 leading-relaxed">{latestWarning.justification}</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1160,7 +1205,7 @@ function SalonApp() {
                     setJournalSubTabRequest({ tab: 'moderation', nonce: Date.now() });
                     navigateTo('carnet');
                   }}
-                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-red-900 bg-white border border-red-200 rounded-md hover:border-red-400 whitespace-nowrap"
+                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-red-900 dark:text-red-200 bg-white dark:bg-stone-900 border border-red-200 dark:border-red-800 rounded-md hover:border-red-400 whitespace-nowrap"
                 >
                   Voir dans Mon carnet
                 </button>
@@ -1172,10 +1217,10 @@ function SalonApp() {
 
       {user && nonCompliantMyPublicStories.length > 0 && activeTab !== 'carnet' && (
         <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
-          <div className="bg-amber-50/90 border border-amber-300 rounded-md p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="bg-amber-50/90 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-800/70 rounded-md p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
             <div className="space-y-1 min-w-0">
-              <p className="text-xs font-semibold text-amber-950 inline-flex items-center gap-1.5">
-                <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+              <p className="text-xs font-semibold text-amber-950 dark:text-amber-200 inline-flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
                 <span>
                   Régulation rétroactive : {nonCompliantMyPublicStories.length} de vos récits publics{' '}
                   {nonCompliantMyPublicStories.length > 1
@@ -1183,7 +1228,7 @@ function SalonApp() {
                     : 'est sous le seuil minimal'}
                 </span>
               </p>
-              <p className="text-xs text-amber-900 leading-relaxed">
+              <p className="text-xs text-amber-900 dark:text-amber-200/80 leading-relaxed">
                 Les histoires de 3 lignes ou moins et les chapitres de roman de moins de 2 pages publiés avant la mise à jour sont masqués des salons publics jusqu’à régularisation.
               </p>
             </div>
@@ -1195,7 +1240,7 @@ function SalonApp() {
                   setJournalSubTabRequest({ tab: 'stories', nonce: Date.now() });
                   navigateTo('carnet');
                 }}
-                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] bg-white border border-[#CBD6E6] rounded-md hover:border-[#1B365D] whitespace-nowrap"
+                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] dark:text-amber-200 bg-white dark:bg-stone-900 border border-[#CBD6E6] dark:border-amber-800 rounded-md hover:border-[#1B365D] whitespace-nowrap"
               >
                 Régulariser dans Mon carnet
               </button>
@@ -1249,8 +1294,10 @@ function SalonApp() {
             discoverableProfiles={discoverableProfiles}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
+            onShareStory={setSharingStory}
             onSelectSalon={(id) => enterSalon(id)}
             onReadStory={(story) => openStoryReader(story)}
+            onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onWriteInSalon={(theme, prompt, starter) =>
               void openComposer({ theme, prompt, starter })
             }
@@ -1272,9 +1319,11 @@ function SalonApp() {
             discoverableProfiles={discoverableProfiles}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
+            onShareStory={setSharingStory}
             onBackToSalons={() => enterSalon(null)}
             onEditSalon={(salonToEdit) => void openCustomSalonModal(salonToEdit)}
             onReadStory={(story) => openStoryReader(story)}
+            onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onWriteInCustomSalon={(targetSalon, initialPrompt, starter) =>
               void openComposer({
                 theme: 'creation',
@@ -1297,6 +1346,7 @@ function SalonApp() {
             repostedStoryIds={repostedStoryIds}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
+            onShareStory={setSharingStory}
             onReadStory={(story) => openStoryReader(story)}
             onEnterSalon={(id) => enterSalon(id)}
             onEnterCustomSalon={(id) => enterCustomSalon(id)}
@@ -1326,6 +1376,7 @@ function SalonApp() {
             onSelectMember={(memberId) => navigateTo('membres', null, memberId)}
             onReadStory={(story) => openStoryReader(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
+            onShareStory={setSharingStory}
             onOpenExchange={(exchangeId) => {
               setSelectedExchangeId(exchangeId);
               navigateTo('passerelles');
@@ -1340,7 +1391,7 @@ function SalonApp() {
           <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-5 sm:pt-7">
             <nav
               aria-label="Vues principales"
-              className="flex items-center gap-1 sm:gap-2 border-b border-stone-200 overflow-x-auto"
+              className="flex items-center gap-1 sm:gap-2 border-b border-stone-200 dark:border-stone-800 overflow-x-auto"
             >
               <button
                 type="button"
@@ -1348,8 +1399,8 @@ function SalonApp() {
                 aria-current={activeTab === 'recits' ? 'page' : undefined}
                 className={`min-h-[42px] px-3 sm:px-4 py-2 text-sm font-medium inline-flex items-center gap-2 whitespace-nowrap border-b-2 -mb-px transition-colors ${
                   activeTab === 'recits'
-                    ? 'border-[#1B365D] text-[#1B365D]'
-                    : 'border-transparent text-stone-600 hover:text-stone-900 hover:border-stone-300'
+                    ? 'border-[#1B365D] dark:border-amber-400 text-[#1B365D] dark:text-amber-300'
+                    : 'border-transparent text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:border-stone-300 dark:hover:border-stone-700'
                 }`}
               >
                 <Home className="w-4 h-4 shrink-0" />
@@ -1362,13 +1413,13 @@ function SalonApp() {
                 aria-current={activeTab === 'pour-vous' ? 'page' : undefined}
                 className={`min-h-[42px] px-3 sm:px-4 py-2 text-sm font-medium inline-flex items-center gap-2 whitespace-nowrap border-b-2 -mb-px transition-colors ${
                   activeTab === 'pour-vous'
-                    ? 'border-[#1B365D] text-[#1B365D]'
-                    : 'border-transparent text-stone-600 hover:text-stone-900 hover:border-stone-300'
+                    ? 'border-[#1B365D] dark:border-amber-400 text-[#1B365D] dark:text-amber-300'
+                    : 'border-transparent text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:border-stone-300 dark:hover:border-stone-700'
                 }`}
               >
                 <Star
                   className={`w-4 h-4 shrink-0 ${
-                    activeTab === 'pour-vous' ? 'fill-[#1B365D]/15' : ''
+                    activeTab === 'pour-vous' ? 'fill-[#1B365D]/15 dark:fill-amber-400/20' : ''
                   }`}
                 />
                 <span>Pour vous</span>
@@ -1376,8 +1427,8 @@ function SalonApp() {
                   <span
                     className={`px-1.5 py-0.5 text-[11px] rounded tabular-nums ${
                       activeTab === 'pour-vous'
-                        ? 'bg-[#1B365D]/10 text-[#1B365D]'
-                        : 'bg-stone-100 text-stone-600'
+                        ? 'bg-[#1B365D]/10 dark:bg-amber-950/50 text-[#1B365D] dark:text-amber-300'
+                        : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
                     }`}
                   >
                     {favoriteThemes.length + favoriteAuthors.length}
@@ -1399,6 +1450,7 @@ function SalonApp() {
             repostedStoryIds={repostedStoryIds}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
+            onShareStory={setSharingStory}
             onReadStory={(story) => openStoryReader(story)}
             onEnterSalon={(salonId) => enterSalon(salonId)}
             onEnterCustomSalon={(customSalonId) => enterCustomSalon(customSalonId)}
@@ -1419,16 +1471,16 @@ function SalonApp() {
             <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
               <div className="lg:col-span-7 flex flex-col justify-between space-y-7 sm:space-y-8">
                 <div className="space-y-4 sm:space-y-5">
-                  <p className="text-xs uppercase tracking-widest text-stone-500">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                     Maison d’édition participative · Salons & histoires pêle-mêle
                   </p>
                   <h1
-                    className="font-display text-3xl sm:text-5xl font-medium text-stone-900 leading-[1.12]"
+                    className="font-display text-3xl sm:text-5xl font-medium text-stone-900 dark:text-stone-100 leading-[1.12]"
                     style={{ textWrap: 'balance' }}
                   >
                     Créer des histoires qui relient ceux qui peinent parfois à se parler.
                   </h1>
-                  <p className="text-base sm:text-lg text-stone-600 leading-relaxed max-w-2xl">
+                  <p className="text-base sm:text-lg text-stone-600 dark:text-stone-300 leading-relaxed max-w-2xl">
                     Explorez les six salons de Lisière (dont le Salon FAQ), parcourez toutes les histoires pêle-mêle ou créez votre propre salon public ou privé avec vos règles d’admission.
                   </p>
                 </div>
@@ -1438,7 +1490,7 @@ function SalonApp() {
                     <button
                       type="button"
                       onClick={() => void openComposer()}
-                      className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                      className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] dark:hover:bg-amber-500 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
                     >
                       <Feather className="w-4 h-4" />
                       <span>Partager une histoire</span>
@@ -1446,7 +1498,7 @@ function SalonApp() {
                     <button
                       type="button"
                       onClick={() => navigateTo('pelemele')}
-                      className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                      className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 dark:hover:border-stone-500 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
                     >
                       <Compass className="w-4 h-4" />
                       <span>Histoires pêle-mêle</span>
@@ -1454,7 +1506,7 @@ function SalonApp() {
                     <button
                       type="button"
                       onClick={() => void openCustomSalonModal(null)}
-                      className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-[#1B365D] bg-white border border-[#1B365D]/40 rounded-md hover:border-[#1B365D] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                      className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-[#1B365D] dark:text-amber-300 bg-white dark:bg-stone-900 border border-[#1B365D]/40 dark:border-amber-400/40 rounded-md hover:border-[#1B365D] dark:hover:border-amber-400 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
                     >
                       <Plus className="w-4 h-4" />
                       <span>Créer un salon</span>
@@ -1462,24 +1514,24 @@ function SalonApp() {
                   </div>
 
                   {/* Operational strip */}
-                  <div className="grid grid-cols-3 gap-6 pt-6 border-t border-stone-200">
+                  <div className="grid grid-cols-3 gap-6 pt-6 border-t border-stone-200 dark:border-stone-800">
                     <div>
-                      <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
+                      <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                         {STORY_THEMES.length}
                       </p>
-                      <p className="text-xs text-stone-600 mt-1">Salons ouverts à la visite</p>
+                      <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">Salons ouverts à la visite</p>
                     </div>
                     <div>
-                      <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
+                      <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                         {publicStories.length}
                       </p>
-                      <p className="text-xs text-stone-600 mt-1">Récits de la communauté</p>
+                      <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">Récits de la communauté</p>
                     </div>
                     <div>
-                      <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
+                      <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                         {user ? exchanges.length : '1 à 1'}
                       </p>
-                      <p className="text-xs text-stone-600 mt-1">
+                      <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
                         {user ? 'Passerelles ouvertes' : 'Passerelles privées'}
                       </p>
                     </div>
@@ -1494,17 +1546,17 @@ function SalonApp() {
                     alt="Carnet ouvert sur une table en bois baignée de lumière matinale avec une tasse de thé"
                     referrerPolicy="no-referrer"
                     onError={() => setHeroImgFailed(true)}
-                    className="w-full h-72 lg:h-full object-cover rounded-sm border border-stone-200"
+                    className="w-full h-72 lg:h-full object-cover rounded-sm border border-stone-200 dark:border-stone-800"
                   />
                 ) : (
-                  <div className="w-full h-72 lg:h-full rounded-sm border border-stone-200 bg-[#F4F0E8] flex flex-col items-center justify-center p-8 text-center">
-                    <BookOpen className="w-8 h-8 text-stone-500 mb-3" />
-                    <p className="font-display text-lg text-stone-800">
+                  <div className="w-full h-72 lg:h-full rounded-sm border border-stone-200 dark:border-stone-800 bg-[#F4F0E8] dark:bg-stone-900 flex flex-col items-center justify-center p-8 text-center">
+                    <BookOpen className="w-8 h-8 text-stone-500 dark:text-stone-400 mb-3" />
+                    <p className="font-display text-lg text-stone-800 dark:text-stone-200">
                       La table calme de la page écrite
                     </p>
                   </div>
                 )}
-                <figcaption className="text-xs font-serif italic text-stone-500 mt-2">
+                <figcaption className="text-xs font-serif italic text-stone-500 dark:text-stone-400 mt-2">
                   Fig. 1 — Prendre le temps d’écrire pour aller à la rencontre des autres
                 </figcaption>
               </figure>
@@ -1514,21 +1566,21 @@ function SalonApp() {
             <section
               id="galerie-salons"
               aria-labelledby="galerie-salons-title"
-              className="pt-10 border-t border-stone-200 space-y-8"
+              className="pt-10 border-t border-stone-200 dark:border-stone-800 space-y-8"
             >
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div className="space-y-2 max-w-2xl">
-                  <p className="text-xs uppercase tracking-widest text-stone-500">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                     Architecture des lieux · Parcours thématique
                   </p>
                   <h2
                     id="galerie-salons-title"
-                    className="font-display text-3xl font-medium text-stone-900"
+                    className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100"
                     style={{ textWrap: 'balance' }}
                   >
                     Les six salons de Lisière
                   </h2>
-                  <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                  <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 leading-relaxed">
                     Chaque salon porte une couleur, une ambiance et une question posée sur la table — dont un Salon FAQ dédié aux questions et à l’entraide.
                   </p>
                 </div>
@@ -1536,7 +1588,7 @@ function SalonApp() {
                 <button
                   type="button"
                   onClick={() => enterSalon(STORY_THEMES[0].id)}
-                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-[#1B365D] bg-white border border-[#1B365D] rounded-md hover:bg-[#1B365D] hover:text-white transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 self-start md:self-auto"
+                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-[#1B365D] dark:text-amber-300 bg-white dark:bg-stone-900 border border-[#1B365D] dark:border-amber-400/60 rounded-md hover:bg-[#1B365D] hover:text-white dark:hover:bg-amber-600 dark:hover:text-white transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 self-start md:self-auto"
                 >
                   <span>Commencer la visite au Salon I</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -1563,7 +1615,7 @@ function SalonApp() {
                         borderColor: salon.palette.borderTint,
                         borderTopColor: salon.palette.swatch,
                       }}
-                      className={`${colSpanClass} bg-white border border-t-2 rounded-lg overflow-hidden transition-colors ${
+                      className={`${colSpanClass} bg-white dark:bg-stone-900 border border-t-2 rounded-lg overflow-hidden transition-colors ${
                         isFaqCard ? 'md:grid md:grid-cols-12' : 'flex flex-col justify-between'
                       }`}
                     >
@@ -1577,13 +1629,13 @@ function SalonApp() {
                       >
                         <div
                           style={{
-                            backgroundColor:
+                            ['--salon-bg' as string]:
                               salon.imageFit === 'contain' ? '#FFFFFF' : salon.palette.softBg,
                           }}
-                          className={`w-full overflow-hidden relative ${
+                          className={`w-full overflow-hidden relative bg-[var(--salon-bg)] dark:bg-stone-800 ${
                             isFaqCard
-                              ? 'aspect-[4/3] md:aspect-auto md:h-full md:min-h-[260px] border-b md:border-b-0 md:border-r border-stone-200/80'
-                              : 'aspect-[4/3] border-b border-stone-200/80'
+                              ? 'aspect-[4/3] md:aspect-auto md:h-full md:min-h-[260px] border-b md:border-b-0 md:border-r border-stone-200/80 dark:border-stone-800'
+                              : 'aspect-[4/3] border-b border-stone-200/80 dark:border-stone-800'
                           }`}
                         >
                           {!imgFailed ? (
@@ -1611,7 +1663,7 @@ function SalonApp() {
                                 color={salon.palette.textAccent}
                                 className="w-9 h-9 mb-2"
                               />
-                              <p className="font-display text-base text-stone-800">
+                              <p className="font-display text-base text-stone-800 dark:text-stone-200">
                                 {salon.salonName}
                               </p>
                             </div>
@@ -1626,7 +1678,7 @@ function SalonApp() {
                       >
                         <div className="p-5 space-y-2.5">
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs text-stone-500 tabular-nums">
+                            <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                               Salon {salon.romanIndex} ·{' '}
                               {count === 0
                                 ? 'Prêt à ouvrir'
@@ -1640,7 +1692,7 @@ function SalonApp() {
                           </div>
 
                           <div>
-                            <h3 className="font-display text-xl sm:text-2xl font-medium text-stone-900 leading-snug">
+                            <h3 className="font-display text-xl sm:text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                               <button
                                 type="button"
                                 onClick={() => enterSalon(salon.id)}
@@ -1651,26 +1703,26 @@ function SalonApp() {
                             </h3>
                             <p
                               style={{ color: salon.palette.textAccent }}
-                              className="text-xs font-medium mt-0.5"
+                              className="text-xs font-medium mt-0.5 dark:brightness-125"
                             >
                               {salon.atmosphere}
                             </p>
                           </div>
 
-                          <p className="text-sm text-stone-600 leading-relaxed line-clamp-2">
+                          <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2">
                             {salon.description}
                           </p>
                         </div>
 
                         <div
-                          style={{ backgroundColor: salon.palette.softBg }}
-                          className="px-6 py-3.5 border-t border-stone-200/70 flex items-center justify-between gap-3"
+                          style={{ ['--salon-bg' as string]: salon.palette.softBg }}
+                          className="px-6 py-3.5 border-t border-stone-200/70 dark:border-stone-800 bg-[var(--salon-bg)] dark:bg-stone-800/70 flex items-center justify-between gap-3"
                         >
                           <button
                             type="button"
                             onClick={() => enterSalon(salon.id)}
                             style={{ color: salon.palette.textAccent }}
-                            className="min-h-[38px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-transform duration-150 ease-out active:scale-[0.96]"
+                            className="min-h-[38px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-transform duration-150 ease-out active:scale-[0.96] dark:brightness-125"
                           >
                             <span>Entrer dans le salon</span>
                             <ArrowRight className="w-3.5 h-3.5" />
@@ -1685,7 +1737,7 @@ function SalonApp() {
                                 starter: `${salon.starterSentence} `,
                               })
                             }
-                            className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 transition-colors whitespace-nowrap shrink-0"
+                            className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 transition-colors whitespace-nowrap shrink-0"
                           >
                             Y écrire
                           </button>
@@ -1701,28 +1753,28 @@ function SalonApp() {
             <section
               id="salons-communaute"
               aria-labelledby="salons-communaute-title"
-              className="pt-10 border-t border-stone-200 space-y-7"
+              className="pt-10 border-t border-stone-200 dark:border-stone-800 space-y-7"
             >
               <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div className="space-y-2 max-w-2xl">
-                  <p className="text-xs uppercase tracking-widest text-stone-500">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                     Cercles fondés par les membres · Publics ou privés
                   </p>
                   <h2
                     id="salons-communaute-title"
-                    className="font-display text-3xl font-medium text-stone-900"
+                    className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100"
                     style={{ textWrap: 'balance' }}
                   >
                     Salons de la communauté
                   </h2>
-                  <p className="text-sm sm:text-base text-stone-600 leading-relaxed">
+                  <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 leading-relaxed">
                     Chaque membre peut ouvrir son propre salon pour y partager des récits et définir librement ses règles d’admission, en accès public ou sur demande privée.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                   {customSalons.length > 0 && (
-                    <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md">
+                    <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-800 rounded-md">
                       {(
                         [
                           { id: 'all', label: 'Tous' },
@@ -1736,8 +1788,8 @@ function SalonApp() {
                           onClick={() => setCustomSalonFilter(opt.id)}
                           className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap ${
                             customSalonFilter === opt.id
-                              ? 'bg-white text-stone-900 shadow-sm'
-                              : 'text-stone-600 hover:text-stone-900'
+                              ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                              : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                           }`}
                         >
                           {opt.label}
@@ -1749,7 +1801,7 @@ function SalonApp() {
                   <button
                     type="button"
                     onClick={() => void openCustomSalonModal(null)}
-                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] dark:hover:bg-amber-500 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Créer un salon</span>
@@ -1758,25 +1810,25 @@ function SalonApp() {
               </div>
 
               {!customSalonsLoaded ? (
-                <div className="py-8 text-center text-sm text-stone-500">
+                <div className="py-8 text-center text-sm text-stone-500 dark:text-stone-400">
                   Chargement des salons de la communauté…
                 </div>
               ) : filteredCustomSalons.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
                   <div className="space-y-1.5 max-w-xl">
-                    <h3 className="font-display text-xl font-medium text-stone-900">
+                    <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                       {customSalons.length === 0
                         ? 'Aucun salon communautaire n’a encore été ouvert'
                         : 'Aucun salon dans cette catégorie'}
                     </h3>
-                    <p className="text-sm text-stone-600">
+                    <p className="text-sm text-stone-600 dark:text-stone-400">
                       Créez un cercle ouvert à tous ou un salon privé avec vos propres conditions d’admission pour réunir vos lecteurs et vos histoires.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => void openCustomSalonModal(null)}
-                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-[#1B365D] bg-white border border-[#1B365D] rounded-md hover:bg-[#1B365D] hover:text-white transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 self-start sm:self-auto"
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-[#1B365D] dark:text-amber-300 bg-white dark:bg-stone-800 border border-[#1B365D] dark:border-amber-400/60 rounded-md hover:bg-[#1B365D] hover:text-white transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0 self-start sm:self-auto"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Ouvrir le premier salon</span>
@@ -1793,14 +1845,14 @@ function SalonApp() {
                           borderColor: pal.borderTint,
                           borderTopColor: pal.swatch,
                         }}
-                        className="bg-white border border-t-2 rounded-lg flex flex-col justify-between overflow-hidden"
+                        className="bg-white dark:bg-stone-900 border border-t-2 rounded-lg flex flex-col justify-between overflow-hidden"
                       >
                         <div className="p-6 space-y-3.5">
                           <div className="flex items-center justify-between gap-2 text-xs">
                             <div className="flex flex-wrap items-center gap-2 min-w-0">
                               <span
                                 style={{ color: pal.textAccent }}
-                                className="font-semibold inline-flex items-center gap-1.5"
+                                className="font-semibold inline-flex items-center gap-1.5 dark:brightness-125"
                               >
                                 {cs.visibility === 'private' ? (
                                   <>
@@ -1816,7 +1868,7 @@ function SalonApp() {
                               </span>
                               <MatureContentBadge minAge={cs.minAge} compact />
                             </div>
-                            <span className="text-stone-500 tabular-nums inline-flex items-center gap-1 shrink-0">
+                            <span className="text-stone-500 dark:text-stone-400 tabular-nums inline-flex items-center gap-1 shrink-0">
                               <Users className="w-3.5 h-3.5" />
                               {cs.memberCount}
                             </span>
@@ -1834,11 +1886,11 @@ function SalonApp() {
                                     [cs.salonId]: true,
                                   }))
                                 }
-                                className="w-11 h-11 rounded-md object-cover border border-stone-200 shrink-0 mt-0.5"
+                                className="w-11 h-11 rounded-md object-cover border border-stone-200 dark:border-stone-700 shrink-0 mt-0.5"
                               />
                             )}
                             <div className="min-w-0 flex-1">
-                              <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                              <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                                 <button
                                   type="button"
                                   onClick={() => enterCustomSalon(cs.salonId)}
@@ -1847,12 +1899,12 @@ function SalonApp() {
                                   {cs.name}
                                 </button>
                               </h3>
-                              <p className="text-xs text-stone-500 mt-1">
+                              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
                                 Par{' '}
                                 <button
                                   type="button"
                                   onClick={() => openMemberWall(cs.ownerId)}
-                                  className="font-medium text-stone-700 hover:underline"
+                                  className="font-medium text-stone-700 dark:text-stone-300 hover:underline"
                                 >
                                   {cs.ownerName}
                                 </button>
@@ -1860,27 +1912,27 @@ function SalonApp() {
                             </div>
                           </div>
 
-                          <p className="text-sm text-stone-600 leading-relaxed line-clamp-3">
+                          <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-3">
                             {cs.description}
                           </p>
 
                           {cs.admissionRules.trim() && (
-                            <div className="pt-2 border-t border-stone-100 text-xs text-stone-600 flex items-start gap-1.5">
-                              <ShieldCheck className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
+                            <div className="pt-2 border-t border-stone-100 dark:border-stone-800 text-xs text-stone-600 dark:text-stone-400 flex items-start gap-1.5">
+                              <ShieldCheck className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 shrink-0 mt-0.5" />
                               <span className="line-clamp-2">{cs.admissionRules}</span>
                             </div>
                           )}
                         </div>
 
                         <div
-                          style={{ backgroundColor: pal.softBg }}
-                          className="px-6 py-3.5 border-t border-stone-200/70 flex items-center justify-between gap-3"
+                          style={{ ['--salon-bg' as string]: pal.softBg }}
+                          className="px-6 py-3.5 border-t border-stone-200/70 dark:border-stone-800 bg-[var(--salon-bg)] dark:bg-stone-800/70 flex items-center justify-between gap-3"
                         >
                           <button
                             type="button"
                             onClick={() => enterCustomSalon(cs.salonId)}
                             style={{ color: pal.textAccent }}
-                            className="min-h-[36px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] text-xs font-medium hover:underline inline-flex items-center gap-1.5 whitespace-nowrap dark:brightness-125"
                           >
                             <span>
                               {cs.visibility === 'private'
@@ -1899,34 +1951,34 @@ function SalonApp() {
 
             {/* Community Stories Feed (when stories exist in Firestore) */}
             {!storiesLoaded ? (
-              <div className="py-10 text-center text-sm text-stone-500">
+              <div className="py-10 text-center text-sm text-stone-500 dark:text-stone-400">
                 Lecture des récits publiés…
               </div>
             ) : publicStories.length === 0 ? (
-              <div className="pt-4 border-t border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm text-stone-600">
+              <div className="pt-4 border-t border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-sm text-stone-600 dark:text-stone-400">
                 <p>
                   Aucun récit public n’a encore été déposé — entrez dans l’un des cinq salons ci-dessus pour ouvrir son premier cahier.
                 </p>
                 <button
                   type="button"
                   onClick={() => void openComposer()}
-                  className="text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap shrink-0 self-start sm:self-auto"
+                  className="text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:underline whitespace-nowrap shrink-0 self-start sm:self-auto"
                 >
                   Publier le premier récit
                 </button>
               </div>
             ) : (
-              <div className="pt-8 border-t border-stone-200 space-y-6">
+              <div className="pt-8 border-t border-stone-200 dark:border-stone-800 space-y-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900">
+                  <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100">
                     Récits récents de la communauté
                   </h2>
                 </div>
 
                 {hiddenFeedByAgeCount > 0 && (
-                  <div className="bg-amber-50/80 border border-amber-200 rounded-md px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950">
+                  <div className="bg-amber-50/80 dark:bg-amber-950/35 border border-amber-200 dark:border-amber-800/70 rounded-md px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950 dark:text-amber-200">
                     <div className="flex items-start gap-2">
-                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
                       <span>
                         {hiddenFeedByAgeCount} récit{hiddenFeedByAgeCount > 1 ? 's' : ''}{' '}
                         comportant une limite d’âge (13+, 16+ ou 18+) {hiddenFeedByAgeCount > 1 ? 'sont masqués' : 'est masqué'} selon votre profil d’âge.
@@ -1939,7 +1991,7 @@ function SalonApp() {
                           setProfilesSubTab('edit-profile');
                           navigateTo('membres', null, null);
                         }}
-                        className="font-medium text-[#1B365D] hover:underline whitespace-nowrap shrink-0 self-start sm:self-center"
+                        className="font-medium text-[#1B365D] dark:text-amber-300 hover:underline whitespace-nowrap shrink-0 self-start sm:self-center"
                       >
                         Renseigner mon âge
                       </button>
@@ -1947,7 +1999,7 @@ function SalonApp() {
                       <button
                         type="button"
                         onClick={() => void signInWithGoogle()}
-                        className="font-medium text-[#1B365D] hover:underline whitespace-nowrap shrink-0 self-start sm:self-center"
+                        className="font-medium text-[#1B365D] dark:text-amber-300 hover:underline whitespace-nowrap shrink-0 self-start sm:self-center"
                       >
                         Se connecter
                       </button>
@@ -1967,17 +2019,17 @@ function SalonApp() {
                 />
 
                 {filteredPublicStories.length === 0 ? (
-                  <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
-                    <p className="font-display text-xl text-stone-900">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-4">
+                    <p className="font-display text-xl text-stone-900 dark:text-stone-100">
                       Aucun récit ne correspond à ce filtre
                     </p>
-                    <p className="text-sm text-stone-600">
+                    <p className="text-sm text-stone-600 dark:text-stone-400">
                       Essayez d’autres critères ou réinitialisez les filtres pour voir tous les récits publiés.
                     </p>
                     <button
                       type="button"
                       onClick={() => setFeedFilter(createDefaultStoryFilterState('recent'))}
-                      className="min-h-[40px] px-4 py-2 text-sm font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                      className="min-h-[40px] px-4 py-2 text-sm font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                     >
                       Afficher tous les récits
                     </button>
@@ -1986,9 +2038,9 @@ function SalonApp() {
                   <section className="space-y-10" aria-label="Récits publiés">
                     {/* Tier 1: Lead Story */}
                     {leadStory && (
-                      <article className="bg-white border border-stone-200 rounded-lg p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                      <article className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-7 sm:p-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                         <div className="lg:col-span-8 space-y-4">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                             {(() => {
                               const leadIsHorsSalon =
                                 leadStory.storyScope === 'pelemele' && !leadStory.customSalonId;
@@ -2021,11 +2073,11 @@ function SalonApp() {
                                       : `Salon d’origine : ${leadOriginLabel} — Cliquer pour y entrer`
                                   }
                                   style={{
-                                    backgroundColor: leadPalette?.softBg ?? '#F5F5F4',
+                                    ['--pill-bg' as string]: leadPalette?.softBg ?? '#F5F5F4',
                                     borderColor: leadPalette?.borderTint ?? '#E7E5E4',
                                     color: leadPalette?.textAccent ?? '#1B365D',
                                   }}
-                                  className="group relative inline-flex items-center gap-1 px-2.5 py-0.5 rounded border text-[11px] font-medium hover:brightness-95 transition cursor-pointer"
+                                  className="group relative inline-flex items-center gap-1 px-2.5 py-0.5 rounded border bg-[var(--pill-bg)] dark:bg-stone-800 text-[11px] font-medium hover:brightness-95 transition cursor-pointer dark:brightness-125"
                                 >
                                   <span>{leadOriginLabel}</span>
                                   <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -2044,12 +2096,12 @@ function SalonApp() {
                             <StoryFormatKicker story={leadStory} showDetails={true} />
                             <span aria-hidden="true">·</span>
                             {leadStory.isAnonymous ? (
-                              <span className="text-stone-600">Par Auteur anonyme</span>
+                              <span className="text-stone-600 dark:text-stone-400">Par Auteur anonyme</span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => openMemberWall(leadStory.authorId)}
-                                className="hover:underline hover:text-stone-900"
+                                className="hover:underline hover:text-stone-900 dark:hover:text-stone-100"
                               >
                                 Par {leadStory.authorName}
                               </button>
@@ -2075,13 +2127,13 @@ function SalonApp() {
                               />
                               <div className="min-w-0 flex-1 space-y-3">
                                 <h2
-                                  className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
+                                  className="font-display text-3xl sm:text-4xl font-medium text-stone-900 dark:text-stone-100 leading-tight"
                                   style={{ textWrap: 'balance' }}
                                 >
                                   {leadStory.title}
                                 </h2>
 
-                                <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
+                                <p className="text-base text-stone-700 dark:text-stone-300 leading-relaxed editorial-drop-cap max-w-2xl">
                                   {leadStory.excerpt}
                                 </p>
                               </div>
@@ -2089,45 +2141,45 @@ function SalonApp() {
                           ) : (
                             <>
                               <h2
-                                className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
+                                className="font-display text-3xl sm:text-4xl font-medium text-stone-900 dark:text-stone-100 leading-tight"
                                 style={{ textWrap: 'balance' }}
                               >
                                 {leadStory.title}
                               </h2>
 
-                              <p className="text-base text-stone-700 leading-relaxed editorial-drop-cap max-w-2xl">
+                              <p className="text-base text-stone-700 dark:text-stone-300 leading-relaxed editorial-drop-cap max-w-2xl">
                                 {leadStory.excerpt}
                               </p>
                             </>
                           )}
                         </div>
 
-                        <div className="lg:col-span-4 lg:border-l lg:border-stone-200 lg:pl-8 flex flex-col justify-between h-full space-y-6">
+                        <div className="lg:col-span-4 lg:border-l lg:border-stone-200 dark:lg:border-stone-800 lg:pl-8 flex flex-col justify-between h-full space-y-6">
                           {leadStory.promptQuestion && (
                             <div>
-                              <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
+                              <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1.5">
                                 Fil d’origine
                               </p>
-                              <p className="text-sm text-stone-700 italic leading-relaxed">
+                              <p className="text-sm text-stone-700 dark:text-stone-300 italic leading-relaxed">
                                 « {leadStory.promptQuestion} »
                               </p>
                             </div>
                           )}
 
                           <div className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 tabular-nums">
+                            <div className="flex flex-wrap items-center gap-4 text-xs text-stone-600 dark:text-stone-400 tabular-nums">
                               <span className="inline-flex items-center gap-1.5" title="Vues">
-                                <Eye className="w-3.5 h-3.5 text-stone-500" />
+                                <Eye className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                                 {leadStory.viewCount ?? 0} vue
                                 {(leadStory.viewCount ?? 0) > 1 ? 's' : ''}
                               </span>
                               <span className="inline-flex items-center gap-1.5">
-                                <Heart className="w-3.5 h-3.5 text-stone-500" />
+                                <Heart className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                                 {leadStory.resonanceCount} résonance
                                 {leadStory.resonanceCount > 1 ? 's' : ''}
                               </span>
                               <span className="inline-flex items-center gap-1.5">
-                                <MessageCircle className="w-3.5 h-3.5 text-stone-500" />
+                                <MessageCircle className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                                 {leadStory.echoCount} commentaire{leadStory.echoCount > 1 ? 's' : ''}
                               </span>
                             </div>
@@ -2136,7 +2188,7 @@ function SalonApp() {
                               <button
                                 type="button"
                                 onClick={() => openStoryReader(leadStory)}
-                                className="flex-1 min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
+                                className="flex-1 min-h-[42px] px-4 py-2 text-sm font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] dark:hover:bg-amber-500 transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] inline-flex items-center justify-center gap-2 whitespace-nowrap"
                               >
                                 <span>Lire et commenter</span>
                                 <ArrowRight className="w-4 h-4" />
@@ -2153,8 +2205,8 @@ function SalonApp() {
                                 aria-label="Enregistrer pour lire plus tard"
                                 className={`min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-md border transition-colors shrink-0 ${
                                   bookmarkedStoryIds.has(leadStory.storyId)
-                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                    ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                 }`}
                               >
                                 <Bookmark
@@ -2175,12 +2227,26 @@ function SalonApp() {
                                 aria-label="Repartager"
                                 className={`min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-md border transition-colors shrink-0 ${
                                   repostedStoryIds.has(leadStory.storyId)
-                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                    ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                 }`}
                               >
                                 <Repeat2 className="w-4 h-4" />
                               </button>
+
+                              {leadStory.visibility === 'public' &&
+                                leadStory.customSalonVisibility !== 'private' &&
+                                isStoryCompliantForPublicFeed(leadStory) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setSharingStory(leadStory)}
+                                    title="Partager ce récit"
+                                    aria-label={`Partager ${leadStory.title}`}
+                                    className="min-h-[42px] min-w-[42px] inline-flex items-center justify-center rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors shrink-0"
+                                  >
+                                    <Share2 className="w-4 h-4" />
+                                  </button>
+                                )}
                             </div>
                           </div>
                         </div>
@@ -2208,10 +2274,10 @@ function SalonApp() {
                           return (
                             <article
                               key={story.storyId}
-                              className="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                              className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 flex flex-col justify-between space-y-5"
                             >
                               <div className="space-y-3">
-                                <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -2227,11 +2293,11 @@ function SalonApp() {
                                         : `Salon d’origine : ${originLabel} — Cliquer pour y entrer`
                                     }
                                     style={{
-                                      backgroundColor: originPalette?.softBg ?? '#F5F5F4',
+                                      ['--pill-bg' as string]: originPalette?.softBg ?? '#F5F5F4',
                                       borderColor: originPalette?.borderTint ?? '#E7E5E4',
                                       color: originPalette?.textAccent ?? '#1B365D',
                                     }}
-                                    className="group relative inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium hover:brightness-95 transition cursor-pointer"
+                                    className="group relative inline-flex items-center gap-1 px-2 py-0.5 rounded border bg-[var(--pill-bg)] dark:bg-stone-800 text-[11px] font-medium hover:brightness-95 transition cursor-pointer dark:brightness-125"
                                   >
                                     <span>{originLabel}</span>
                                     <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -2248,12 +2314,12 @@ function SalonApp() {
                                   <StoryFormatKicker story={story} showDetails={true} />
                                   <span aria-hidden="true">·</span>
                                   {story.isAnonymous ? (
-                                    <span className="text-stone-600">Auteur anonyme</span>
+                                    <span className="text-stone-600 dark:text-stone-400">Auteur anonyme</span>
                                   ) : (
                                     <button
                                       type="button"
                                       onClick={() => openMemberWall(story.authorId)}
-                                      className="hover:underline hover:text-stone-900"
+                                      className="hover:underline hover:text-stone-900 dark:hover:text-stone-100"
                                     >
                                       {story.authorName}
                                     </button>
@@ -2279,28 +2345,28 @@ function SalonApp() {
                                       size="sm"
                                     />
                                     <div className="min-w-0 flex-1 space-y-2">
-                                      <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                      <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                                         {story.title}
                                       </h3>
-                                      <p className="text-sm text-stone-600 leading-relaxed">
+                                      <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
                                         {story.excerpt}
                                       </p>
                                     </div>
                                   </div>
                                 ) : (
                                   <>
-                                    <h3 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                                    <h3 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                                       {story.title}
                                     </h3>
-                                    <p className="text-sm text-stone-600 leading-relaxed">
+                                    <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed">
                                       {story.excerpt}
                                     </p>
                                   </>
                                 )}
                               </div>
 
-                              <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-3.5 text-xs text-stone-500 tabular-nums">
+                              <div className="pt-4 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-3.5 text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                                   <span className="inline-flex items-center gap-1" title="Vues">
                                     <Eye className="w-3.5 h-3.5" />
                                     {story.viewCount ?? 0}
@@ -2327,8 +2393,8 @@ function SalonApp() {
                                     aria-label="Enregistrer pour lire plus tard"
                                     className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                       bookmarkedStoryIds.has(story.storyId)
-                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                        : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                        ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800 dark:hover:text-stone-100'
                                     }`}
                                   >
                                     <Bookmark
@@ -2349,17 +2415,31 @@ function SalonApp() {
                                     aria-label="Repartager"
                                     className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                       repostedStoryIds.has(story.storyId)
-                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                        : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                                        ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800 dark:hover:text-stone-100'
                                     }`}
                                   >
                                     <Repeat2 className="w-3.5 h-3.5" />
                                   </button>
 
+                                  {story.visibility === 'public' &&
+                                    story.customSalonVisibility !== 'private' &&
+                                    isStoryCompliantForPublicFeed(story) && (
+                                      <button
+                                        type="button"
+                                        onClick={() => setSharingStory(story)}
+                                        title="Partager ce récit"
+                                        aria-label={`Partager ${story.title}`}
+                                        className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors"
+                                      >
+                                        <Share2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+
                                   <button
                                     type="button"
                                     onClick={() => openStoryReader(story)}
-                                    className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
+                                    className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:underline inline-flex items-center gap-1.5 whitespace-nowrap transition-transform duration-150 ease-out active:scale-[0.96]"
                                   >
                                     <span>Lire et commenter</span>
                                     <ArrowRight className="w-3.5 h-3.5" />
@@ -2389,6 +2469,7 @@ function SalonApp() {
             repostedStoryIds={repostedStoryIds}
             onToggleBookmark={(story) => void handleToggleBookmark(story)}
             onOpenRepost={(story) => void handleOpenRepost(story)}
+            onShareStory={setSharingStory}
             onReadStory={(story) => openStoryReader(story)}
             onOpenMemberWall={openMemberWall}
             onEnterSalon={(salonId) => enterSalon(salonId)}
@@ -2407,12 +2488,14 @@ function SalonApp() {
         {activeTab === 'passerelles' && (
           <ExchangesView
             exchanges={exchanges}
+            stories={openSalonEligibleStories}
             discoverableProfiles={discoverableProfiles}
             relationships={userRelationships}
             selectedExchangeId={selectedExchangeId}
             initialRecipientId={pendingDirectRecipientId}
             onClearInitialRecipient={() => setPendingDirectRecipientId(null)}
             onSelectExchange={setSelectedExchangeId}
+            onReadStory={(story) => openStoryReader(story)}
             onOpenStoryById={(id) => void handleOpenStoryById(id)}
             onOpenMemberWall={openMemberWall}
             onExploreStories={() => enterSalon(null)}
@@ -2470,45 +2553,45 @@ function SalonApp() {
         )}
       </main>
 
-      <footer className="border-t border-stone-200 bg-[#FBF9F5] mt-12">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-7 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500">
+      <footer className="border-t border-stone-200 dark:border-stone-800 bg-[#FBF9F5] dark:bg-[#12100E] mt-12">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-7 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500 dark:text-stone-400">
           <div className="space-y-1">
             <p>Lisière — Espace de récits personnels et de passerelles humaines</p>
-            <p className="text-stone-700 font-medium">Créé par Kris Ivan N’dri</p>
+            <p className="text-stone-700 dark:text-stone-300 font-medium">Créé par Kris Ivan N’dri</p>
           </div>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
             <button
               type="button"
               onClick={() => enterSalon(null)}
-              className="hover:text-stone-900 transition-colors"
+              className="hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
             >
               Salons
             </button>
             <button
               type="button"
               onClick={() => navigateTo('pour-vous')}
-              className="hover:text-stone-900 transition-colors"
+              className="hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
             >
               Pour vous
             </button>
             <button
               type="button"
               onClick={() => navigateTo('pelemele')}
-              className="hover:text-stone-900 transition-colors"
+              className="hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
             >
               Pêle-mêle
             </button>
             <button
               type="button"
               onClick={() => navigateTo('themes')}
-              className="hover:text-stone-900 transition-colors"
+              className="hover:text-stone-900 dark:hover:text-stone-100 transition-colors"
             >
               Romans &amp; confessions
             </button>
             <button
               type="button"
               onClick={() => navigateTo('confidentialite')}
-              className="hover:text-stone-900 transition-colors font-medium text-stone-700"
+              className="hover:text-stone-900 dark:hover:text-stone-100 transition-colors font-medium text-stone-700 dark:text-stone-300"
             >
               Confidentialité
             </button>
@@ -2525,7 +2608,7 @@ function SalonApp() {
       {/* Dedicated Mobile Bottom Tab Bar */}
       <nav
         aria-label="Navigation rapide mobile"
-        className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)]"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-200 dark:border-stone-800 bg-[#FBF9F5]/95 dark:bg-[#12100E]/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)]"
       >
         <div className="grid grid-cols-5 h-14">
           <button
@@ -2534,8 +2617,8 @@ function SalonApp() {
             aria-current={highlightedTab === 'recits' ? 'page' : undefined}
             className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
               highlightedTab === 'recits'
-                ? 'text-[#1B365D] font-semibold'
-                : 'text-stone-500 hover:text-stone-900'
+                ? 'text-[#1B365D] dark:text-amber-300 font-semibold'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
             <Home className="w-4 h-4" />
@@ -2547,8 +2630,8 @@ function SalonApp() {
             aria-current={highlightedTab === 'pour-vous' ? 'page' : undefined}
             className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
               highlightedTab === 'pour-vous'
-                ? 'text-[#1B365D] font-semibold'
-                : 'text-stone-500 hover:text-stone-900'
+                ? 'text-[#1B365D] dark:text-amber-300 font-semibold'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
             <Star className="w-4 h-4" />
@@ -2560,8 +2643,8 @@ function SalonApp() {
             aria-current={highlightedTab === 'pelemele' ? 'page' : undefined}
             className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
               highlightedTab === 'pelemele'
-                ? 'text-[#1B365D] font-semibold'
-                : 'text-stone-500 hover:text-stone-900'
+                ? 'text-[#1B365D] dark:text-amber-300 font-semibold'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
             <Compass className="w-4 h-4" />
@@ -2576,8 +2659,8 @@ function SalonApp() {
             aria-current={highlightedTab === 'membres' ? 'page' : undefined}
             className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
               highlightedTab === 'membres'
-                ? 'text-[#1B365D] font-semibold'
-                : 'text-stone-500 hover:text-stone-900'
+                ? 'text-[#1B365D] dark:text-amber-300 font-semibold'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
             <Users className="w-4 h-4" />
@@ -2589,8 +2672,8 @@ function SalonApp() {
             aria-current={highlightedTab === 'carnet' ? 'page' : undefined}
             className={`relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
               highlightedTab === 'carnet'
-                ? 'text-[#1B365D] font-semibold'
-                : 'text-stone-500 hover:text-stone-900'
+                ? 'text-[#1B365D] dark:text-amber-300 font-semibold'
+                : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
             <span className="relative">
@@ -2623,6 +2706,7 @@ function SalonApp() {
         isReposted={Boolean(readingStory && repostedStoryIds.has(readingStory.storyId))}
         onToggleBookmark={(story) => void handleToggleBookmark(story)}
         onOpenRepost={(story) => void handleOpenRepost(story)}
+        onShareStory={setSharingStory}
         onOpenExchange={(exchangeId) => {
           setSelectedExchangeId(exchangeId);
           navigateTo('passerelles');
@@ -2644,6 +2728,22 @@ function SalonApp() {
         onStoryClaimed={(claimedName) => {
           showNotice(`Cet écrit est désormais publié sous votre nom (${claimedName}).`);
         }}
+      />
+
+      {/* Social & In-App Share Modal */}
+      <ShareStoryModal
+        story={sharingStory}
+        customSalons={customSalons}
+        discoverableProfiles={discoverableProfiles}
+        hiddenUserIds={hiddenUserIds}
+        onClose={() => setSharingStory(null)}
+        onEnterSalon={(id) => enterSalon(id)}
+        onEnterCustomSalon={(id) => enterCustomSalon(id)}
+        onOpenExchange={(exchangeId) => {
+          setSelectedExchangeId(exchangeId);
+          navigateTo('passerelles');
+        }}
+        onSharedNotice={showNotice}
       />
 
       {/* Global Reporting Modal */}

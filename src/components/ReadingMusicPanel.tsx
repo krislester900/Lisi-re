@@ -1019,8 +1019,8 @@ export function ReadingMusicPanel({
     <div
       className={
         compactPopover
-          ? 'bg-[#FBF9F5] border border-stone-300 rounded-lg shadow-xl p-4 space-y-4 text-stone-900'
-          : 'bg-white border-b border-stone-200 px-6 py-4 space-y-4 text-stone-900'
+          ? 'bg-[#FBF9F5] dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg shadow-xl p-4 space-y-4 text-stone-900 dark:text-stone-100'
+          : 'bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 px-6 py-4 space-y-4 text-stone-900 dark:text-stone-100'
       }
       aria-label="Musique pour la lecture"
     >
@@ -1031,8 +1031,8 @@ export function ReadingMusicPanel({
             aria-hidden="true"
             className={`w-7 h-7 rounded-full flex items-center justify-center border shrink-0 ${
               isPlaying
-                ? 'bg-[#1B365D] border-[#1B365D] text-white lisiere-music-pulse'
-                : 'bg-[#FBF9F5] border-stone-300 text-stone-700'
+                ? 'bg-[#1B365D] dark:bg-[#3B629B] border-[#1B365D] dark:border-[#3B629B] text-white lisiere-music-pulse'
+                : 'bg-[#FBF9F5] dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300'
             }`}
           >
             {isPlaying ? (
@@ -1042,7 +1042,7 @@ export function ReadingMusicPanel({
             )}
           </div>
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-widest text-stone-600 truncate">
+            <p className="text-xs font-semibold uppercase tracking-widest text-stone-600 dark:text-stone-400 truncate">
               Musique de lecture
             </p>
           </div>
@@ -1052,7 +1052,7 @@ export function ReadingMusicPanel({
           type="button"
           onClick={onClose}
           aria-label="Fermer le panneau musical"
-          className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 hover:bg-stone-100 transition-colors shrink-0"
+          className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
         >
           <X className="w-4 h-4" />
         </button>
@@ -1060,23 +1060,23 @@ export function ReadingMusicPanel({
 
       {/* Currently playing bar */}
       {activeTrack && (
-        <div className="rounded-md border border-stone-200 bg-[#FBF9F5] p-3 space-y-2.5">
+        <div className="rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/80 p-3 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
               {activeTrack.coverUrl ? (
                 <img
                   src={activeTrack.coverUrl}
                   alt=""
-                  className="w-10 h-10 rounded object-cover border border-stone-200 shrink-0"
+                  className="w-10 h-10 rounded object-cover border border-stone-200 dark:border-stone-700 shrink-0"
                 />
               ) : (
-                <div className="w-10 h-10 rounded bg-stone-200/80 flex items-center justify-center shrink-0">
-                  <Music2 className="w-4 h-4 text-stone-600" />
+                <div className="w-10 h-10 rounded bg-stone-200/80 dark:bg-stone-700 flex items-center justify-center shrink-0">
+                  <Music2 className="w-4 h-4 text-stone-600 dark:text-stone-300" />
                 </div>
               )}
               <div className="min-w-0">
-                <p className="text-sm font-medium text-stone-900 truncate">{activeTrack.title}</p>
-                <p className="text-xs text-stone-600 truncate">
+                <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">{activeTrack.title}</p>
+                <p className="text-xs text-stone-600 dark:text-stone-400 truncate">
                   {activeTrack.artist}
                   {activeTrack.isPreview ? ' · Aperçu 30 s' : ''}
                   {isExternalEmbedActive
@@ -1093,7 +1093,7 @@ export function ReadingMusicPanel({
                 type="button"
                 onClick={() => void togglePlayPause()}
                 aria-label={isPlaying ? 'Mettre en pause' : 'Reprendre la lecture'}
-                className="min-h-[36px] min-w-[36px] rounded-md bg-[#1B365D] text-white hover:bg-[#132744] inline-flex items-center justify-center transition-colors"
+                className="min-h-[36px] min-w-[36px] rounded-md bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] inline-flex items-center justify-center transition-colors"
               >
                 {isPlaying ? (
                   <Pause className="w-3.5 h-3.5" />
@@ -1110,8 +1110,8 @@ export function ReadingMusicPanel({
                   title="Lire en boucle"
                   className={`min-h-[36px] min-w-[36px] rounded-md border inline-flex items-center justify-center transition-colors ${
                     isLooping
-                      ? 'border-[#1B365D] bg-[#1B365D]/10 text-[#1B365D]'
-                      : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-100'
+                      ? 'border-[#1B365D] dark:border-[#6088C2] bg-[#1B365D]/10 dark:bg-[#3B629B]/20 text-[#1B365D] dark:text-[#93B4E2]'
+                      : 'border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
                   }`}
                 >
                   <Repeat className="w-3.5 h-3.5" />
@@ -1122,7 +1122,7 @@ export function ReadingMusicPanel({
                   type="button"
                   onClick={toggleMute}
                   aria-label={isMuted ? 'Réactiver le son' : 'Couper le son'}
-                  className="min-h-[36px] min-w-[36px] rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 inline-flex items-center justify-center"
+                  className="min-h-[36px] min-w-[36px] rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 inline-flex items-center justify-center"
                 >
                   {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                 </button>
@@ -1137,7 +1137,7 @@ export function ReadingMusicPanel({
                       ? 'Afficher le lecteur vidéo'
                       : 'Masquer la vidéo derrière la page de lecture'
                   }
-                  className="min-h-[36px] px-2.5 rounded-md border border-stone-300 bg-white text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  className="min-h-[36px] px-2.5 rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-700 dark:text-stone-200 hover:text-stone-900 dark:hover:text-stone-100 hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   {embedBackground ? (
                     <>
@@ -1156,7 +1156,7 @@ export function ReadingMusicPanel({
                 type="button"
                 onClick={() => void stopTrack()}
                 aria-label="Arrêter la musique"
-                className="min-h-[36px] px-2.5 rounded-md border border-stone-300 bg-white text-xs text-stone-700 hover:text-stone-900 whitespace-nowrap shrink-0"
+                className="min-h-[36px] px-2.5 rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs text-stone-700 dark:text-stone-200 hover:text-stone-900 dark:hover:text-stone-100 whitespace-nowrap shrink-0"
               >
                 Arrêter
               </button>
@@ -1164,7 +1164,7 @@ export function ReadingMusicPanel({
           </div>
 
           {isExternalEmbedActive && embedBackground && (
-            <p className="text-[11px] text-stone-500 leading-relaxed">
+            <p className="text-[11px] text-stone-500 dark:text-stone-400 leading-relaxed">
               Lecture en arrière-plan activée pour ne pas gêner votre lecture. Si votre téléphone bloque le démarrage automatique, touchez « Vidéo » pour lancer puis repassez en « Arrière-plan ».
             </p>
           )}
@@ -1184,7 +1184,7 @@ export function ReadingMusicPanel({
                 }}
                 className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-[#1B365D]"
               />
-              <div className="flex items-center justify-between text-[11px] text-stone-500 tabular-nums">
+              <div className="flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
                 <span>{formatMs(currentTimeMs)}</span>
                 <span>{durationMs > 0 ? formatMs(durationMs) : '--:--'}</span>
               </div>
@@ -1195,7 +1195,7 @@ export function ReadingMusicPanel({
             parsedActiveEmbed &&
             (parsedActiveEmbed.type === 'spotify' || parsedActiveEmbed.type === 'deezer') &&
             parsedActiveEmbed.embedUrl && (
-              <div className="rounded overflow-hidden border border-stone-200 bg-white">
+              <div className="rounded overflow-hidden border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900">
                 <iframe
                   title={`Lecteur ${activeTrack.title}`}
                   src={parsedActiveEmbed.embedUrl}
@@ -1212,12 +1212,12 @@ export function ReadingMusicPanel({
 
       {/* Optional 1-click author's pinned track */}
       {authorFavoriteMusic?.title && (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-[#FBF9F5] px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/80 px-3 py-2">
           <div className="min-w-0">
-            <p className="text-[11px] uppercase tracking-widest text-stone-500">
+            <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Musique choisie par {authorName}
             </p>
-            <p className="text-xs font-medium text-stone-900 truncate">
+            <p className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">
               {authorFavoriteMusic.title}
               {authorFavoriteMusic.artist ? ` · ${authorFavoriteMusic.artist}` : ''}
             </p>
@@ -1225,7 +1225,7 @@ export function ReadingMusicPanel({
           <button
             type="button"
             onClick={() => void playAuthorMusic(authorFavoriteMusic, authorName)}
-            className="min-h-[34px] px-3 py-1 rounded-md border border-stone-300 bg-white text-xs font-medium text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            className="min-h-[34px] px-3 py-1 rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-[#1B365D] dark:hover:border-[#6088C2] hover:text-[#1B365D] dark:hover:text-[#93B4E2] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
             <Play className="w-3 h-3 fill-current" />
             <span>Écouter</span>
@@ -1259,8 +1259,8 @@ export function ReadingMusicPanel({
             }}
             className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
               providerTab === tab.id
-                ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                ? 'bg-[#1B365D] dark:bg-[#3B629B] text-white border-[#1B365D] dark:border-[#3B629B]'
+                : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
             }`}
           >
             {tab.label}
@@ -1270,14 +1270,14 @@ export function ReadingMusicPanel({
 
       {/* Spotify connection bar */}
       {providerTab === 'spotify' && (
-        <div className="rounded-md border border-stone-200 bg-[#FBF9F5] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/80 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {providers?.spotify.connected && providers.spotify.user ? (
             <>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-stone-900 truncate">
+                <p className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">
                   Connecté : {providers.spotify.user.displayName}
                 </p>
-                <p className="text-[11px] text-stone-600">
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">
                   {providers.spotify.user.product === 'premium' && spotifyDeviceId
                     ? 'Lecteur Spotify temps réel prêt'
                     : providers.spotify.user.product === 'premium'
@@ -1288,7 +1288,7 @@ export function ReadingMusicPanel({
               <button
                 type="button"
                 onClick={() => void disconnectSpotify()}
-                className="min-h-[34px] px-3 py-1 rounded-md border border-stone-300 bg-white text-xs font-medium text-stone-700 hover:text-red-700 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 self-start sm:self-center"
+                className="min-h-[34px] px-3 py-1 rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-700 dark:text-stone-200 hover:text-red-700 dark:hover:text-red-400 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 self-start sm:self-center"
               >
                 <Unplug className="w-3.5 h-3.5" />
                 <span>Déconnecter</span>
@@ -1297,17 +1297,17 @@ export function ReadingMusicPanel({
           ) : (
             <>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-stone-900">
+                <p className="text-xs font-medium text-stone-900 dark:text-stone-100">
                   Spotify (optionnel — gratuit ou Premium)
                 </p>
-                <p className="text-[11px] text-stone-600">
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">
                   Pas d’abonnement payant ? L’onglet « Musique gratuite » et « SoundCloud / Lien » jouent des morceaux entiers gratuitement.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => void connectSpotify()}
-                className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] text-xs font-medium whitespace-nowrap shrink-0 self-start sm:self-center"
+                className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] text-xs font-medium whitespace-nowrap shrink-0 self-start sm:self-center"
               >
                 Connecter Spotify
               </button>
@@ -1319,14 +1319,14 @@ export function ReadingMusicPanel({
       {playbackError && (
         <div
           role="alert"
-          className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 flex items-start justify-between gap-2"
+          className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-3 py-2 text-xs text-amber-950 dark:text-amber-200 flex items-start justify-between gap-2"
         >
           <span>{playbackError}</span>
           <button
             type="button"
             onClick={clearPlaybackError}
             aria-label="Fermer l’avertissement"
-            className="text-amber-800 hover:text-amber-950 shrink-0"
+            className="text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-100 shrink-0"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -1351,16 +1351,16 @@ export function ReadingMusicPanel({
             className="hidden"
           />
 
-          <div className="rounded-md border border-dashed border-stone-300 bg-[#FBF9F5] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="rounded-md border border-dashed border-stone-300 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-start gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-md bg-white border border-stone-200 flex items-center justify-center shrink-0 text-[#1B365D]">
+              <div className="w-8 h-8 rounded-md bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 flex items-center justify-center shrink-0 text-[#1B365D] dark:text-[#93B4E2]">
                 <Smartphone className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-stone-900">
+                <p className="text-xs font-medium text-stone-900 dark:text-stone-100">
                   Musiques depuis votre téléphone ou ordinateur
                 </p>
-                <p className="text-[11px] text-stone-600">
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">
                   Importez vos fichiers MP3, M4A, WAV ou OGG. Ils restent privés sur cet appareil et se lisent en mode zen.
                 </p>
               </div>
@@ -1370,7 +1370,7 @@ export function ReadingMusicPanel({
               type="button"
               disabled={localBusy}
               onClick={() => localFileInputRef.current?.click()}
-              className="min-h-[38px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] disabled:opacity-50 text-xs font-medium inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
+              className="min-h-[38px] px-3.5 py-1.5 rounded-md bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] disabled:opacity-50 text-xs font-medium inline-flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <Upload className="w-3.5 h-3.5" />
               <span>{localBusy ? 'Chargement…' : 'Ajouter un fichier audio'}</span>
@@ -1380,14 +1380,14 @@ export function ReadingMusicPanel({
           {localError && (
             <div
               role="alert"
-              className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 flex items-start justify-between gap-2"
+              className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-3 py-2 text-xs text-amber-950 dark:text-amber-200 flex items-start justify-between gap-2"
             >
               <span>{localError}</span>
               <button
                 type="button"
                 onClick={clearLocalError}
                 aria-label="Fermer le message"
-                className="text-amber-800 hover:text-amber-950 shrink-0"
+                className="text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-100 shrink-0"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1395,21 +1395,21 @@ export function ReadingMusicPanel({
           )}
 
           {localTracks.length > 0 ? (
-            <ul className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5] max-h-56 overflow-y-auto">
+            <ul className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-700 rounded-md bg-[#FBF9F5] dark:bg-stone-800/60 max-h-56 overflow-y-auto">
               {localTracks.map((track) => {
                 const isCurrent = activeTrack?.id === track.id;
                 return (
                   <li
                     key={track.id}
-                    className="flex items-center justify-between gap-2.5 px-3 py-2 hover:bg-white transition-colors"
+                    className="flex items-center justify-between gap-2.5 px-3 py-2 hover:bg-white dark:hover:bg-stone-800 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-9 h-9 rounded bg-stone-200/80 flex items-center justify-center shrink-0 text-[#1B365D]">
+                      <div className="w-9 h-9 rounded bg-stone-200/80 dark:bg-stone-700 flex items-center justify-center shrink-0 text-[#1B365D] dark:text-[#93B4E2]">
                         <Smartphone className="w-4 h-4" />
                       </div>
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-stone-900 truncate">{track.title}</p>
-                        <p className="text-[11px] text-stone-500 truncate tabular-nums">
+                        <p className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">{track.title}</p>
+                        <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate tabular-nums">
                           {track.artist}
                           {track.durationMs ? ` · ${formatMs(track.durationMs)}` : ''}
                         </p>
@@ -1422,7 +1422,7 @@ export function ReadingMusicPanel({
                         onClick={() => void removeLocalTrack(track)}
                         aria-label={`Supprimer ${track.title}`}
                         title="Retirer de cet appareil"
-                        className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 bg-white text-stone-500 hover:text-red-700 hover:border-red-200"
+                        className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-500 dark:text-stone-400 hover:text-red-700 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-800"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1437,8 +1437,8 @@ export function ReadingMusicPanel({
                         }}
                         className={`min-h-[32px] px-2.5 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
                           isCurrent && isPlaying
-                            ? 'bg-stone-900 text-white'
-                            : 'bg-[#1B365D] text-white hover:bg-[#132744]'
+                            ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900'
+                            : 'bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183]'
                         }`}
                       >
                         {isCurrent && isPlaying ? (
@@ -1459,7 +1459,7 @@ export function ReadingMusicPanel({
               })}
             </ul>
           ) : (
-            <p className="text-xs text-stone-500 text-center py-3">
+            <p className="text-xs text-stone-500 dark:text-stone-400 text-center py-3">
               Aucune musique ajoutée pour le moment. Choisissez un fichier sur votre téléphone pour l’écouter pendant votre lecture.
             </p>
           )}
@@ -1473,7 +1473,7 @@ export function ReadingMusicPanel({
               onChange={(e) => setLinkUrl(e.target.value)}
               placeholder="Coller un lien SoundCloud, Spotify, Deezer, YouTube ou MP3…"
               aria-label="Lien musical SoundCloud, Spotify, Deezer ou audio"
-              className="w-full min-h-[40px] px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+              className="w-full min-h-[40px] px-3 py-2 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
             />
             <div className="flex items-center gap-2">
               <input
@@ -1482,19 +1482,19 @@ export function ReadingMusicPanel({
                 onChange={(e) => setLinkTitle(e.target.value)}
                 placeholder="Titre (facultatif)"
                 aria-label="Titre du morceau"
-                className="flex-1 min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                className="flex-1 min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
               />
               <button
                 type="submit"
                 disabled={!linkUrl.trim()}
-                className="min-h-[38px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] disabled:opacity-50 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3.5 py-1.5 rounded-md bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] disabled:opacity-50 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <Link2 className="w-3.5 h-3.5" />
                 <span>Écouter</span>
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-stone-500">
+          <p className="text-[11px] text-stone-500 dark:text-stone-400">
             Les pistes YouTube et SoundCloud jouent en arrière-plan derrière la page de lecture pour préserver l’immersion (vous pouvez afficher ou masquer la vidéo à tout moment).
           </p>
         </form>
@@ -1502,7 +1502,7 @@ export function ReadingMusicPanel({
         <div className="space-y-3">
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
-              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={searchInput}
@@ -1517,13 +1517,13 @@ export function ReadingMusicPanel({
                         : 'Chercher un morceau pour accompagner votre lecture…'
                 }
                 aria-label="Rechercher une musique pour la lecture"
-                className="w-full min-h-[40px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                className="w-full min-h-[40px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
               />
             </div>
             <button
               type="submit"
               disabled={searching || !searchInput.trim()}
-              className="min-h-[40px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] disabled:opacity-50 text-xs font-medium whitespace-nowrap shrink-0"
+              className="min-h-[40px] px-3.5 py-1.5 rounded-md bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] disabled:opacity-50 text-xs font-medium whitespace-nowrap shrink-0"
             >
               {searching ? 'Recherche…' : 'Chercher'}
             </button>
@@ -1531,13 +1531,13 @@ export function ReadingMusicPanel({
 
           {/* Quick reading mood searches */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-stone-500 mr-1">Ambiances :</span>
+            <span className="text-[11px] text-stone-500 dark:text-stone-400 mr-1">Ambiances :</span>
             {READING_MOOD_PRESETS.map((preset) => (
               <button
                 key={preset.label}
                 type="button"
                 onClick={() => handlePresetClick(preset.query)}
-                className="min-h-[28px] px-2.5 py-0.5 rounded border border-stone-200 bg-[#FBF9F5] text-[11px] text-stone-700 hover:border-stone-400 hover:text-stone-900 whitespace-nowrap shrink-0"
+                className="min-h-[28px] px-2.5 py-0.5 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-[11px] text-stone-700 dark:text-stone-300 hover:border-stone-400 dark:hover:border-stone-500 hover:text-stone-900 dark:hover:text-stone-100 whitespace-nowrap shrink-0"
               >
                 {preset.label}
               </button>
@@ -1545,35 +1545,35 @@ export function ReadingMusicPanel({
           </div>
 
           {searchError && (
-            <p role="alert" className="text-xs text-red-700">
+            <p role="alert" className="text-xs text-red-700 dark:text-red-400">
               {searchError}
             </p>
           )}
 
           {searchResults.length > 0 && (
-            <ul className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5] max-h-56 overflow-y-auto">
+            <ul className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-700 rounded-md bg-[#FBF9F5] dark:bg-stone-800/60 max-h-56 overflow-y-auto">
               {searchResults.map((track) => {
                 const isCurrent = activeTrack?.id === track.id;
                 return (
                   <li
                     key={track.id}
-                    className="flex items-center justify-between gap-2.5 px-3 py-2 hover:bg-white transition-colors"
+                    className="flex items-center justify-between gap-2.5 px-3 py-2 hover:bg-white dark:hover:bg-stone-800 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {track.coverUrl ? (
                         <img
                           src={track.coverUrl}
                           alt=""
-                          className="w-9 h-9 rounded object-cover border border-stone-200 shrink-0"
+                          className="w-9 h-9 rounded object-cover border border-stone-200 dark:border-stone-700 shrink-0"
                         />
                       ) : (
-                        <div className="w-9 h-9 rounded bg-stone-200 flex items-center justify-center shrink-0">
-                          <Music2 className="w-4 h-4 text-stone-600" />
+                        <div className="w-9 h-9 rounded bg-stone-200 dark:bg-stone-700 flex items-center justify-center shrink-0">
+                          <Music2 className="w-4 h-4 text-stone-600 dark:text-stone-300" />
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-stone-900 truncate">{track.title}</p>
-                        <p className="text-[11px] text-stone-500 truncate">
+                        <p className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">{track.title}</p>
+                        <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
                           {track.artist}
                           {track.durationMs ? ` · ${formatMs(track.durationMs)}` : ''}
                         </p>
@@ -1587,7 +1587,7 @@ export function ReadingMusicPanel({
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`Ouvrir ${track.title} dans l’application`}
-                          className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 bg-white text-stone-500 hover:text-stone-900"
+                          className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                         >
                           <ExternalLink className="w-3 h-3" />
                         </a>
@@ -1603,8 +1603,8 @@ export function ReadingMusicPanel({
                         }}
                         className={`min-h-[32px] px-2.5 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap shrink-0 ${
                           isCurrent && isPlaying
-                            ? 'bg-stone-900 text-white'
-                            : 'bg-[#1B365D] text-white hover:bg-[#132744]'
+                            ? 'bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900'
+                            : 'bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183]'
                         }`}
                       >
                         {isCurrent && isPlaying ? (

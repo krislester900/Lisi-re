@@ -53,15 +53,15 @@ export function AgeOnboardingModal({ isOpen, onDismiss, onSaved }: AgeOnboarding
       aria-modal="true"
       aria-labelledby="age-onboarding-title"
     >
-      <div className="bg-[#FBF9F5] border border-stone-200 rounded-lg max-w-md w-full p-6 sm:p-7 space-y-5 shadow-2xl">
+      <div className="bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg max-w-md w-full p-6 sm:p-7 space-y-5 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-1">
-            <p className="text-[11px] uppercase tracking-widest text-[#1B365D] font-semibold">
+            <p className="text-[11px] uppercase tracking-widest text-[#1B365D] dark:text-[#93B4E2] font-semibold">
               Cadre du compte · Âge privé
             </p>
             <h2
               id="age-onboarding-title"
-              className="font-display text-2xl font-medium text-stone-900"
+              className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100"
             >
               Adapter Lisière à votre âge
             </h2>
@@ -70,25 +70,25 @@ export function AgeOnboardingModal({ isOpen, onDismiss, onSaved }: AgeOnboarding
             type="button"
             onClick={onDismiss}
             aria-label="Compléter plus tard"
-            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 hover:bg-stone-100"
+            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-md text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <p className="text-sm text-stone-700 leading-relaxed">
+        <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
           Bienvenue{profile?.displayName ? `, ${profile.displayName}` : ''}. Renseignez votre âge (confidentiel, jamais affiché publiquement) afin que les salons ne vous proposent que des récits et fils adaptés.
         </p>
 
-        <div className="bg-white border border-stone-200 rounded-md p-3.5 space-y-2 text-xs text-stone-600">
+        <div className="bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-md p-3.5 space-y-2 text-xs text-stone-600 dark:text-stone-300">
           <div className="flex items-start gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
             <span>
               Même lorsque votre âge autorise la lecture, un avertissement <strong>« Contenu mature »</strong> s’affichera systématiquement avant d’ouvrir un texte sensible.
             </span>
           </div>
           <div className="flex items-start gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#1B365D] shrink-0 mt-0.5" />
+            <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2] shrink-0 mt-0.5" />
             <span>
               Modifiable à tout moment dans <strong>Profils &rarr; Modifier mon profil</strong>.
             </span>
@@ -99,7 +99,7 @@ export function AgeOnboardingModal({ isOpen, onDismiss, onSaved }: AgeOnboarding
           <div>
             <label
               htmlFor="onboarding-user-age"
-              className="block text-sm font-medium text-stone-800 mb-1.5"
+              className="block text-sm font-medium text-stone-800 dark:text-stone-200 mb-1.5"
             >
               Votre âge (en années)
             </label>
@@ -114,14 +114,14 @@ export function AgeOnboardingModal({ isOpen, onDismiss, onSaved }: AgeOnboarding
               value={ageInput}
               onChange={(e) => setAgeInput(e.target.value)}
               placeholder="Ex. 24"
-              className="w-full px-3.5 py-2.5 bg-white border border-stone-300 rounded-md text-base text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2.5 bg-white dark:bg-stone-950 border border-stone-300 dark:border-stone-700 rounded-md text-base text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
             />
           </div>
 
           {error && (
             <p
               role="alert"
-              className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-md px-3 py-2"
+              className="text-xs text-red-800 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-md px-3 py-2"
             >
               {error}
             </p>
@@ -131,14 +131,14 @@ export function AgeOnboardingModal({ isOpen, onDismiss, onSaved }: AgeOnboarding
             <button
               type="button"
               onClick={onDismiss}
-              className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-600 hover:text-stone-900"
+              className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             >
               Plus tard
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="min-h-[40px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60 inline-flex items-center gap-1.5"
+              className="min-h-[40px] px-5 py-2 text-xs sm:text-sm font-medium text-white bg-[#1B365D] dark:bg-[#3B629B] rounded-md hover:bg-[#132744] dark:hover:bg-[#2F5183] disabled:opacity-60 inline-flex items-center gap-1.5"
             >
               <UserCheck className="w-4 h-4" />
               <span>{saving ? 'Enregistrement…' : 'Enregistrer mon âge'}</span>

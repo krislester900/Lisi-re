@@ -10,29 +10,37 @@ import {
   subscribeToSalonMessages,
 } from '../lib/storyService';
 import { formatFrenchDate, THEME_MAP } from '../lib/themes';
-import { FIELD_LIMITS, PublicProfile, SalonMessage, StoryThemeId } from '../types/story';
+import { stripSharedStoryUrlFromText } from '../lib/storyShare';
+import { FIELD_LIMITS, PublicProfile, SalonMessage, Story, StoryThemeId } from '../types/story';
 import type { ReportDraft } from './ReportModal';
 import { RoleBadgesRow } from './RoleBadge';
+import { SharedStoryPreviewCard } from './SharedStoryPreviewCard';
 
 interface SalonChatPanelProps {
   salonId: StoryThemeId;
+  stories?: Story[];
   hiddenUserIds?: Set<string>;
   adminUserIds?: Set<string>;
   moderatorIds?: Set<string>;
   profilesByUserId?: Map<string, PublicProfile>;
   canModerate?: boolean;
   onOpenMemberWall: (userId: string) => void;
+  onReadStory?: (story: Story) => void;
+  onOpenStoryById?: (storyId: string) => void;
   onOpenReport?: (draft: ReportDraft) => void;
 }
 
 export function SalonChatPanel({
   salonId,
+  stories = [],
   hiddenUserIds,
   adminUserIds,
   moderatorIds,
   profilesByUserId,
   canModerate = false,
   onOpenMemberWall,
+  onReadStory,
+  onOpenStoryById,
   onOpenReport,
 }: SalonChatPanelProps) {
   const { user, profile, signInWithGoogle } = useAuth();
@@ -124,13 +132,13 @@ export function SalonChatPanel({
     return (
       <section
         aria-label={`Chat textuel de ${salon.salonName}`}
-        className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-4"
+        className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10 text-center space-y-4"
       >
         <MessageSquare className="w-7 h-7 text-stone-400 mx-auto" />
-        <h2 className="font-display text-2xl font-medium text-stone-900">
+        <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
           Discussion ouverte de {salon.salonName}
         </h2>
-        <p className="text-sm text-stone-600 max-w-xl mx-auto leading-relaxed">
+        <p className="text-sm text-stone-600 dark:text-stone-400 max-w-xl mx-auto leading-relaxed">
           Un chat calme et uniquement écrit (sans appel ni message vocal) pour échanger en direct avec les autres membres autour des thèmes de ce salon.
         </p>
         <button
@@ -148,33 +156,33 @@ export function SalonChatPanel({
   return (
     <section
       aria-label={`Chat textuel de ${salon.salonName}`}
-      className="bg-white border border-stone-200 rounded-lg overflow-hidden flex flex-col"
+      className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg overflow-hidden flex flex-col"
     >
-      <div className="px-6 py-4 border-b border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#FBF9F5]">
+      <div className="px-6 py-4 border-b border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-[#FBF9F5] dark:bg-stone-950">
         <div>
-          <h2 className="font-display text-xl font-medium text-stone-900">
+          <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
             Chat écrit de {salon.salonName}
           </h2>
-          <p className="text-xs text-stone-600 mt-0.5">
+          <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
             Discussion collective entre membres · Texte uniquement, sans appel ni vocal · Cliquez sur un prénom pour voir son mur
           </p>
         </div>
-        <span className="text-xs text-stone-500 tabular-nums whitespace-nowrap shrink-0">
+        <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums whitespace-nowrap shrink-0">
           {visibleMessages.length} message{visibleMessages.length > 1 ? 's' : ''}
         </span>
       </div>
 
-      <div className="h-[420px] overflow-y-auto p-6 space-y-4 bg-[#FBF9F5]/50">
+      <div className="h-[420px] overflow-y-auto p-6 space-y-4 bg-[#FBF9F5]/50 dark:bg-stone-950/60">
         {!loaded ? (
-          <p className="text-sm text-stone-500 italic text-center py-12">
+          <p className="text-sm text-stone-500 dark:text-stone-400 italic text-center py-12">
             Ouverture du fil de discussion…
           </p>
         ) : visibleMessages.length === 0 ? (
           <div className="text-center py-14 space-y-2">
-            <p className="font-display text-lg text-stone-800">
+            <p className="font-display text-lg text-stone-800 dark:text-stone-200">
               Le salon est silencieux pour l’instant
             </p>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-400">
               Déposez quelques mots ci-dessous pour saluer les autres membres ou réagir au thème du salon.
             </p>
           </div>
@@ -194,7 +202,7 @@ export function SalonChatPanel({
                   <button
                     type="button"
                     onClick={() => onOpenMemberWall(msg.senderId)}
-                    className="font-semibold text-stone-800 hover:underline"
+                    className="font-semibold text-stone-800 dark:text-stone-200 hover:underline"
                   >
                     {msg.senderName}
                   </button>
@@ -247,10 +255,17 @@ export function SalonChatPanel({
                   className={`max-w-[82%] px-4 py-2.5 rounded-lg text-sm leading-relaxed whitespace-pre-line border ${
                     isMine
                       ? 'text-white border-transparent'
-                      : 'bg-white text-stone-800 border-stone-200'
+                      : 'bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border-stone-200 dark:border-stone-700'
                   }`}
                 >
-                  {msg.content}
+                  {stripSharedStoryUrlFromText(msg.content) || msg.content}
+                  <SharedStoryPreviewCard
+                    content={msg.content}
+                    stories={stories}
+                    onReadStory={onReadStory}
+                    onOpenStoryById={onOpenStoryById}
+                    isMineBubble={isMine}
+                  />
                 </div>
               </div>
             );
@@ -259,7 +274,7 @@ export function SalonChatPanel({
         <div ref={listEndRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="p-4 border-t border-stone-200 bg-white space-y-2">
+      <form onSubmit={handleSubmit} className="p-4 border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 space-y-2">
         <div className="flex items-end gap-3">
           <textarea
             rows={2}
@@ -273,7 +288,7 @@ export function SalonChatPanel({
               }
             }}
             placeholder={`Écrire dans ${salon.shortSalonName}… (Entrée pour envoyer)`}
-            className="flex-1 px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1B365D] resize-none"
+            className="flex-1 px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400 resize-none"
           />
           <button
             type="submit"
@@ -285,14 +300,14 @@ export function SalonChatPanel({
             <span>Envoyer</span>
           </button>
         </div>
-        <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500">
+        <div className="flex items-center justify-between gap-2 text-[11px] text-stone-500 dark:text-stone-400">
           <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+            <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D] dark:text-amber-300 shrink-0" />
             <span>Échanges régulés : aucun propos haineux, insultant ni spam.</span>
           </span>
         </div>
         {error && (
-          <p role="alert" className="text-xs text-red-700">
+          <p role="alert" className="text-xs text-red-700 dark:text-red-400">
             {error}
           </p>
         )}

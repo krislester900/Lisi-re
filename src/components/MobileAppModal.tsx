@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import {
+  AlertCircle,
   Check,
   Copy,
   Download,
   ExternalLink,
+  Info,
   Share2,
   Smartphone,
   WifiOff,
@@ -21,9 +23,9 @@ export function OfflineIndicator() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-20 lg:bottom-4 left-4 z-50 flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950 shadow-md"
+      className="fixed bottom-20 lg:bottom-4 left-4 z-50 flex items-center gap-2 rounded-md border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/90 px-3 py-2 text-xs font-medium text-amber-950 dark:text-amber-100 shadow-md"
     >
-      <WifiOff className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+      <WifiOff className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
       <span>Hors ligne — Mode lecture en cache actif</span>
     </div>
   );
@@ -38,10 +40,10 @@ export function PWAInstallButton({
   onOpenMobileGuide,
   variant = 'header',
 }: PWAInstallButtonProps) {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, isInIframe, install } = usePWAInstall();
 
   const handleClick = async () => {
-    if (isInstallable) {
+    if (isInstallable && !isInIframe) {
       const accepted = await install();
       if (accepted) return;
     }
@@ -57,13 +59,13 @@ export function PWAInstallButton({
       <button
         type="button"
         onClick={() => void handleClick()}
-        className="hover:text-stone-900 transition-colors inline-flex items-center gap-1.5 font-medium text-[#1B365D]"
+        className="hover:text-stone-900 dark:hover:text-stone-100 transition-colors inline-flex items-center gap-1.5 font-medium text-[#1B365D] dark:text-amber-300"
       >
         <Smartphone className="w-3.5 h-3.5" />
         <span>
           {isInstalled
             ? 'Application mobile active'
-            : isInstallable
+            : isInstallable && !isInIframe
               ? 'Installer la version mobile'
               : 'Version mobile'}
         </span>
@@ -76,14 +78,14 @@ export function PWAInstallButton({
       <button
         type="button"
         onClick={() => void handleClick()}
-        className="w-full min-h-[36px] px-2.5 py-2 rounded-md border border-[#CBD6E6] bg-white text-xs font-medium text-[#1B365D] hover:border-[#1B365D] transition-colors flex items-center justify-between gap-2"
+        className="w-full min-h-[36px] px-2.5 py-2 rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:border-[#1B365D] dark:hover:border-amber-400 transition-colors flex items-center justify-between gap-2"
       >
         <span className="inline-flex items-center gap-2 min-w-0">
           <Smartphone className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">
             {isInstalled
               ? 'App mobile installée'
-              : isInstallable
+              : isInstallable && !isInIframe
                 ? 'Installer sur mobile'
                 : 'Version mobile'}
           </span>
@@ -100,22 +102,22 @@ export function PWAInstallButton({
       type="button"
       onClick={() => void handleClick()}
       aria-label={
-        isInstallable
+        isInstallable && !isInIframe
           ? 'Installer la version mobile de Lisière'
           : isIOS
             ? 'Installer Lisière sur iPhone ou iPad'
             : 'Ouvrir les liens vers la version mobile'
       }
       title="Version mobile & installation sur téléphone"
-      className="min-h-[38px] px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#1B365D] bg-white border border-stone-200 rounded-md hover:border-[#1B365D] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+      className="min-h-[38px] px-2.5 sm:px-3 py-1.5 text-xs font-medium text-[#1B365D] dark:text-amber-300 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-[#1B365D] dark:hover:border-amber-400 transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
     >
-      {isInstallable ? (
+      {isInstallable && !isInIframe ? (
         <Download className="w-3.5 h-3.5 shrink-0" />
       ) : (
         <Smartphone className="w-3.5 h-3.5 shrink-0" />
       )}
       <span className="hidden sm:inline">
-        {isInstallable ? 'Installer l’app' : 'Version mobile'}
+        {isInstallable && !isInIframe ? 'Installer l’app' : 'Version mobile'}
       </span>
     </button>
   );
@@ -127,7 +129,7 @@ interface MobileAppModalProps {
 }
 
 export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
-  const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
+  const { isInstallable, isInstalled, isIOS, isAndroid, isInIframe, install } = usePWAInstall();
   const [copied, setCopied] = useState(false);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
@@ -166,7 +168,7 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-stone-950/55 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="mobile-app-modal-title"
@@ -174,22 +176,22 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full sm:max-w-lg bg-[#FBF9F5] border border-stone-200 rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col">
-        <div className="px-5 py-4 border-b border-stone-200 bg-white flex items-center justify-between gap-3">
+      <div className="w-full sm:max-w-lg bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-800 rounded-t-2xl sm:rounded-xl shadow-2xl overflow-hidden max-h-[92dvh] flex flex-col">
+        <div className="px-5 py-4 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <img
               src="/pwa-192x192.png"
               alt="Icône Lisière"
-              className="w-9 h-9 rounded-lg border border-stone-200 shrink-0"
+              className="w-9 h-9 rounded-lg border border-stone-200 dark:border-stone-700 shrink-0"
             />
             <div className="min-w-0">
               <h2
                 id="mobile-app-modal-title"
-                className="font-display text-xl font-medium text-stone-900 truncate"
+                className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 truncate"
               >
                 Lisière sur mobile
               </h2>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 Application web installable (Android, iPhone &amp; tablette)
               </p>
             </div>
@@ -198,7 +200,7 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
             type="button"
             onClick={onClose}
             aria-label="Fermer"
-            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 hover:bg-stone-100"
+            className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded-md text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
           >
             <X className="w-5 h-5" />
           </button>
@@ -206,21 +208,44 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
 
         <div className="p-5 sm:p-6 space-y-5 overflow-y-auto">
           {isInstalled ? (
-            <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 flex items-center gap-2">
-              <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+            <div className="p-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-950 dark:text-emerald-100 flex items-center gap-2">
+              <Check className="w-4 h-4 text-emerald-700 dark:text-emerald-400 shrink-0" />
               <span>
                 Vous utilisez actuellement Lisière en mode application mobile autonome.
               </span>
             </div>
+          ) : isInIframe ? (
+            <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1 text-xs text-amber-950 dark:text-amber-100 leading-relaxed">
+                  <p className="font-semibold">
+                    Pourquoi le téléchargement direct est bloqué dans cet aperçu :
+                  </p>
+                  <p>
+                    Les navigateurs bloquent l’installation d’application tant que Lisière est affiché dans un cadre d’aperçu intégré. Ouvrez l’adresse directement dans votre navigateur (Chrome sur Android ou Safari sur iPhone) pour déclencher l’installation.
+                  </p>
+                </div>
+              </div>
+              <a
+                href={mobileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full min-h-[42px] px-4 py-2 rounded-md bg-[#1B365D] dark:bg-amber-600 text-white text-sm font-medium hover:bg-[#132744] dark:hover:bg-amber-500 inline-flex items-center justify-center gap-2 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Ouvrir hors aperçu pour installer</span>
+              </a>
+            </div>
           ) : isInstallable ? (
-            <div className="p-4 rounded-lg bg-[#F3F6FA] border border-[#CBD6E6] space-y-3">
-              <p className="text-xs text-stone-700 leading-relaxed">
+            <div className="p-4 rounded-lg bg-[#F3F6FA] dark:bg-stone-900 border border-[#CBD6E6] dark:border-stone-700 space-y-3">
+              <p className="text-xs text-stone-700 dark:text-stone-300 leading-relaxed">
                 Installez directement Lisière sur l’écran d’accueil de votre téléphone pour une lecture plein écran, rapide et avec barre de navigation mobile dédiée.
               </p>
               <button
                 type="button"
                 onClick={() => void install()}
-                className="w-full min-h-[42px] px-4 py-2 rounded-md bg-[#1B365D] text-white text-sm font-medium hover:bg-[#132744] inline-flex items-center justify-center gap-2 transition-colors"
+                className="w-full min-h-[42px] px-4 py-2 rounded-md bg-[#1B365D] dark:bg-amber-600 text-white text-sm font-medium hover:bg-[#132744] dark:hover:bg-amber-500 inline-flex items-center justify-center gap-2 transition-colors"
               >
                 <Download className="w-4 h-4" />
                 <span>Installer l’application mobile</span>
@@ -228,13 +253,31 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
             </div>
           ) : null}
 
+          {/* Honest APK / IPA explanation */}
+          <div className="p-4 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 space-y-2">
+            <div className="flex items-start gap-2">
+              <Info className="w-4 h-4 text-[#1B365D] dark:text-amber-300 shrink-0 mt-0.5" />
+              <div className="space-y-1.5 text-xs text-stone-700 dark:text-stone-300 leading-relaxed">
+                <p className="font-semibold text-stone-900 dark:text-stone-100">
+                  À propos des fichiers .APK (Android) et .IPA (iOS)
+                </p>
+                <p>
+                  Cet espace web ne contient pas les outils de compilation natifs (Android SDK / Gradle pour <strong>.apk</strong>, et macOS + Xcode + certificat développeur Apple pour <strong>.ipa</strong>) et ne peut donc pas générer directement un fichier .apk ou .ipa téléchargeable ici.
+                </p>
+                <p>
+                  <strong>Sur téléphone dès maintenant :</strong> installez Lisière via le bouton « Ouvrir hors aperçu » ci-dessus (application plein écran avec icône sur l’écran d’accueil et lecture hors ligne). Pour publier ensuite en .apk/.ipa sur les stores après déploiement HTTPS public, utilisez <strong>PWABuilder</strong> ou <strong>Capacitor</strong> avec Android Studio et Xcode.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Direct mobile link sharing */}
-          <div className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
-            <p className="text-xs uppercase tracking-widest text-stone-500 font-medium">
+          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-4 space-y-3">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 font-medium">
               Lien direct vers la version mobile
             </p>
-            <div className="flex items-center gap-2 p-2.5 rounded-md bg-[#FBF9F5] border border-stone-200">
-              <span className="text-xs font-mono text-stone-700 truncate flex-1 select-all">
+            <div className="flex items-center gap-2 p-2.5 rounded-md bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700">
+              <span className="text-xs font-mono text-stone-700 dark:text-stone-200 truncate flex-1 select-all">
                 {mobileUrl}
               </span>
               <a
@@ -243,7 +286,7 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
                 rel="noopener noreferrer"
                 title="Ouvrir le lien mobile"
                 aria-label="Ouvrir le lien mobile dans un nouvel onglet"
-                className="p-1.5 rounded text-[#1B365D] hover:bg-stone-200/60 shrink-0"
+                className="p-1.5 rounded text-[#1B365D] dark:text-amber-300 hover:bg-stone-200/60 dark:hover:bg-stone-800 shrink-0"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -252,11 +295,11 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
               <button
                 type="button"
                 onClick={() => void handleCopyLink()}
-                className="min-h-[38px] px-3 py-1.5 rounded-md border border-stone-200 bg-[#FBF9F5] hover:border-[#1B365D] text-xs font-medium text-stone-800 inline-flex items-center justify-center gap-1.5"
+                className="min-h-[38px] px-3 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 hover:border-[#1B365D] dark:hover:border-amber-400 text-xs font-medium text-stone-800 dark:text-stone-200 inline-flex items-center justify-center gap-1.5"
               >
                 {copied ? (
                   <>
-                    <Check className="w-3.5 h-3.5 text-emerald-700" />
+                    <Check className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
                     <span>Lien copié !</span>
                   </>
                 ) : (
@@ -269,41 +312,49 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
               <button
                 type="button"
                 onClick={() => void handleNativeShare()}
-                className="min-h-[38px] px-3 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] text-xs font-medium inline-flex items-center justify-center gap-1.5"
+                className="min-h-[38px] px-3 py-1.5 rounded-md bg-[#1B365D] dark:bg-amber-600 text-white hover:bg-[#132744] dark:hover:bg-amber-500 text-xs font-medium inline-flex items-center justify-center gap-1.5"
               >
                 <Share2 className="w-3.5 h-3.5" />
                 <span>Envoyer vers un téléphone</span>
               </button>
             </div>
             {shareFeedback && (
-              <p className="text-xs text-stone-600">{shareFeedback}</p>
+              <p className="text-xs text-stone-600 dark:text-stone-400">{shareFeedback}</p>
             )}
           </div>
 
           {/* Step-by-step phone install guides */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div
-              className={`p-3.5 rounded-lg border bg-white space-y-1.5 ${
-                isIOS ? 'border-[#1B365D] ring-1 ring-[#1B365D]/20' : 'border-stone-200'
+              className={`p-3.5 rounded-lg border bg-white dark:bg-stone-900 space-y-1.5 ${
+                isIOS
+                  ? 'border-[#1B365D] dark:border-amber-400 ring-1 ring-[#1B365D]/20 dark:ring-amber-400/20'
+                  : 'border-stone-200 dark:border-stone-800'
               }`}
             >
-              <p className="text-xs font-semibold text-stone-900">
+              <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">
                 iPhone &amp; iPad (Safari)
               </p>
-              <ol className="text-xs text-stone-600 space-y-1 list-decimal list-inside leading-relaxed">
-                <li>Ouvrez le lien dans <strong>Safari</strong>.</li>
+              <ol className="text-xs text-stone-600 dark:text-stone-400 space-y-1 list-decimal list-inside leading-relaxed">
+                <li>Ouvrez le lien hors aperçu dans <strong>Safari</strong>.</li>
                 <li>Touchez le bouton <strong>Partager</strong> (carré avec flèche).</li>
                 <li>Choisissez <strong>Sur l’écran d’accueil</strong>.</li>
               </ol>
             </div>
 
-            <div className="p-3.5 rounded-lg border border-stone-200 bg-white space-y-1.5">
-              <p className="text-xs font-semibold text-stone-900">
+            <div
+              className={`p-3.5 rounded-lg border bg-white dark:bg-stone-900 space-y-1.5 ${
+                isAndroid
+                  ? 'border-[#1B365D] dark:border-amber-400 ring-1 ring-[#1B365D]/20 dark:ring-amber-400/20'
+                  : 'border-stone-200 dark:border-stone-800'
+              }`}
+            >
+              <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">
                 Android (Chrome)
               </p>
-              <ol className="text-xs text-stone-600 space-y-1 list-decimal list-inside leading-relaxed">
-                <li>Ouvrez le lien dans <strong>Chrome</strong>.</li>
-                <li>Touchez <strong>Installer l’app</strong> ou le menu <strong>⋮</strong>.</li>
+              <ol className="text-xs text-stone-600 dark:text-stone-400 space-y-1 list-decimal list-inside leading-relaxed">
+                <li>Ouvrez le lien hors aperçu dans <strong>Chrome</strong>.</li>
+                <li>Touchez <strong>Installer l’application</strong> ou le menu <strong>⋮</strong>.</li>
                 <li>Sélectionnez <strong>Ajouter à l’écran d’accueil</strong>.</li>
               </ol>
             </div>

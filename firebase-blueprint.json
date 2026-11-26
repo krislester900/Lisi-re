@@ -50,6 +50,10 @@
         "discoverable": {
           "type": "boolean"
         },
+        "commentsDisabled": {
+          "type": "boolean",
+          "description": "When true, readers cannot publish new comments/echoes on stories authored by this member."
+        },
         "isAdmin": {
           "type": "boolean"
         },

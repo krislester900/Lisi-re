@@ -380,6 +380,7 @@ export interface ProfileUpdatePayload {
   interests?: string;
   avatarUrl?: string;
   discoverable?: boolean;
+  commentsDisabled?: boolean;
 }
 
 export async function updatePublicProfile(
@@ -429,10 +430,29 @@ export async function updatePublicProfile(
   if (payload.discoverable !== undefined) {
     updateFields.discoverable = Boolean(payload.discoverable);
   }
+  if (payload.commentsDisabled !== undefined) {
+    updateFields.commentsDisabled = Boolean(payload.commentsDisabled);
+  }
 
   const path = `publicProfiles/${userId}`;
   try {
     await updateDoc(doc(db, 'publicProfiles', userId), updateFields);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function updateProfileCommentsDisabled(
+  userId: string,
+  commentsDisabled: boolean
+): Promise<void> {
+  assertValidId(userId, 'userId');
+  const path = `publicProfiles/${userId}`;
+  try {
+    await updateDoc(doc(db, 'publicProfiles', userId), {
+      commentsDisabled: Boolean(commentsDisabled),
+      updatedAt: serverTimestamp(),
+    });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, path);
   }

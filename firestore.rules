@@ -103,8 +103,8 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'userId', 'displayName', 'bio', 'listeningNote',
           'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'isAdmin', 'badges',
-          'createdAt', 'updatedAt'
+          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'commentsDisabled',
+          'isAdmin', 'badges', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.userId)
         && data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60
@@ -117,6 +117,7 @@ service cloud.firestore {
         && (!('interests' in data) || (data.interests is string && data.interests.size() <= 240))
         && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000))
         && (!('discoverable' in data) || data.discoverable is bool)
+        && (!('commentsDisabled' in data) || data.commentsDisabled is bool)
         && (!('isAdmin' in data) || data.isAdmin is bool)
         && (
           !('badges' in data)
@@ -789,7 +790,7 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'displayName', 'bio', 'listeningNote',
               'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'updatedAt'
+              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'commentsDisabled', 'updatedAt'
             ])
           )
           || (
@@ -798,7 +799,8 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'displayName', 'bio', 'listeningNote',
               'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'isAdmin', 'badges', 'updatedAt'
+              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'commentsDisabled',
+              'isAdmin', 'badges', 'updatedAt'
             ])
           )
           || (
@@ -1343,7 +1345,12 @@ service cloud.firestore {
           && incoming().storyVisibility == 'public'
           && incoming().createdAt == request.time
           && get(/databases/$(database)/documents/stories/$(storyId)).data.visibility == 'public'
-          && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.lastEchoId == echoId;
+          && getAfter(/databases/$(database)/documents/stories/$(storyId)).data.lastEchoId == echoId
+          && (
+            !exists(/databases/$(database)/documents/publicProfiles/$(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId))
+            || !('commentsDisabled' in get(/databases/$(database)/documents/publicProfiles/$(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId)).data)
+            || get(/databases/$(database)/documents/publicProfiles/$(get(/databases/$(database)/documents/stories/$(storyId)).data.authorId)).data.commentsDisabled != true
+          );
         allow update: if false;
         allow delete: if isVerifiedUser()
           && isValidId(storyId)

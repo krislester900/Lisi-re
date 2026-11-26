@@ -105,7 +105,7 @@ function SpotlightAvatar({
   if (avatarUrl && !failed) {
     return (
       <div
-        className={`${sizeClass} rounded-full overflow-hidden border-2 ${ringClass} bg-stone-100 shrink-0`}
+        className={`${sizeClass} rounded-full overflow-hidden border-2 ${ringClass} bg-stone-100 dark:bg-stone-800 shrink-0`}
       >
         <img
           src={avatarUrl}
@@ -120,7 +120,7 @@ function SpotlightAvatar({
 
   return (
     <div
-      className={`${sizeClass} rounded-full border-2 ${ringClass} bg-[#F3F6FA] text-[#1B365D] font-display font-medium flex items-center justify-center shrink-0`}
+      className={`${sizeClass} rounded-full border-2 ${ringClass} bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 font-display font-medium flex items-center justify-center shrink-0`}
       aria-hidden="true"
     >
       {initial}
@@ -443,10 +443,10 @@ export function AuthorsSpotlight({
           : 'max-w-2xl mx-auto w-full';
 
     const surfaceClass = isChampion
-      ? 'bg-[#FFFDF8] border-[#C9A227]/80 shadow-[0_14px_34px_-20px_rgba(122,82,16,0.28)] lg:min-h-[340px]'
+      ? 'bg-[#FFFDF8] dark:bg-[#1E1A14] border-[#C9A227]/80 dark:border-amber-600/60 shadow-[0_14px_34px_-20px_rgba(122,82,16,0.28)] lg:min-h-[340px]'
       : isSecond
-        ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[310px]'
-        : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.14)] lg:min-h-[290px]';
+        ? 'bg-white dark:bg-[#1A1815] border-stone-300 dark:border-stone-700 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[310px]'
+        : 'bg-white dark:bg-[#1A1815] border-[#D9B9AE] dark:border-[#6A382E] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.14)] lg:min-h-[290px]';
 
     const topStripColor = isChampion
       ? 'bg-[#7A5210] text-[#FFFDF8]'
@@ -457,14 +457,14 @@ export function AuthorsSpotlight({
     const avatarRing = isChampion
       ? 'border-[#C9A227]'
       : isSecond
-        ? 'border-stone-400'
-        : 'border-[#C97B6B]';
+        ? 'border-stone-400 dark:border-stone-600'
+        : 'border-[#C97B6B] dark:border-[#9A3B29]';
 
     const plinthStyle = isChampion
-      ? 'h-16 bg-gradient-to-b from-[#F4E7C3] to-[#E8D295] border-x border-t border-[#C9A227]/70 text-[#5C3D0B]'
+      ? 'h-16 bg-gradient-to-b from-[#F4E7C3] to-[#E8D295] dark:from-[#3D2E14] dark:to-[#2B200E] border-x border-t border-[#C9A227]/70 dark:border-amber-700/60 text-[#5C3D0B] dark:text-amber-200'
       : isSecond
-        ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 border-x border-t border-stone-300 text-stone-700'
-        : 'h-7 bg-gradient-to-b from-[#F8EBE7] to-[#EED5CE] border-x border-t border-[#D9B9AE] text-[#7A2D1F]';
+        ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 dark:from-stone-800 dark:to-stone-900 border-x border-t border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300'
+        : 'h-7 bg-gradient-to-b from-[#F8EBE7] to-[#EED5CE] dark:from-[#3A201B] dark:to-[#2B1713] border-x border-t border-[#D9B9AE] dark:border-[#6A382E] text-[#7A2D1F] dark:text-amber-200';
 
     const plinthLabel = isChampion ? '1re marche' : isSecond ? '2e marche' : '3e marche';
 
@@ -518,13 +518,13 @@ export function AuthorsSpotlight({
                     <button
                       type="button"
                       onClick={() => onOpenMemberWall(author.authorId)}
-                      className={`font-display font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate max-w-full block ${
+                      className={`font-display font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline text-left truncate max-w-full block ${
                         isChampion ? 'text-2xl' : 'text-xl'
                       }`}
                     >
                       {author.authorName}
                     </button>
-                    <p className="text-xs text-stone-500 mt-0.5 tabular-nums">
+                    <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 tabular-nums">
                       {[
                         author.novelCount > 0
                           ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
@@ -550,8 +550,8 @@ export function AuthorsSpotlight({
                     aria-pressed={isFollowing}
                     className={`min-h-[32px] px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
                       isFollowing
-                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                        : 'border-stone-200 bg-white text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
+                        ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:border-[#1B365D] hover:text-[#1B365D]'
                     }`}
                   >
                     <Star className={`w-3.5 h-3.5 ${isFollowing ? 'fill-current' : ''}`} />
@@ -561,36 +561,36 @@ export function AuthorsSpotlight({
               </div>
 
               {author.bio && (
-                <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 leading-relaxed">
+                <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 line-clamp-2 leading-relaxed">
                   {author.bio}
                 </p>
               )}
 
               {/* Metrics Bar */}
-              <div className="grid grid-cols-3 gap-3 py-3 border-y border-stone-200/80">
+              <div className="grid grid-cols-3 gap-3 py-3 border-y border-stone-200/80 dark:border-stone-800">
                 <div>
-                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                     {author.totalViews}
                   </p>
-                  <p className="text-[11px] text-stone-500">Lectures</p>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">Lectures</p>
                 </div>
                 <div>
-                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                     {author.totalResonances}
                   </p>
-                  <p className="text-[11px] text-stone-500">Résonances</p>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">Résonances</p>
                 </div>
                 <div>
-                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 tabular-nums">
+                  <p className="font-display text-lg sm:text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                     {formatFrenchDecimal(author.averageResonance)}
                   </p>
-                  <p className="text-[11px] text-stone-500">Moy. / texte</p>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">Moy. / texte</p>
                 </div>
               </div>
 
               {/* Featured Work (unbordered warm inset) */}
               {featuredStory && (
-                <div className="rounded-md bg-[#F7F4EE] p-3.5 flex items-start justify-between gap-3">
+                <div className="rounded-md bg-[#F7F4EE] dark:bg-stone-900 p-3.5 flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2.5 min-w-0">
                     {featuredStory.storyFormat === 'roman' && (
                       <NovelCoverArt
@@ -606,8 +606,8 @@ export function AuthorsSpotlight({
                       <span
                         className={`inline-flex items-center gap-1 font-semibold ${
                           featuredStory.storyFormat === 'roman'
-                            ? 'text-[#1B365D]'
-                            : 'text-[#9A3B29]'
+                            ? 'text-[#1B365D] dark:text-sky-300'
+                            : 'text-[#9A3B29] dark:text-amber-300'
                         }`}
                       >
                         {featuredStory.storyFormat === 'roman' ? (
@@ -632,11 +632,11 @@ export function AuthorsSpotlight({
                     <button
                       type="button"
                       onClick={() => onReadStory(featuredStory)}
-                      className="font-display text-base font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left block truncate max-w-full"
+                      className="font-display text-base font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline text-left block truncate max-w-full"
                     >
                       {featuredStory.title}
                     </button>
-                    <p className="text-[11px] text-stone-600 tabular-nums">
+                    <p className="text-[11px] text-stone-600 dark:text-stone-400 tabular-nums">
                       {featuredStory.viewCount ?? 0} vue
                       {(featuredStory.viewCount ?? 0) > 1 ? 's' : ''} ·{' '}
                       {featuredStory.resonanceCount} rés.
@@ -646,7 +646,7 @@ export function AuthorsSpotlight({
                 <button
                   type="button"
                   onClick={() => onReadStory(featuredStory)}
-                  className="min-h-[32px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-white border border-[#CBD6E6] rounded hover:bg-[#F3F6FA] whitespace-nowrap shrink-0 self-center"
+                  className="min-h-[32px] px-2.5 py-1 text-xs font-medium text-[#1B365D] dark:text-sky-300 bg-white dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded hover:bg-[#F3F6FA] whitespace-nowrap shrink-0 self-center"
                 >
                   Lire
                 </button>
@@ -655,16 +655,16 @@ export function AuthorsSpotlight({
           </div>
         </div>
 
-          <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex items-center justify-between gap-3">
+          <div className="px-5 py-3 bg-[#FAF8F4] dark:bg-stone-900/90 border-t border-stone-200/80 dark:border-stone-800 flex items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => onOpenMemberWall(author.authorId)}
-              className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
             >
               <span>Voir son mur littéraire</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
-            <span className="text-[11px] text-stone-500 tabular-nums">
+            <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
               {author.totalEchoes} comm.
             </span>
           </div>
@@ -698,13 +698,13 @@ export function AuthorsSpotlight({
       <div className="flex flex-col gap-4">
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-widest text-stone-500">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Palmarès des plumes · {activePeriodMeta.caption}
             </p>
-            <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 mt-1">
+            <h2 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100 mt-1">
               Auteurs en lumière
             </h2>
-            <p className="text-xs sm:text-sm text-stone-600 mt-1">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-400 mt-1">
               Podium en direct des plumes les plus lues et les mieux notées sur la période choisie, à partir de leurs écrits signés.
             </p>
           </div>
@@ -714,7 +714,7 @@ export function AuthorsSpotlight({
             <div
               role="group"
               aria-label="Catégorie d’œuvres pour le classement des auteurs"
-              className="inline-flex items-center gap-1 p-1 bg-white rounded-lg border border-stone-200"
+              className="inline-flex items-center gap-1 p-1 bg-white dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-800"
             >
               {(
                 [
@@ -735,7 +735,7 @@ export function AuthorsSpotlight({
                         ? fmt.id === 'confession'
                           ? 'bg-[#9A3B29] text-white'
                           : 'bg-[#1B365D] text-white'
-                        : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+                        : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-50 dark:hover:bg-stone-800'
                     }`}
                   >
                     {fmt.label}
@@ -746,12 +746,12 @@ export function AuthorsSpotlight({
 
             {/* Period Dropdown Selector (Semaine / Mois / Tout le temps) */}
             <div className="relative flex items-center shrink-0">
-              <Calendar className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 pointer-events-none" />
+              <Calendar className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400 absolute left-2.5 pointer-events-none" />
               <select
                 aria-label="Période d’activité"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value as SpotlightPeriod)}
-                className="min-h-[40px] pl-8 pr-7 py-1.5 bg-white border border-stone-200 rounded-lg text-xs font-medium text-stone-800 hover:border-stone-400 focus:outline-none focus:border-[#1B365D] cursor-pointer"
+                className="min-h-[40px] pl-8 pr-7 py-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 focus:outline-none focus:border-[#1B365D] cursor-pointer"
               >
                 {PERIOD_OPTIONS.map((opt) => (
                   <option key={opt.id} value={opt.id}>
@@ -765,7 +765,7 @@ export function AuthorsSpotlight({
             <div
               role="tablist"
               aria-label="Critère de classement des auteurs"
-              className="inline-flex items-center gap-1 p-1 bg-stone-100 rounded-lg border border-stone-200"
+              className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-800"
             >
               {(
                 [
@@ -784,8 +784,8 @@ export function AuthorsSpotlight({
                     onClick={() => setCriteria(tab.id)}
                     className={`min-h-[32px] px-3 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                       active
-                        ? 'bg-white text-[#1B365D] shadow-xs'
-                        : 'text-stone-600 hover:text-stone-900'
+                        ? 'bg-white dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 shadow-xs'
+                        : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
                     }`}
                   >
                     {tab.label}
@@ -798,22 +798,22 @@ export function AuthorsSpotlight({
       </div>
 
       {/* Author Identity Mode Switcher (Anonymat <-> Identité réelle) */}
-      <div className="bg-white border border-stone-200 rounded-lg p-4 sm:p-5 space-y-4">
+      <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-4 sm:p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="space-y-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-sm font-medium text-stone-900">
+              <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
                 Votre signature au palmarès : anonymat ou identité réelle
               </p>
               {user && myPublicStories.length > 0 && (
-                <span className="text-xs text-stone-500 tabular-nums">
+                <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                   {mySignedPublicStories.length} signé{mySignedPublicStories.length > 1 ? 's' : ''} ·{' '}
                   {myAnonymousPublicStories.length} anonyme
                   {myAnonymousPublicStories.length > 1 ? 's' : ''}
                 </span>
               )}
             </div>
-            <p className="text-xs text-stone-600">
+            <p className="text-xs text-stone-600 dark:text-stone-400">
               {!user
                 ? 'Connectez-vous pour choisir si vos récits apparaissent sous votre identité réelle sur le podium ou restent anonymes.'
                 : myPublicStories.length === 0
@@ -839,7 +839,7 @@ export function AuthorsSpotlight({
               <button
                 type="button"
                 onClick={onWriteNovel}
-                className="min-h-[38px] px-3.5 py-1.5 rounded-md border border-[#1B365D] bg-[#F3F6FA] text-[#1B365D] text-xs font-medium hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3.5 py-1.5 rounded-md border border-[#1B365D] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-sky-300 text-xs font-medium hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <Feather className="w-3.5 h-3.5" />
                 <span>Publier un roman</span>
@@ -849,7 +849,7 @@ export function AuthorsSpotlight({
                 <div
                   role="group"
                   aria-label="Basculer entre identité réelle et anonymat"
-                  className="inline-flex items-center gap-1 p-1 bg-stone-100 rounded-lg border border-stone-200"
+                  className="inline-flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-900 rounded-lg border border-stone-200 dark:border-stone-800"
                 >
                   <button
                     type="button"
@@ -859,7 +859,7 @@ export function AuthorsSpotlight({
                     className={`min-h-[34px] px-3 py-1.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                       currentAuthorMode === 'real'
                         ? 'bg-[#1B365D] text-white shadow-xs'
-                        : 'text-stone-700 hover:bg-white hover:text-stone-900 disabled:opacity-60'
+                        : 'text-stone-700 dark:text-stone-300 hover:bg-white dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 disabled:opacity-60'
                     }`}
                   >
                     <UserCheck className="w-3.5 h-3.5" />
@@ -872,8 +872,8 @@ export function AuthorsSpotlight({
                     aria-pressed={currentAuthorMode === 'anonymous'}
                     className={`min-h-[34px] px-3 py-1.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                       currentAuthorMode === 'anonymous'
-                        ? 'bg-stone-900 text-white shadow-xs'
-                        : 'text-stone-700 hover:bg-white hover:text-stone-900 disabled:opacity-60'
+                        ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 shadow-xs'
+                        : 'text-stone-700 dark:text-stone-300 hover:bg-white dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100 disabled:opacity-60'
                     }`}
                   >
                     <EyeOff className="w-3.5 h-3.5" />
@@ -885,7 +885,7 @@ export function AuthorsSpotlight({
                   type="button"
                   onClick={() => setShowPerStoryDrawer((prev) => !prev)}
                   aria-expanded={showPerStoryDrawer}
-                  className="min-h-[38px] px-3 py-1.5 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-700 hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  className="min-h-[38px] px-3 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-700 dark:text-stone-200 hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                 >
                   <span>Par texte ({myPublicStories.length})</span>
                   {showPerStoryDrawer ? (
@@ -901,8 +901,8 @@ export function AuthorsSpotlight({
 
         {/* Batch Confirmation Banner (when switching >1 stories at once) */}
         {confirmBatchTarget && (
-          <div className="rounded-md border border-[#CBD6E6] bg-[#F3F6FA] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-            <p className="text-stone-800">
+          <div className="rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-900 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+            <p className="text-stone-800 dark:text-stone-200">
               {confirmBatchTarget === 'real'
                 ? `Afficher votre identité réelle (${realDisplayName}) sur vos ${myAnonymousPublicStories.length} récits actuellement anonymes ?`
                 : `Basculer vos ${mySignedPublicStories.length} récits signés en « Auteur anonyme » et les retirer du palmarès des auteurs ?`}
@@ -920,7 +920,7 @@ export function AuthorsSpotlight({
                 type="button"
                 disabled={batchBusy}
                 onClick={() => setConfirmBatchTarget(null)}
-                className="min-h-[32px] px-3 py-1 rounded border border-stone-300 bg-white text-stone-700 hover:border-stone-500 whitespace-nowrap"
+                className="min-h-[32px] px-3 py-1 rounded border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:border-stone-500 whitespace-nowrap"
               >
                 Annuler
               </button>
@@ -929,14 +929,14 @@ export function AuthorsSpotlight({
         )}
 
         {identityError && (
-          <p role="alert" className="text-xs text-red-700">
+          <p role="alert" className="text-xs text-red-700 dark:text-red-400">
             {identityError}
           </p>
         )}
 
         {/* Per-Story Anonymity / Identity List */}
         {user && showPerStoryDrawer && myPublicStories.length > 0 && (
-          <div className="pt-3 border-t border-stone-200 divide-y divide-stone-100">
+          <div className="pt-3 border-t border-stone-200 dark:border-stone-800 divide-y divide-stone-100 dark:divide-stone-800">
             {myPublicStories.map((story) => {
               const isAnon = Boolean(story.isAnonymous);
               const busy = identityBusyId === story.storyId;
@@ -951,11 +951,11 @@ export function AuthorsSpotlight({
                     <button
                       type="button"
                       onClick={() => onReadStory(story)}
-                      className="text-sm font-medium text-stone-900 hover:text-[#1B365D] hover:underline truncate block max-w-full text-left"
+                      className="text-sm font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline truncate block max-w-full text-left"
                     >
                       {story.title}
                     </button>
-                    <p className="text-xs text-stone-500 tabular-nums">
+                    <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                       {formatLabel}
                       {story.storyFormat === 'roman' && story.novelGenre
                         ? ` · ${NOVEL_GENRE_LABELS[story.novelGenre]}`
@@ -967,7 +967,7 @@ export function AuthorsSpotlight({
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-stone-600 inline-flex items-center gap-1 whitespace-nowrap">
+                    <span className="text-xs text-stone-600 dark:text-stone-400 inline-flex items-center gap-1 whitespace-nowrap">
                       {isAnon ? (
                         <>
                           <EyeOff className="w-3.5 h-3.5 text-stone-400" />
@@ -975,8 +975,8 @@ export function AuthorsSpotlight({
                         </>
                       ) : (
                         <>
-                          <UserCheck className="w-3.5 h-3.5 text-[#1B365D]" />
-                          <span className="font-medium text-stone-800">{realDisplayName}</span>
+                          <UserCheck className="w-3.5 h-3.5 text-[#1B365D] dark:text-sky-300" />
+                          <span className="font-medium text-stone-800 dark:text-stone-200">{realDisplayName}</span>
                         </>
                       )}
                     </span>
@@ -984,7 +984,7 @@ export function AuthorsSpotlight({
                       type="button"
                       disabled={busy}
                       onClick={() => void handleToggleSingleStoryAnonymity(story)}
-                      className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 bg-[#FAF8F4] text-xs font-medium text-[#1B365D] hover:border-[#1B365D] disabled:opacity-50 whitespace-nowrap"
+                      className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 dark:border-stone-700 bg-[#FAF8F4] dark:bg-stone-900 text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:border-[#1B365D] disabled:opacity-50 whitespace-nowrap"
                     >
                       {busy
                         ? 'En cours…'
@@ -1002,12 +1002,12 @@ export function AuthorsSpotlight({
 
       {/* Main Podium & Runners-up */}
       {!storiesLoaded ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-8 text-sm text-stone-500">
+        <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-sm text-stone-500 dark:text-stone-400">
           Chargement des auteurs en lumière…
         </div>
       ) : podiumAuthors.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-          <p className="font-display text-xl text-stone-900">
+        <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
+          <p className="font-display text-xl text-stone-900 dark:text-stone-100">
             {period === 'all' && formatFilter === 'all'
               ? 'Aucun auteur signé n’apparaît encore sur le podium'
               : `Aucun auteur signé trouvé pour « ${
@@ -1018,7 +1018,7 @@ export function AuthorsSpotlight({
                       : 'Toutes catégories'
                 } » (${activePeriodMeta.label.toLowerCase()})`}
           </p>
-          <p className="text-sm text-stone-600 max-w-lg mx-auto">
+          <p className="text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
             {period === 'all' && formatFilter === 'all'
               ? 'Publiez un texte ou basculez l’un de vos écrits anonymes vers votre identité réelle ci-dessus pour entrer sur le podium.'
               : 'Essayez une période plus large, affichez toutes les catégories ou publiez un nouveau texte.'}
@@ -1029,7 +1029,7 @@ export function AuthorsSpotlight({
                 <button
                   type="button"
                   onClick={() => setFormatFilter('all')}
-                  className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D]"
+                  className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] dark:text-sky-300 bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded-md hover:border-[#1B365D]"
                 >
                   Toutes catégories
                 </button>
@@ -1038,7 +1038,7 @@ export function AuthorsSpotlight({
                 <button
                   type="button"
                   onClick={() => setPeriod('all')}
-                  className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D]"
+                  className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-[#1B365D] dark:text-sky-300 bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded-md hover:border-[#1B365D]"
                 >
                   Afficher tout le temps
                 </button>
@@ -1050,7 +1050,7 @@ export function AuthorsSpotlight({
         <div className="space-y-4">
           {podiumAuthors.length >= 2 && (
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <p className="text-xs uppercase tracking-widest text-stone-500">
+              <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                 Podium · Top {podiumAuthors.length} des plumes ·{' '}
                 {criteria === 'best-rated'
                   ? 'Les mieux notées'
@@ -1058,7 +1058,7 @@ export function AuthorsSpotlight({
                     ? 'Palmarès global'
                     : 'Les plus lues'}
               </p>
-              <span className="text-xs text-stone-500 tabular-nums">
+              <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                 {activePeriodMeta.label} · {rankedAuthors.length} plume
                 {rankedAuthors.length > 1 ? 's' : ''} classée{rankedAuthors.length > 1 ? 's' : ''}
               </span>
@@ -1069,9 +1069,9 @@ export function AuthorsSpotlight({
           <div
             className={
               podiumAuthors.length >= 3
-                ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90'
+                ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90 dark:lg:border-stone-700'
                 : podiumAuthors.length === 2
-                  ? 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90'
+                  ? 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90 dark:lg:border-stone-700'
                   : 'grid grid-cols-1 gap-5'
             }
           >
@@ -1082,17 +1082,17 @@ export function AuthorsSpotlight({
 
           {/* Ranks #4+ */}
           {remainingAuthors.length > 0 && (
-            <div className="bg-white border border-stone-200 rounded-lg p-5 sm:p-6 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 pb-3">
-                <h3 className="font-display text-lg font-medium text-stone-900">
+            <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-5 sm:p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200 dark:border-stone-800 pb-3">
+                <h3 className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
                   Au pied du podium · {activePeriodMeta.label}
                 </h3>
-                <span className="text-xs text-stone-500 tabular-nums">
+                <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                   Rangs 04 à {rankedAuthors.length < 10 ? `0${rankedAuthors.length}` : rankedAuthors.length > 10 ? '10' : rankedAuthors.length}
                 </span>
               </div>
 
-              <ol className="divide-y divide-stone-200">
+              <ol className="divide-y divide-stone-200 dark:divide-stone-800">
                 {remainingAuthors.map((author, idx) => {
                   const rank = idx + 4;
                   const rankLabel = rank < 10 ? `0${rank}` : `${rank}`;
@@ -1104,7 +1104,7 @@ export function AuthorsSpotlight({
                       className="py-3.5 first:pt-1 last:pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <span className="font-display text-base font-medium text-stone-400 tabular-nums w-6 shrink-0">
+                        <span className="font-display text-base font-medium text-stone-400 dark:text-stone-500 tabular-nums w-6 shrink-0">
                           {rankLabel}
                         </span>
                         <SpotlightAvatar
@@ -1116,11 +1116,11 @@ export function AuthorsSpotlight({
                           <button
                             type="button"
                             onClick={() => onOpenMemberWall(author.authorId)}
-                            className="text-sm font-medium text-stone-900 hover:text-[#1B365D] hover:underline truncate block max-w-full text-left"
+                            className="text-sm font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline truncate block max-w-full text-left"
                           >
                             {author.authorName}
                           </button>
-                          <p className="text-xs text-stone-500 tabular-nums">
+                          <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                             {[
                               author.novelCount > 0
                                 ? `${author.novelCount} roman${author.novelCount > 1 ? 's' : ''}`
@@ -1132,7 +1132,7 @@ export function AuthorsSpotlight({
                               .filter(Boolean)
                               .join(' · ')}{' '}
                             · {author.totalViews} lecture{author.totalViews > 1 ? 's' : ''} ·{' '}
-                            <span className="inline-flex items-center gap-0.5 text-stone-700 font-medium">
+                            <span className="inline-flex items-center gap-0.5 text-stone-700 dark:text-stone-300 font-medium">
                               <Heart className="w-3 h-3 text-stone-400 inline" />{' '}
                               {author.totalResonances}
                             </span>{' '}
@@ -1157,8 +1157,8 @@ export function AuthorsSpotlight({
                             aria-pressed={favoriteAuthorIds.has(author.authorId)}
                             className={`min-h-[32px] px-2.5 py-1 inline-flex items-center gap-1 rounded border text-xs transition-colors whitespace-nowrap ${
                               favoriteAuthorIds.has(author.authorId)
-                                ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                : 'border-stone-200 bg-white text-stone-600 hover:border-[#1B365D] hover:text-[#1B365D]'
+                                ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D]'
                             }`}
                           >
                             <Star
@@ -1175,13 +1175,13 @@ export function AuthorsSpotlight({
                           <button
                             type="button"
                             onClick={() => onReadStory(featuredStory)}
-                            className="min-h-[32px] px-3 py-1 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[32px] px-3 py-1 rounded border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <span
                               className={
                                 featuredStory.storyFormat === 'roman'
-                                  ? 'text-[#1B365D] font-semibold'
-                                  : 'text-[#9A3B29] font-semibold'
+                                  ? 'text-[#1B365D] dark:text-sky-300 font-semibold'
+                                  : 'text-[#9A3B29] dark:text-amber-300 font-semibold'
                               }
                             >
                               {featuredStory.storyFormat === 'roman' ? 'Roman' : 'Confession'}
@@ -1198,7 +1198,7 @@ export function AuthorsSpotlight({
             </div>
           )}
 
-          <p className="text-[11px] text-stone-500">
+          <p className="text-[11px] text-stone-500 dark:text-stone-400">
             Les écrits marqués « Anonyme » restent strictement exclus du podium des auteurs tant qu’ils ne sont pas basculés vers l’identité réelle.
           </p>
         </div>

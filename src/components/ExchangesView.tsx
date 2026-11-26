@@ -31,24 +31,29 @@ import {
   updateExchangeStatus,
   upsertUserRelationship,
 } from '../lib/storyService';
+import { stripSharedStoryUrlFromText } from '../lib/storyShare';
 import { formatFrenchDate } from '../lib/themes';
 import {
   Exchange,
   ExchangeMessage,
   FIELD_LIMITS,
   PublicProfile,
+  Story,
   UserRelationship,
 } from '../types/story';
 import type { ReportDraft } from './ReportModal';
+import { SharedStoryPreviewCard } from './SharedStoryPreviewCard';
 
 interface ExchangesViewProps {
   exchanges: Exchange[];
+  stories?: Story[];
   discoverableProfiles: PublicProfile[];
   relationships?: UserRelationship[];
   selectedExchangeId: string | null;
   initialRecipientId?: string | null;
   onClearInitialRecipient?: () => void;
   onSelectExchange: (exchangeId: string) => void;
+  onReadStory?: (story: Story) => void;
   onOpenStoryById: (storyId: string) => void;
   onOpenMemberWall: (userId: string) => void;
   onExploreStories: () => void;
@@ -94,12 +99,14 @@ function getInitialLetter(name: string): string {
 
 export function ExchangesView({
   exchanges,
+  stories = [],
   discoverableProfiles,
   relationships = [],
   selectedExchangeId,
   initialRecipientId,
   onClearInitialRecipient,
   onSelectExchange,
+  onReadStory,
   onOpenStoryById,
   onOpenMemberWall,
   onExploreStories,
@@ -326,20 +333,20 @@ export function ExchangesView({
   if (!user) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-16">
-        <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10">
-          <p className="text-xs uppercase tracking-widest text-stone-500 mb-3">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10">
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-3">
             Passerelles · Chat privé 1 à 1
           </p>
-          <h1 className="font-display text-3xl font-medium text-stone-900 mb-3">
+          <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100 mb-3">
             Discuter en privé avec les membres de votre choix
           </h1>
-          <p className="text-base text-stone-600 leading-relaxed mb-6">
+          <p className="text-base text-stone-600 dark:text-stone-400 leading-relaxed mb-6">
             Les passerelles vous permettent d’ouvrir une conversation écrite calme et privée avec n’importe quel membre, librement ou à partir d’un récit du salon.
           </p>
           <button
             type="button"
             onClick={signInWithGoogle}
-            className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap"
+            className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 transition-colors whitespace-nowrap"
           >
             Se connecter avec Google
           </button>
@@ -539,18 +546,18 @@ export function ExchangesView({
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-stone-200">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-stone-200 dark:border-stone-800">
         <div>
-          <p className="text-xs uppercase tracking-widest text-stone-500 mb-1">
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1">
             Passerelles · Discussions privées 1 à 1
           </p>
-          <h1 className="font-display text-2xl sm:text-3xl font-medium text-stone-900">
+          <h1 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100">
             Vos conversations privées
           </h1>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs text-stone-500 tabular-nums">
+          <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
             {visibleExchanges.length} conversation{visibleExchanges.length > 1 ? 's' : ''}
           </span>
           <button
@@ -571,16 +578,16 @@ export function ExchangesView({
       {showNewChat && (
         <form
           onSubmit={handleCreateDirectChat}
-          className="bg-white border border-stone-300 rounded-lg p-5 space-y-4"
+          className="bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg p-5 space-y-4"
         >
           <div className="flex items-center justify-between gap-4">
-            <h2 className="font-display text-lg font-medium text-stone-900">
+            <h2 className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
               Démarrer une conversation privée
             </h2>
           </div>
 
           {otherMembers.length === 0 ? (
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-stone-600 dark:text-stone-400">
               Aucun autre membre disponible pour démarrer un échange pour le moment.
             </p>
           ) : (
@@ -589,7 +596,7 @@ export function ExchangesView({
                 <div className="md:w-64 shrink-0">
                   <label
                     htmlFor="dm-recipient"
-                    className="block text-xs font-medium text-stone-700 mb-1"
+                    className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
                   >
                     Destinataire
                   </label>
@@ -598,7 +605,7 @@ export function ExchangesView({
                     value={recipientId}
                     onChange={(e) => setRecipientId(e.target.value)}
                     required
-                    className="w-full min-h-[40px] px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                    className="w-full min-h-[40px] px-3 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                   >
                     <option value="">Choisir un membre…</option>
                     {otherMembers.map((m) => (
@@ -612,7 +619,7 @@ export function ExchangesView({
                 <div className="flex-1 min-w-0">
                   <label
                     htmlFor="dm-first-msg"
-                    className="block text-xs font-medium text-stone-700 mb-1"
+                    className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
                   >
                     Premier message
                   </label>
@@ -624,13 +631,13 @@ export function ExchangesView({
                     value={firstMessage}
                     onChange={(e) => setFirstMessage(e.target.value)}
                     placeholder="Bonjour, j’aimerais échanger avec toi…"
-                    className="w-full min-h-[40px] px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                    className="w-full min-h-[40px] px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                   />
                 </div>
               </div>
 
               {createError && (
-                <p role="alert" className="text-xs text-red-700">
+                <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                   {createError}
                 </p>
               )}
@@ -651,12 +658,12 @@ export function ExchangesView({
       )}
 
       {visibleExchanges.length === 0 && relationships.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-10 text-center max-w-2xl mx-auto my-8">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center max-w-2xl mx-auto my-8">
           <MessageCircle className="w-8 h-8 text-stone-400 mx-auto mb-4" />
-          <h2 className="font-display text-2xl font-medium text-stone-900 mb-2">
+          <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 mb-2">
             Aucune conversation privée pour le moment
           </h2>
-          <p className="text-sm text-stone-600 leading-relaxed mb-6">
+          <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed mb-6">
             Cliquez sur « Nouveau message » pour écrire à un membre de votre choix, ou ouvrez une conversation depuis le mur d’un membre ou sous un récit du salon.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-3">
@@ -670,7 +677,7 @@ export function ExchangesView({
             <button
               type="button"
               onClick={onExploreStories}
-              className="min-h-[40px] px-5 py-2 text-sm font-medium text-stone-800 bg-white border border-stone-300 rounded-md hover:border-stone-500 transition-colors whitespace-nowrap"
+              className="min-h-[40px] px-5 py-2 text-sm font-medium text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 transition-colors whitespace-nowrap"
             >
               Explorer les salons
             </button>
@@ -678,15 +685,15 @@ export function ExchangesView({
         </div>
       ) : (
         /* Unified Flex Split-Pane Inbox + Active Conversation */
-        <div className="bg-white border border-stone-200 rounded-lg overflow-hidden flex flex-col lg:flex-row min-h-[540px] lg:h-[680px]">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg overflow-hidden flex flex-col lg:flex-row min-h-[540px] lg:h-[680px]">
           {/* Left Pane: Conversations Sidebar */}
           <aside
             className={`${
               mobilePane === 'list' ? 'flex' : 'hidden lg:flex'
-            } flex-col w-full lg:w-[330px] xl:w-[360px] shrink-0 border-b lg:border-b-0 lg:border-r border-stone-200 min-h-0 bg-[#FBF9F5]/40`}
+            } flex-col w-full lg:w-[330px] xl:w-[360px] shrink-0 border-b lg:border-b-0 lg:border-r border-stone-200 dark:border-stone-800 min-h-0 bg-[#FBF9F5]/40 dark:bg-stone-950/40`}
           >
             {/* Sidebar Search */}
-            <div className="p-3 border-b border-stone-200 bg-white space-y-2.5 shrink-0">
+            <div className="p-3 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 space-y-2.5 shrink-0">
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
@@ -695,7 +702,7 @@ export function ExchangesView({
                   onChange={(e) => setSidebarSearch(e.target.value)}
                   placeholder="Filtrer par membre ou mot…"
                   aria-label="Filtrer les conversations"
-                  className="w-full min-h-[36px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full min-h-[36px] pl-8 pr-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                 />
               </div>
 
@@ -722,7 +729,7 @@ export function ExchangesView({
                     className={`min-h-[30px] px-2.5 py-1 text-[11px] font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
                       sidebarTab === tab.id
                         ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                        : 'bg-[#FBF9F5] text-stone-600 border-stone-200 hover:border-stone-400 hover:text-stone-900'
+                        : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-600 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                     }`}
                   >
                     {tab.label}
@@ -732,9 +739,9 @@ export function ExchangesView({
             </div>
 
             {/* Sidebar List */}
-            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-stone-200">
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-stone-200 dark:divide-stone-800">
               {filteredSidebarExchanges.length === 0 && relationshipEntriesForTab.length === 0 ? (
-                <div className="p-8 text-center text-xs text-stone-500">
+                <div className="p-8 text-center text-xs text-stone-500 dark:text-stone-400">
                   {sidebarSearch.trim()
                     ? 'Aucune conversation ne correspond à cette recherche.'
                     : sidebarTab === 'active'
@@ -762,28 +769,28 @@ export function ExchangesView({
                         }}
                         className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition-colors ${
                           isSelected
-                            ? 'bg-[#F3F6FA] border-l-2 border-l-[#1B365D]'
-                            : 'bg-white hover:bg-stone-50'
+                            ? 'bg-[#F3F6FA] dark:bg-stone-800 border-l-2 border-l-[#1B365D] dark:border-l-amber-400'
+                            : 'bg-white dark:bg-stone-900 hover:bg-stone-50 dark:hover:bg-stone-800/60'
                         }`}
                       >
-                        <div className="w-9 h-9 rounded-full bg-[#EFEAE0] border border-stone-200 text-stone-700 flex items-center justify-center font-display text-sm font-medium shrink-0 mt-0.5">
+                        <div className="w-9 h-9 rounded-full bg-[#EFEAE0] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 flex items-center justify-center font-display text-sm font-medium shrink-0 mt-0.5">
                           {getInitialLetter(otherName)}
                         </div>
                         <div className="flex-1 min-w-0 space-y-0.5">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-medium text-sm text-stone-900 truncate">
+                            <span className="font-medium text-sm text-stone-900 dark:text-stone-100 truncate">
                               {otherName}
                             </span>
-                            <span className="text-[11px] text-stone-500 whitespace-nowrap shrink-0">
+                            <span className="text-[11px] text-stone-500 dark:text-stone-400 whitespace-nowrap shrink-0">
                               {ex.status === 'archived'
                                 ? 'Archivée'
                                 : formatFrenchDate(ex.updatedAt?.toDate() ?? null)}
                             </span>
                           </div>
-                          <p className="text-[11px] text-[#1E3A8A] truncate">
+                          <p className="text-[11px] text-[#1E3A8A] dark:text-amber-300 truncate">
                             {isDirect ? 'Discussion directe' : ex.storyTitle}
                           </p>
-                          <p className="text-xs text-stone-600 truncate">
+                          <p className="text-xs text-stone-600 dark:text-stone-400 truncate">
                             {ex.lastMessagePreview || 'Conversation ouverte'}
                           </p>
                         </div>
@@ -803,17 +810,17 @@ export function ExchangesView({
                     .map((rel) => (
                       <div
                         key={rel.targetUserId}
-                        className="px-4 py-3.5 flex items-center justify-between gap-3 bg-white"
+                        className="px-4 py-3.5 flex items-center justify-between gap-3 bg-white dark:bg-stone-900"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-stone-100 border border-stone-200 text-stone-600 flex items-center justify-center font-display text-xs shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 flex items-center justify-center font-display text-xs shrink-0">
                             {getInitialLetter(rel.targetName)}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-stone-900 truncate">
+                            <p className="text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
                               {rel.targetName}
                             </p>
-                            <p className="text-[11px] text-stone-500">
+                            <p className="text-[11px] text-stone-500 dark:text-stone-400">
                               {rel.relation === 'blocked' ? 'Membre bloqué' : 'Pas intéressé'}
                             </p>
                           </div>
@@ -824,7 +831,7 @@ export function ExchangesView({
                           onClick={() =>
                             void handleSetRelation(rel.targetUserId, rel.targetName, null)
                           }
-                          className="min-h-[30px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-[#FBF9F5] border border-stone-200 rounded hover:border-[#1B365D] whitespace-nowrap shrink-0"
+                          className="min-h-[30px] px-2.5 py-1 text-xs font-medium text-[#1B365D] dark:text-amber-300 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded hover:border-[#1B365D] whitespace-nowrap shrink-0"
                         >
                           {rel.relation === 'blocked' ? 'Débloquer' : 'Rétablir'}
                         </button>
@@ -839,24 +846,24 @@ export function ExchangesView({
           <section
             className={`${
               mobilePane === 'thread' ? 'flex' : 'hidden lg:flex'
-            } flex-1 min-w-0 flex-col min-h-0 bg-white`}
+            } flex-1 min-w-0 flex-col min-h-0 bg-white dark:bg-stone-900`}
           >
             {activeExchange ? (
               <>
                 {/* Clean Flex Thread Header */}
-                <div className="px-4 sm:px-5 py-3.5 border-b border-stone-200 shrink-0 space-y-2.5 bg-white">
+                <div className="px-4 sm:px-5 py-3.5 border-b border-stone-200 dark:border-stone-800 shrink-0 space-y-2.5 bg-white dark:bg-stone-900">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
                       <button
                         type="button"
                         onClick={() => setMobilePane('list')}
                         aria-label="Revenir à la liste des conversations"
-                        className="lg:hidden min-h-[36px] min-w-[36px] rounded-md border border-stone-200 text-stone-700 hover:bg-stone-50 inline-flex items-center justify-center shrink-0"
+                        className="lg:hidden min-h-[36px] min-w-[36px] rounded-md border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 inline-flex items-center justify-center shrink-0"
                       >
                         <ArrowLeft className="w-4 h-4" />
                       </button>
 
-                      <div className="w-9 h-9 rounded-full bg-[#EFEAE0] border border-stone-200 text-stone-800 flex items-center justify-center font-display text-sm font-medium shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-[#EFEAE0] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-100 flex items-center justify-center font-display text-sm font-medium shrink-0">
                         {getInitialLetter(activeOtherName || 'M')}
                       </div>
 
@@ -865,22 +872,22 @@ export function ExchangesView({
                           <button
                             type="button"
                             onClick={() => activeOtherId && onOpenMemberWall(activeOtherId)}
-                            className="font-medium text-sm sm:text-base text-stone-900 hover:text-[#1B365D] hover:underline truncate"
+                            className="font-medium text-sm sm:text-base text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline truncate"
                           >
                             {activeOtherName}
                           </button>
-                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 shrink-0">
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 shrink-0">
                             {activeExchange.status === 'active' ? 'Active' : 'Archivée'}
                           </span>
                         </div>
-                        <p className="text-xs text-stone-500 truncate">
+                        <p className="text-xs text-stone-500 dark:text-stone-400 truncate">
                           {isDirectExchange ? (
                             'Conversation privée directe'
                           ) : (
                             <button
                               type="button"
                               onClick={() => onOpenStoryById(activeExchange.storyId)}
-                              className="hover:text-[#1B365D] hover:underline truncate text-left"
+                              className="hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline truncate text-left"
                             >
                               À propos de « {activeExchange.storyTitle} »
                             </button>
@@ -900,7 +907,7 @@ export function ExchangesView({
                         className={`min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap ${
                           showThreadSearch
                             ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                            : 'text-stone-700 border-stone-200 hover:border-stone-400'
+                            : 'text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                         }`}
                       >
                         <Search className="w-3.5 h-3.5" />
@@ -913,7 +920,7 @@ export function ExchangesView({
                           onClick={() => setThreadMenuOpen((prev) => !prev)}
                           aria-expanded={threadMenuOpen}
                           aria-haspopup="menu"
-                          className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border border-stone-200 text-stone-700 hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                          className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
                         >
                           <MoreVertical className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Options</span>
@@ -922,7 +929,7 @@ export function ExchangesView({
                         {threadMenuOpen && (
                           <div
                             role="menu"
-                            className="absolute right-0 mt-1.5 w-64 bg-white border border-stone-200 rounded-lg shadow-xl py-1.5 z-30 text-xs"
+                            className="absolute right-0 mt-1.5 w-64 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg shadow-xl py-1.5 z-30 text-xs"
                           >
                             {activeOtherId && (
                               <button
@@ -932,9 +939,9 @@ export function ExchangesView({
                                   setThreadMenuOpen(false);
                                   onOpenMemberWall(activeOtherId);
                                 }}
-                                className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5"
+                                className="w-full px-3.5 py-2 text-left text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2.5"
                               >
-                                <UserIcon className="w-3.5 h-3.5 text-stone-500" />
+                                <UserIcon className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                                 <span>Voir le profil de {activeOtherName}</span>
                               </button>
                             )}
@@ -947,9 +954,9 @@ export function ExchangesView({
                                   setThreadMenuOpen(false);
                                   onOpenStoryById(activeExchange.storyId);
                                 }}
-                                className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5"
+                                className="w-full px-3.5 py-2 text-left text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2.5"
                               >
-                                <BookOpen className="w-3.5 h-3.5 text-stone-500" />
+                                <BookOpen className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                                 <span>Lire le récit associé</span>
                               </button>
                             )}
@@ -959,16 +966,16 @@ export function ExchangesView({
                               role="menuitem"
                               disabled={statusBusy}
                               onClick={() => void handleToggleArchive()}
-                              className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5 disabled:opacity-50"
+                              className="w-full px-3.5 py-2 text-left text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2.5 disabled:opacity-50"
                             >
                               {activeExchange.status === 'active' ? (
                                 <>
-                                  <Archive className="w-3.5 h-3.5 text-stone-500" />
+                                  <Archive className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                                   <span>Archiver la conversation</span>
                                 </>
                               ) : (
                                 <>
-                                  <RotateCcw className="w-3.5 h-3.5 text-stone-500" />
+                                  <RotateCcw className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                                   <span>Rouvrir la conversation</span>
                                 </>
                               )}
@@ -976,7 +983,7 @@ export function ExchangesView({
 
                             {activeOtherId && activeOtherName && (
                               <>
-                                <div className="my-1 border-t border-stone-100" />
+                                <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
 
                                 <button
                                   type="button"
@@ -989,9 +996,9 @@ export function ExchangesView({
                                       isNotInterested ? null : 'not_interested'
                                     )
                                   }
-                                  className="w-full px-3.5 py-2 text-left text-stone-800 hover:bg-stone-50 flex items-center gap-2.5 disabled:opacity-50"
+                                  className="w-full px-3.5 py-2 text-left text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800 flex items-center gap-2.5 disabled:opacity-50"
                                 >
-                                  <EyeOff className="w-3.5 h-3.5 text-amber-700" />
+                                  <EyeOff className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400" />
                                   <span>
                                     {isNotInterested
                                       ? 'Retirer « Pas intéressé »'
@@ -1007,7 +1014,7 @@ export function ExchangesView({
                                     onClick={() =>
                                       void handleSetRelation(activeOtherId, activeOtherName, null)
                                     }
-                                    className="w-full px-3.5 py-2 text-left text-red-800 hover:bg-red-50 flex items-center gap-2.5 disabled:opacity-50"
+                                    className="w-full px-3.5 py-2 text-left text-red-800 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/50 flex items-center gap-2.5 disabled:opacity-50"
                                   >
                                     <Ban className="w-3.5 h-3.5" />
                                     <span>Débloquer {activeOtherName}</span>
@@ -1020,7 +1027,7 @@ export function ExchangesView({
                                       setThreadMenuOpen(false);
                                       setConfirmBlockMember(true);
                                     }}
-                                    className="w-full px-3.5 py-2 text-left text-red-800 hover:bg-red-50 flex items-center gap-2.5"
+                                    className="w-full px-3.5 py-2 text-left text-red-800 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/50 flex items-center gap-2.5"
                                   >
                                     <Ban className="w-3.5 h-3.5" />
                                     <span>Bloquer {activeOtherName}</span>
@@ -1050,7 +1057,7 @@ export function ExchangesView({
                                         targetSummaryLabel: `Signaler ${activeOtherName}`,
                                       });
                                     }}
-                                    className="w-full px-3.5 py-2 text-left text-red-800 hover:bg-red-50 flex items-center gap-2.5"
+                                    className="w-full px-3.5 py-2 text-left text-red-800 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/50 flex items-center gap-2.5"
                                   >
                                     <Flag className="w-3.5 h-3.5" />
                                     <span>Signaler ce membre</span>
@@ -1059,7 +1066,7 @@ export function ExchangesView({
                               </>
                             )}
 
-                            <div className="my-1 border-t border-stone-100" />
+                            <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
 
                             <button
                               type="button"
@@ -1068,7 +1075,7 @@ export function ExchangesView({
                                 setThreadMenuOpen(false);
                                 setConfirmDeleteThread(true);
                               }}
-                              className="w-full px-3.5 py-2 text-left text-red-700 hover:bg-red-50 flex items-center gap-2.5"
+                              className="w-full px-3.5 py-2 text-left text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 flex items-center gap-2.5"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               <span>Supprimer la conversation</span>
@@ -1081,7 +1088,7 @@ export function ExchangesView({
 
                   {/* Confirmation Banner: Delete Thread */}
                   {confirmDeleteThread && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md flex flex-wrap items-center justify-between gap-2 text-xs text-red-950">
+                    <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-md flex flex-wrap items-center justify-between gap-2 text-xs text-red-950 dark:text-red-200">
                       <span>Retirer cette conversation de votre boîte de réception ?</span>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
@@ -1095,7 +1102,7 @@ export function ExchangesView({
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteThread(false)}
-                          className="px-2 py-1 text-stone-700 hover:text-stone-900"
+                          className="px-2 py-1 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
                         >
                           Annuler
                         </button>
@@ -1105,7 +1112,7 @@ export function ExchangesView({
 
                   {/* Confirmation Banner: Block Member */}
                   {confirmBlockMember && activeOtherId && activeOtherName && !isBlocked && (
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-md flex flex-wrap items-center justify-between gap-2 text-xs text-red-950">
+                    <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-md flex flex-wrap items-center justify-between gap-2 text-xs text-red-950 dark:text-red-200">
                       <span>
                         Bloquer <strong>{activeOtherName}</strong> empêchera tout futur message privé dans les deux sens et masquera ses contenus.
                       </span>
@@ -1123,7 +1130,7 @@ export function ExchangesView({
                         <button
                           type="button"
                           onClick={() => setConfirmBlockMember(false)}
-                          className="px-2 py-1 text-stone-700 hover:text-stone-900"
+                          className="px-2 py-1 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
                         >
                           Annuler
                         </button>
@@ -1133,7 +1140,7 @@ export function ExchangesView({
 
                   {/* In-Conversation Word Search Bar */}
                   {showThreadSearch && (
-                    <div className="p-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md flex flex-wrap items-center gap-2">
+                    <div className="p-2.5 bg-[#FBF9F5] dark:bg-stone-800/70 border border-stone-200 dark:border-stone-700 rounded-md flex flex-wrap items-center gap-2">
                       <div className="relative flex-1 min-w-[160px]">
                         <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <input
@@ -1143,12 +1150,12 @@ export function ExchangesView({
                           onChange={(e) => setThreadSearchQuery(e.target.value)}
                           placeholder="Rechercher un mot dans la conversation…"
                           aria-label="Rechercher un mot dans la conversation"
-                          className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-white border border-stone-200 rounded text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                          className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                         />
                       </div>
 
                       {normalizedSearch && (
-                        <div className="flex items-center gap-1.5 text-xs text-stone-600 tabular-nums">
+                        <div className="flex items-center gap-1.5 text-xs text-stone-600 dark:text-stone-300 tabular-nums">
                           <span>
                             {matchedMessageIds.length === 0
                               ? '0 résultat'
@@ -1161,7 +1168,7 @@ export function ExchangesView({
                             disabled={matchedMessageIds.length === 0}
                             onClick={() => stepMatch(-1)}
                             aria-label="Occurrence précédente"
-                            className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 bg-white hover:border-stone-400 disabled:opacity-40"
+                            className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-stone-400 disabled:opacity-40"
                           >
                             <ChevronUp className="w-3.5 h-3.5" />
                           </button>
@@ -1170,7 +1177,7 @@ export function ExchangesView({
                             disabled={matchedMessageIds.length === 0}
                             onClick={() => stepMatch(1)}
                             aria-label="Occurrence suivante"
-                            className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 bg-white hover:border-stone-400 disabled:opacity-40"
+                            className="min-h-[30px] min-w-[30px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-stone-400 disabled:opacity-40"
                           >
                             <ChevronDown className="w-3.5 h-3.5" />
                           </button>
@@ -1180,7 +1187,7 @@ export function ExchangesView({
                             className={`min-h-[30px] px-2.5 py-1 rounded border text-[11px] font-medium whitespace-nowrap ${
                               filterToMatches
                                 ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                                : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                                : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                             }`}
                           >
                             {filterToMatches ? 'Tout voir' : 'Filtrer'}
@@ -1196,7 +1203,7 @@ export function ExchangesView({
                           setShowThreadSearch(false);
                         }}
                         aria-label="Fermer la recherche"
-                        className="p-1 text-stone-500 hover:text-stone-900"
+                        className="p-1 text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -1208,8 +1215,8 @@ export function ExchangesView({
                     <div
                       className={`px-3.5 py-2 rounded-md border flex flex-wrap items-center justify-between gap-2 text-xs ${
                         isBlocked
-                          ? 'bg-red-50 border-red-200 text-red-950'
-                          : 'bg-amber-50 border-amber-200 text-amber-950'
+                          ? 'bg-red-50 dark:bg-red-950/50 border-red-200 dark:border-red-800 text-red-950 dark:text-red-200'
+                          : 'bg-amber-50 dark:bg-amber-950/50 border-amber-200 dark:border-amber-800 text-amber-950 dark:text-amber-200'
                       }`}
                     >
                       <span>
@@ -1232,14 +1239,14 @@ export function ExchangesView({
                 {/* Scrollable Flex Message List */}
                 <div
                   ref={threadContainerRef}
-                  className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4 bg-[#FBF9F5]/60"
+                  className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4 bg-[#FBF9F5]/60 dark:bg-stone-950/60"
                 >
                   {!messagesLoaded ? (
-                    <p className="text-sm text-stone-500 italic text-center py-10">
+                    <p className="text-sm text-stone-500 dark:text-stone-400 italic text-center py-10">
                       Chargement de la conversation…
                     </p>
                   ) : displayedMessages.length === 0 ? (
-                    <p className="text-sm text-stone-500 italic text-center py-10">
+                    <p className="text-sm text-stone-500 dark:text-stone-400 italic text-center py-10">
                       {normalizedSearch
                         ? `Aucun message ne contient « ${threadSearchQuery} ».`
                         : 'Aucun message affiché dans cette conversation.'}
@@ -1257,8 +1264,8 @@ export function ExchangesView({
                           data-msg-id={msg.messageId}
                           className={`group flex flex-col ${isMine ? 'items-end' : 'items-start'}`}
                         >
-                          <div className="flex items-center gap-2 text-[11px] text-stone-500 mb-1 px-1">
-                            <span className="font-medium text-stone-700">{msg.senderName}</span>
+                          <div className="flex items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400 mb-1 px-1">
+                            <span className="font-medium text-stone-700 dark:text-stone-300">{msg.senderName}</span>
                             <span aria-hidden="true">·</span>
                             <span>{formatFrenchDate(msg.createdAt?.toDate() ?? null)}</span>
                           </div>
@@ -1271,11 +1278,33 @@ export function ExchangesView({
                             <div
                               className={`px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-line border transition-shadow ${
                                 isMine
-                                  ? 'bg-[#1E3A8A] text-white border-[#1E3A8A] rounded-br-sm'
-                                  : 'bg-white text-stone-800 border-stone-200 rounded-bl-sm'
+                                  ? 'bg-[#1E3A8A] dark:bg-amber-700 text-white border-[#1E3A8A] dark:border-amber-600 rounded-br-sm'
+                                  : 'bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-100 border-stone-200 dark:border-stone-700 rounded-bl-sm'
                               } ${isFocused ? 'ring-2 ring-amber-400 shadow-sm' : ''}`}
                             >
-                              {renderHighlightedText(msg.content, threadSearchQuery, isFocused)}
+                              {(() => {
+                                const cleanText = stripSharedStoryUrlFromText(msg.content);
+                                return (
+                                  <>
+                                    {cleanText && (
+                                      <span>
+                                        {renderHighlightedText(
+                                          cleanText,
+                                          threadSearchQuery,
+                                          isFocused
+                                        )}
+                                      </span>
+                                    )}
+                                    <SharedStoryPreviewCard
+                                      content={msg.content}
+                                      stories={stories}
+                                      onReadStory={onReadStory}
+                                      onOpenStoryById={onOpenStoryById}
+                                      isMineBubble={isMine}
+                                    />
+                                  </>
+                                );
+                              })()}
                             </div>
 
                             {/* Compact Action Controls alongside bubble */}
@@ -1287,7 +1316,7 @@ export function ExchangesView({
                                     onClick={() => setConfirmDeleteMsgId(msg.messageId)}
                                     aria-label="Supprimer ce message"
                                     title="Supprimer ce message"
-                                    className="p-1.5 rounded-full text-stone-400 hover:text-red-700 hover:bg-red-50"
+                                    className="p-1.5 rounded-full text-stone-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -1300,7 +1329,7 @@ export function ExchangesView({
                                     onClick={() => void handleHideMsgForMe(msg)}
                                     aria-label="Supprimer pour moi"
                                     title="Supprimer pour moi"
-                                    className="p-1.5 rounded-full text-stone-400 hover:text-stone-800 hover:bg-stone-100"
+                                    className="p-1.5 rounded-full text-stone-400 hover:text-stone-800 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -1320,7 +1349,7 @@ export function ExchangesView({
                                       }
                                       aria-label="Signaler ce message"
                                       title="Signaler ce message"
-                                      className="p-1.5 rounded-full text-stone-400 hover:text-red-700 hover:bg-red-50"
+                                      className="p-1.5 rounded-full text-stone-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50"
                                     >
                                       <Flag className="w-3.5 h-3.5" />
                                     </button>
@@ -1331,20 +1360,20 @@ export function ExchangesView({
                           </div>
 
                           {isMine && isConfirmingDel && (
-                            <div className="mt-1 inline-flex items-center gap-2 text-[11px] bg-white border border-red-200 rounded px-2.5 py-1">
-                              <span className="text-red-800">Supprimer pour tous ?</span>
+                            <div className="mt-1 inline-flex items-center gap-2 text-[11px] bg-white dark:bg-stone-900 border border-red-200 dark:border-red-800 rounded px-2.5 py-1">
+                              <span className="text-red-800 dark:text-red-300">Supprimer pour tous ?</span>
                               <button
                                 type="button"
                                 disabled={isBusyDel}
                                 onClick={() => void handleDeleteOwnMsg(msg)}
-                                className="font-semibold text-red-700 hover:underline"
+                                className="font-semibold text-red-700 dark:text-red-400 hover:underline"
                               >
                                 {isBusyDel ? 'Suppression…' : 'Confirmer'}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteMsgId(null)}
-                                className="text-stone-600 hover:text-stone-900"
+                                className="text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
                               >
                                 Annuler
                               </button>
@@ -1359,13 +1388,13 @@ export function ExchangesView({
 
                 {/* Pinned Flex Footer Composer */}
                 {isBlocked ? (
-                  <div className="p-4 border-t border-stone-200 bg-red-50/70 text-center text-xs text-red-900 shrink-0">
+                  <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-red-50/70 dark:bg-red-950/40 text-center text-xs text-red-900 dark:text-red-200 shrink-0">
                     Vous avez bloqué ce membre. Utilisez « Options → Débloquer » pour reprendre la conversation.
                   </div>
                 ) : activeExchange.status === 'active' ? (
                   <form
                     onSubmit={handleSend}
-                    className="p-3.5 sm:p-4 border-t border-stone-200 bg-white space-y-2 shrink-0"
+                    className="p-3.5 sm:p-4 border-t border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 space-y-2 shrink-0"
                   >
                     <div className="flex items-end gap-2.5">
                       <textarea
@@ -1380,7 +1409,7 @@ export function ExchangesView({
                           }
                         }}
                         placeholder="Écrire votre message privé… (Entrée pour envoyer)"
-                        className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1E3A8A] resize-none"
+                        className="flex-1 min-w-0 px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-amber-400 resize-none"
                       />
                       <button
                         type="submit"
@@ -1392,20 +1421,20 @@ export function ExchangesView({
                       </button>
                     </div>
                     {error && (
-                      <p role="alert" className="text-xs text-red-700">
+                      <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                         {error}
                       </p>
                     )}
                   </form>
                 ) : (
-                  <div className="p-4 border-t border-stone-200 bg-stone-50 text-center text-xs text-stone-600 shrink-0">
+                  <div className="p-4 border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-center text-xs text-stone-600 dark:text-stone-400 shrink-0">
                     Cette conversation est archivée. Rouvrez-la via « Options » pour reprendre l’échange.
                   </div>
                 )}
               </>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center p-10 text-center text-sm text-stone-500">
-                <MessageCircle className="w-7 h-7 text-stone-300 mb-3" />
+              <div className="flex-1 flex flex-col items-center justify-center p-10 text-center text-sm text-stone-500 dark:text-stone-400">
+                <MessageCircle className="w-7 h-7 text-stone-300 dark:text-stone-600 mb-3" />
                 <p>Sélectionnez une conversation dans la liste à gauche.</p>
               </div>
             )}

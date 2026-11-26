@@ -294,20 +294,20 @@ export function JournalView({
   if (!user) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-16">
-        <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10">
-          <p className="text-xs uppercase tracking-widest text-stone-500 mb-3">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10">
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-3">
             Mon carnet · Écrits & bibliothèque
           </p>
-          <h1 className="font-display text-3xl font-medium text-stone-900 mb-3">
+          <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100 mb-3">
             Vos histoires, vos brouillons privés et vos lectures enregistrées
           </h1>
-          <p className="text-base text-stone-600 leading-relaxed mb-6">
+          <p className="text-base text-stone-600 dark:text-stone-400 leading-relaxed mb-6">
             Connectez-vous avec Google pour rédiger vos textes à votre rythme, retrouver vos favoris « À lire plus tard », gérer vos repartages et suivre vos statistiques de lecture.
           </p>
           <button
             type="button"
             onClick={signInWithGoogle}
-            className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap"
+            className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1E3A8A] dark:bg-[#3B629B] rounded-md hover:bg-[#172D6B] dark:hover:bg-[#2F5082] transition-colors whitespace-nowrap"
           >
             Se connecter avec Google
           </button>
@@ -545,12 +545,12 @@ export function JournalView({
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 sm:py-10 space-y-6">
       {/* Compact Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-stone-200">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-5 border-b border-stone-200 dark:border-stone-800">
         <div>
-          <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1.5">
             Mon carnet · {user.email}
           </p>
-          <h1 className="font-display text-3xl font-medium text-stone-900">
+          <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100">
             Mes écrits & bibliothèque
           </h1>
         </div>
@@ -560,7 +560,7 @@ export function JournalView({
             <button
               type="button"
               onClick={onOpenMyProfile}
-              className="min-h-[38px] px-3.5 py-1.5 text-xs sm:text-sm font-medium text-[#1B365D] bg-white border border-[#CBD6E6] rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              className="min-h-[38px] px-3.5 py-1.5 text-xs sm:text-sm font-medium text-[#1B365D] dark:text-[#93B4E2] bg-white dark:bg-stone-900 border border-[#CBD6E6] dark:border-stone-700 rounded-md hover:border-[#1B365D] dark:hover:border-[#93B4E2] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <UserIcon className="w-4 h-4" />
               <span>Mon profil</span>
@@ -569,7 +569,7 @@ export function JournalView({
           <button
             type="button"
             onClick={onNewStory}
-            className="min-h-[38px] px-4 py-1.5 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            className="min-h-[38px] px-4 py-1.5 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] dark:bg-[#3B629B] rounded-md hover:bg-[#172D6B] dark:hover:bg-[#2F5082] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
             <Plus className="w-4 h-4" />
             <span>Nouveau texte</span>
@@ -577,7 +577,7 @@ export function JournalView({
           <button
             type="button"
             onClick={logOut}
-            className="min-h-[38px] px-3 py-1.5 text-xs sm:text-sm font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            className="min-h-[38px] px-3 py-1.5 text-xs sm:text-sm font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
             <LogOut className="w-4 h-4" />
             <span>Déconnexion</span>
@@ -588,7 +588,7 @@ export function JournalView({
       {/* Mobile & Tablet Horizontal Navigation */}
       <nav
         aria-label="Sections de mon carnet"
-        className="lg:hidden flex items-center gap-1.5 p-1 bg-stone-100 rounded-lg overflow-x-auto"
+        className="lg:hidden flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-lg overflow-x-auto"
       >
         {navItems.map((tab) => {
           const Icon = tab.icon;
@@ -600,8 +600,8 @@ export function JournalView({
               onClick={() => setSubTab(tab.id)}
               className={`min-h-[38px] px-3 py-1.5 text-xs font-medium rounded-md transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                 active
-                  ? 'bg-white text-stone-900 shadow-sm'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -609,7 +609,9 @@ export function JournalView({
               {typeof tab.count === 'number' && (
                 <span
                   className={`px-1.5 py-0.5 rounded text-[10px] tabular-nums ${
-                    active ? 'bg-stone-100 text-stone-800' : 'bg-white/70 text-stone-600'
+                    active
+                      ? 'bg-stone-100 dark:bg-stone-700 text-stone-800 dark:text-stone-100'
+                      : 'bg-white/70 dark:bg-stone-800/80 text-stone-600 dark:text-stone-400'
                   }`}
                 >
                   {tab.count}
@@ -626,7 +628,7 @@ export function JournalView({
         <aside className="hidden lg:block lg:col-span-3 space-y-5 sticky top-6">
           <nav
             aria-label="Menu du carnet"
-            className="bg-white border border-stone-200 rounded-lg p-2 space-y-1"
+            className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-2 space-y-1"
           >
             {navItems.map((tab) => {
               const Icon = tab.icon;
@@ -638,8 +640,8 @@ export function JournalView({
                   onClick={() => setSubTab(tab.id)}
                   className={`w-full min-h-[42px] px-3.5 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-between gap-2 ${
                     active
-                      ? 'bg-[#1B365D] text-white'
-                      : 'text-stone-700 hover:bg-[#FBF9F5] hover:text-stone-900'
+                      ? 'bg-[#1B365D] dark:bg-[#3B629B] text-white'
+                      : 'text-stone-700 dark:text-stone-300 hover:bg-[#FBF9F5] dark:hover:bg-stone-800 hover:text-stone-900 dark:hover:text-stone-100'
                   }`}
                 >
                   <span className="inline-flex items-center gap-2.5 truncate">
@@ -649,7 +651,9 @@ export function JournalView({
                   {typeof tab.count === 'number' && (
                     <span
                       className={`px-2 py-0.5 rounded text-xs tabular-nums ${
-                        active ? 'bg-white/20 text-white' : 'bg-stone-100 text-stone-600'
+                        active
+                          ? 'bg-white/20 text-white'
+                          : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
                       }`}
                     >
                       {tab.count}
@@ -661,8 +665,8 @@ export function JournalView({
           </nav>
 
           {/* Compact Interactive Overview in Rail */}
-          <div className="bg-white border border-stone-200 rounded-lg p-4 space-y-3">
-            <p className="text-[11px] uppercase tracking-widest text-stone-500">
+          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-4 space-y-3">
+            <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Aperçu rapide
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -672,12 +676,12 @@ export function JournalView({
                   setSubTab('stories');
                   setStoryFilter('public');
                 }}
-                className="p-2.5 rounded-md bg-[#FBF9F5] border border-stone-200/80 hover:border-[#1B365D]/40 text-left transition-colors"
+                className="p-2.5 rounded-md bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200/80 dark:border-stone-800 hover:border-[#1B365D]/40 dark:hover:border-[#93B4E2]/50 text-left transition-colors"
               >
-                <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+                <p className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                   {publicCount}
                 </p>
-                <p className="text-[11px] text-stone-600">Publiés</p>
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">Publiés</p>
               </button>
               <button
                 type="button"
@@ -685,32 +689,32 @@ export function JournalView({
                   setSubTab('stories');
                   setStoryFilter('private');
                 }}
-                className="p-2.5 rounded-md bg-[#FBF9F5] border border-stone-200/80 hover:border-[#1B365D]/40 text-left transition-colors"
+                className="p-2.5 rounded-md bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200/80 dark:border-stone-800 hover:border-[#1B365D]/40 dark:hover:border-[#93B4E2]/50 text-left transition-colors"
               >
-                <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+                <p className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                   {draftCount}
                 </p>
-                <p className="text-[11px] text-stone-600">Brouillons</p>
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">Brouillons</p>
               </button>
               <button
                 type="button"
                 onClick={() => setSubTab('stats')}
-                className="p-2.5 rounded-md bg-[#FBF9F5] border border-stone-200/80 hover:border-[#1B365D]/40 text-left transition-colors"
+                className="p-2.5 rounded-md bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200/80 dark:border-stone-800 hover:border-[#1B365D]/40 dark:hover:border-[#93B4E2]/50 text-left transition-colors"
               >
-                <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+                <p className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                   {totalViewsReceived}
                 </p>
-                <p className="text-[11px] text-stone-600">Vues</p>
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">Vues</p>
               </button>
               <button
                 type="button"
                 onClick={() => setSubTab('stats')}
-                className="p-2.5 rounded-md bg-[#FBF9F5] border border-stone-200/80 hover:border-[#1B365D]/40 text-left transition-colors"
+                className="p-2.5 rounded-md bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200/80 dark:border-stone-800 hover:border-[#1B365D]/40 dark:hover:border-[#93B4E2]/50 text-left transition-colors"
               >
-                <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+                <p className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                   {totalEchoesReceived}
                 </p>
-                <p className="text-[11px] text-stone-600">Échos</p>
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">Échos</p>
               </button>
             </div>
           </div>
@@ -722,7 +726,7 @@ export function JournalView({
           {subTab === 'stories' && (
             <section aria-label="Mes écrits" className="space-y-4">
               {myStories.length > 0 && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-3.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {(
                       [
@@ -774,8 +778,8 @@ export function JournalView({
                           storyFilter === opt.id
                             ? opt.id === 'confession'
                               ? 'bg-[#9A3B29] text-white border-[#9A3B29]'
-                              : 'bg-[#1B365D] text-white border-[#1B365D]'
-                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                              : 'bg-[#1B365D] dark:bg-[#3B629B] text-white border-[#1B365D] dark:border-[#3B629B]'
+                            : 'bg-[#FBF9F5] dark:bg-stone-950 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-600'
                         }`}
                       >
                         {opt.label}
@@ -789,7 +793,7 @@ export function JournalView({
                         value={storySort}
                         onChange={(e) => setStorySort(e.target.value as StorySortMode)}
                         aria-label="Trier mes écrits"
-                        className="min-h-[34px] px-2.5 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                        className="min-h-[34px] px-2.5 py-1 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                       >
                         <option value="recent">Plus récents</option>
                         <option value="views">Plus vus</option>
@@ -802,14 +806,14 @@ export function JournalView({
 
                     {myStories.length > 1 && (
                       <div className="relative w-full sm:w-52 shrink-0">
-                        <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <input
                           type="search"
                           value={storySearch}
                           onChange={(e) => setStorySearch(e.target.value)}
                           placeholder="Filtrer mes textes…"
                           aria-label="Rechercher dans mes écrits"
-                          className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                          className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                         />
                       </div>
                     )}
@@ -818,17 +822,17 @@ export function JournalView({
               )}
 
               {nonCompliantPublicStories.length > 0 && (
-                <div className="bg-amber-50/90 border border-amber-300 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="bg-amber-50/90 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-800/70 rounded-lg p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold text-amber-950 inline-flex items-center gap-1.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <p className="text-xs font-semibold text-amber-950 dark:text-amber-200 inline-flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
                       <span>
                         Régulation rétroactive : {nonCompliantPublicStories.length} récit
                         {nonCompliantPublicStories.length > 1 ? 's' : ''} public
                         {nonCompliantPublicStories.length > 1 ? 's' : ''} sous le seuil minimal
                       </span>
                     </p>
-                    <p className="text-xs text-amber-900 leading-relaxed">
+                    <p className="text-xs text-amber-900 dark:text-amber-200/90 leading-relaxed">
                       Les confessions de 3 lignes ou moins et les romans de moins de 2 pages publiés avant la mise à jour sont automatiquement masqués des salons. Complétez-les pour qu’ils redeviennent visibles, ou passez-les en brouillons privés.
                     </p>
                   </div>
@@ -837,7 +841,7 @@ export function JournalView({
                       <button
                         type="button"
                         onClick={() => setStoryFilter('non-compliant')}
-                        className="min-h-[34px] px-3 py-1 rounded-md border border-amber-300 bg-white text-xs font-medium text-amber-950 hover:border-amber-500 whitespace-nowrap"
+                        className="min-h-[34px] px-3 py-1 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-stone-900 text-xs font-medium text-amber-950 dark:text-amber-200 hover:border-amber-500 whitespace-nowrap"
                       >
                         Afficher ({nonCompliantCount})
                       </button>
@@ -863,7 +867,7 @@ export function JournalView({
                           setBatchPrivatizeBusy(false);
                         }
                       }}
-                      className="min-h-[34px] px-3 py-1 rounded-md bg-amber-900 text-white text-xs font-medium hover:bg-amber-950 disabled:opacity-60 whitespace-nowrap"
+                      className="min-h-[34px] px-3 py-1 rounded-md bg-amber-900 dark:bg-amber-700 text-white text-xs font-medium hover:bg-amber-950 dark:hover:bg-amber-600 disabled:opacity-60 whitespace-nowrap"
                     >
                       {batchPrivatizeBusy
                         ? 'En cours…'
@@ -876,34 +880,34 @@ export function JournalView({
               {storyActionError && (
                 <p
                   role="alert"
-                  className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+                  className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-md px-3.5 py-2"
                 >
                   {storyActionError}
                 </p>
               )}
 
               {myStories.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-4">
-                  <FileText className="w-7 h-7 text-stone-400 mx-auto" />
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10 text-center space-y-4">
+                  <FileText className="w-7 h-7 text-stone-400 dark:text-stone-500 mx-auto" />
                   <div className="space-y-1.5">
-                    <p className="font-display text-xl text-stone-900">
+                    <p className="font-display text-xl text-stone-900 dark:text-stone-100">
                       Votre carnet est encore vierge
                     </p>
-                    <p className="text-sm text-stone-600 max-w-md mx-auto">
+                    <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto">
                       Écrivez une confession, un récit libre ou lancez le premier chapitre d’un roman.
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={onNewStory}
-                    className="min-h-[40px] px-4 py-2 text-sm font-medium text-[#1E3A8A] border border-[#1E3A8A] rounded-md hover:bg-[#1E3A8A] hover:text-white transition-colors whitespace-nowrap"
+                    className="min-h-[40px] px-4 py-2 text-sm font-medium text-[#1E3A8A] dark:text-[#93B4E2] border border-[#1E3A8A] dark:border-[#93B4E2] rounded-md hover:bg-[#1E3A8A] dark:hover:bg-[#3B629B] hover:text-white transition-colors whitespace-nowrap"
                   >
                     Commencer un texte
                   </button>
                 </div>
               ) : filteredStories.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-                  <p className="font-display text-lg text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
+                  <p className="font-display text-lg text-stone-900 dark:text-stone-100">
                     Aucun texte ne correspond à ce filtre
                   </p>
                   <button
@@ -912,13 +916,13 @@ export function JournalView({
                       setStoryFilter('all');
                       setStorySearch('');
                     }}
-                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                   >
                     Afficher tous mes écrits
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+                <div className="divide-y divide-stone-200 dark:divide-stone-800 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg">
                   {filteredStories.map((story) => {
                     const isConfirming = confirmDeleteId === story.storyId;
                     const isConfirmingClaim = confirmClaimId === story.storyId;
@@ -928,11 +932,11 @@ export function JournalView({
 
                     return (
                       <article key={story.storyId} className="p-5 sm:p-6 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                           <div className="flex flex-wrap items-center gap-2">
                             <StoryFormatKicker story={story} showDetails={true} />
                             <span aria-hidden="true">·</span>
-                            <span className="font-medium text-stone-800">
+                            <span className="font-medium text-stone-800 dark:text-stone-200">
                               {story.customSalonName
                                 ? story.customSalonName
                                 : story.storyScope === 'pelemele'
@@ -955,8 +959,8 @@ export function JournalView({
                             <span
                               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded border text-[11px] font-medium ${
                                 isDraft
-                                  ? 'border-stone-300 bg-stone-100 text-stone-700'
-                                  : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D]'
+                                  ? 'border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                                  : 'border-[#CBD6E6] dark:border-[#3B629B]/50 bg-[#F3F6FA] dark:bg-[#1B365D]/30 text-[#1B365D] dark:text-[#93B4E2]'
                               }`}
                             >
                               {isDraft ? (
@@ -981,7 +985,7 @@ export function JournalView({
                               )}
                             </span>
                             {story.isAnonymous && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-stone-300 bg-stone-50 text-[11px] font-medium text-stone-700">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-[11px] font-medium text-stone-700 dark:text-stone-300">
                                 <EyeOff className="w-3 h-3" />
                                 <span>Anonyme</span>
                               </span>
@@ -992,8 +996,8 @@ export function JournalView({
                               compact
                             />
                             {!compliance.compliant && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-[11px] font-medium text-amber-950">
-                                <AlertTriangle className="w-3 h-3 text-amber-700" />
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 text-[11px] font-medium text-amber-950 dark:text-amber-200">
+                                <AlertTriangle className="w-3 h-3 text-amber-700 dark:text-amber-400" />
                                 <span>À régulariser</span>
                               </span>
                             )}
@@ -1001,7 +1005,7 @@ export function JournalView({
                         </div>
 
                         {!compliance.compliant && (
-                          <div className="rounded-md border border-amber-200 bg-amber-50/75 px-3 py-2 text-xs text-amber-950">
+                          <div className="rounded-md border border-amber-200 dark:border-amber-800/70 bg-amber-50/75 dark:bg-amber-950/35 px-3 py-2 text-xs text-amber-950 dark:text-amber-200">
                             <span className="font-medium">
                               {story.visibility === 'public'
                                 ? 'Suspendu des salons publics : '
@@ -1022,7 +1026,7 @@ export function JournalView({
                             />
                           )}
                           <div className="min-w-0 flex-1 space-y-1.5">
-                            <h3 className="font-display text-xl font-medium text-stone-900">
+                            <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                               <button
                                 type="button"
                                 onClick={() => onReadStory(story)}
@@ -1031,7 +1035,7 @@ export function JournalView({
                                 {story.title}
                               </button>
                             </h3>
-                            <p className="text-sm text-stone-600 leading-relaxed line-clamp-2">
+                            <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2">
                               {story.excerpt}
                             </p>
                           </div>
@@ -1042,7 +1046,7 @@ export function JournalView({
                             <button
                               type="button"
                               onClick={() => onReadStory(story)}
-                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] dark:bg-[#3B629B] rounded-md hover:bg-[#132744] dark:hover:bg-[#2F5082] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <BookOpen className="w-3.5 h-3.5" />
                               <span>
@@ -1054,7 +1058,7 @@ export function JournalView({
                               <button
                                 type="button"
                                 onClick={() => onAddChapterToNovel(story)}
-                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded-md hover:border-[#1B365D] dark:hover:border-[#93B4E2] inline-flex items-center gap-1.5 whitespace-nowrap"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Chapitre {(story.chapterCount ?? 1) + 1}</span>
@@ -1066,7 +1070,7 @@ export function JournalView({
                                 type="button"
                                 disabled={isBusy}
                                 onClick={() => void handleToggleSeriesStatus(story)}
-                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
                               >
                                 <Check className="w-3.5 h-3.5" />
                                 <span>
@@ -1082,8 +1086,8 @@ export function JournalView({
                               onClick={() => onEditStory(story)}
                               className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-md inline-flex items-center gap-1.5 whitespace-nowrap ${
                                 !compliance.compliant
-                                  ? 'text-amber-950 bg-amber-100 border border-amber-300 hover:bg-amber-200'
-                                  : 'text-stone-800 bg-[#FBF9F5] border border-stone-200 hover:border-stone-400'
+                                  ? 'text-amber-950 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-900/60'
+                                  : 'text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
                               }`}
                             >
                               <Edit3 className="w-3.5 h-3.5" />
@@ -1098,7 +1102,7 @@ export function JournalView({
                                   type="button"
                                   disabled={isBusy}
                                   onClick={() => void handleToggleVisibility(story)}
-                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
                                 >
                                   {story.visibility === 'public' ? (
                                     <>
@@ -1116,22 +1120,22 @@ export function JournalView({
 
                             {story.isAnonymous &&
                               (isConfirmingClaim ? (
-                                <div className="flex flex-wrap items-center gap-1.5 bg-[#F3F6FA] border border-[#CBD6E6] rounded-md px-2.5 py-1">
-                                  <span className="text-[11px] text-[#1B365D] font-medium">
+                                <div className="flex flex-wrap items-center gap-1.5 bg-[#F3F6FA] dark:bg-[#1B365D]/30 border border-[#CBD6E6] dark:border-[#3B629B]/60 rounded-md px-2.5 py-1">
+                                  <span className="text-[11px] text-[#1B365D] dark:text-[#93B4E2] font-medium">
                                     Signer « {profile?.displayName || user.displayName || 'Auteur'} » ?
                                   </span>
                                   <button
                                     type="button"
                                     disabled={isBusy}
                                     onClick={() => void handleClaimAnonymous(story.storyId)}
-                                    className="min-h-[28px] px-2.5 py-0.5 text-[11px] font-medium text-white bg-[#1B365D] rounded hover:bg-[#132744] disabled:opacity-60 whitespace-nowrap"
+                                    className="min-h-[28px] px-2.5 py-0.5 text-[11px] font-medium text-white bg-[#1B365D] dark:bg-[#3B629B] rounded hover:bg-[#132744] dark:hover:bg-[#2F5082] disabled:opacity-60 whitespace-nowrap"
                                   >
                                     {isBusy ? 'En cours…' : 'Confirmer'}
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => setConfirmClaimId(null)}
-                                    className="min-h-[28px] px-2 py-0.5 text-[11px] font-medium text-stone-600 hover:text-stone-900"
+                                    className="min-h-[28px] px-2 py-0.5 text-[11px] font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                                   >
                                     Annuler
                                   </button>
@@ -1144,7 +1148,7 @@ export function JournalView({
                                     setConfirmDeleteId(null);
                                     setConfirmClaimId(story.storyId);
                                   }}
-                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded-md hover:border-[#1B365D] dark:hover:border-[#93B4E2] inline-flex items-center gap-1.5 whitespace-nowrap"
                                 >
                                   <UserCheck className="w-3.5 h-3.5" />
                                   <span>Revendiquer cet écrit</span>
@@ -1153,7 +1157,7 @@ export function JournalView({
                           </div>
 
                           <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 ml-auto">
-                            <span className="text-xs text-stone-500 tabular-nums">
+                            <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                               {story.viewCount ?? 0} vue{(story.viewCount ?? 0) > 1 ? 's' : ''} ·{' '}
                               {story.resonanceCount} rés. · {story.echoCount} comm.
                             </span>
@@ -1171,7 +1175,7 @@ export function JournalView({
                                 <button
                                   type="button"
                                   onClick={() => setConfirmDeleteId(null)}
-                                  className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
+                                  className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                                 >
                                   Annuler
                                 </button>
@@ -1180,7 +1184,7 @@ export function JournalView({
                               <button
                                 type="button"
                                 onClick={() => setConfirmDeleteId(story.storyId)}
-                                className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1 whitespace-nowrap"
+                                className="min-h-[36px] px-2.5 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1 whitespace-nowrap"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 <span>Supprimer</span>
@@ -1200,20 +1204,20 @@ export function JournalView({
           {subTab === 'bookmarks' && (
             <section aria-label="Histoires enregistrées à lire plus tard" className="space-y-4">
               {bookmarks.length > 1 && (
-                <div className="flex items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
-                  <p className="text-xs text-stone-600 tabular-nums">
+                <div className="flex items-center justify-between gap-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-3.5">
+                  <p className="text-xs text-stone-600 dark:text-stone-400 tabular-nums">
                     {filteredBookmarks.length} histoire{filteredBookmarks.length > 1 ? 's' : ''} enregistrée
                     {filteredBookmarks.length > 1 ? 's' : ''}
                   </p>
                   <div className="relative w-full sm:w-64">
-                    <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="search"
                       value={bookmarkSearch}
                       onChange={(e) => setBookmarkSearch(e.target.value)}
                       placeholder="Rechercher dans mes favoris…"
                       aria-label="Rechercher dans mes favoris"
-                      className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                      className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                     />
                   </div>
                 </div>
@@ -1222,46 +1226,46 @@ export function JournalView({
               {bookmarkActionError && (
                 <p
                   role="alert"
-                  className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+                  className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-md px-3.5 py-2"
                 >
                   {bookmarkActionError}
                 </p>
               )}
 
               {bookmarks.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-2">
-                  <Bookmark className="w-6 h-6 text-stone-400 mx-auto" />
-                  <p className="font-display text-xl text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10 text-center space-y-2">
+                  <Bookmark className="w-6 h-6 text-stone-400 dark:text-stone-500 mx-auto" />
+                  <p className="font-display text-xl text-stone-900 dark:text-stone-100">
                     Aucune histoire enregistrée pour le moment
                   </p>
-                  <p className="text-sm text-stone-600 max-w-md mx-auto">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto">
                     Cliquez sur l’icône « Enregistrer » sur n’importe quelle histoire pour la retrouver ici et la lire à tête reposée.
                   </p>
                 </div>
               ) : filteredBookmarks.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-                  <p className="font-display text-lg text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
+                  <p className="font-display text-lg text-stone-900 dark:text-stone-100">
                     Aucun favori ne correspond à cette recherche
                   </p>
                   <button
                     type="button"
                     onClick={() => setBookmarkSearch('')}
-                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 dark:hover:border-stone-500"
                   >
                     Tout afficher
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+                <div className="divide-y divide-stone-200 dark:divide-stone-800 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg">
                   {filteredBookmarks.map((bm) => {
                     const salonInfo = THEME_MAP[bm.storyTheme];
                     const isBusy = busyBookmarkId === bm.storyId;
                     return (
                       <div key={bm.storyId} className="p-5 sm:p-6 space-y-3">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                           <StoryFormatKicker story={{ storyFormat: bm.storyFormat }} showDetails={false} />
                           <span aria-hidden="true">·</span>
-                          <span className="font-medium text-stone-800">
+                          <span className="font-medium text-stone-800 dark:text-stone-200">
                             {bm.customSalonName ||
                               (bm.storyScope === 'pelemele' && !bm.customSalonId
                                 ? 'Hors salon · Pêle-mêle'
@@ -1275,10 +1279,10 @@ export function JournalView({
                           <span>Enregistré le {formatFrenchDate(bm.createdAt?.toDate() ?? null)}</span>
                         </div>
 
-                        <h3 className="font-display text-xl font-medium text-stone-900">
+                        <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                           {bm.storyTitle}
                         </h3>
-                        <p className="text-sm text-stone-600 leading-relaxed line-clamp-2">
+                        <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2">
                           {bm.storyExcerpt}
                         </p>
 
@@ -1286,7 +1290,7 @@ export function JournalView({
                           <button
                             type="button"
                             onClick={() => onOpenStoryById?.(bm.storyId)}
-                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-[#1B365D] dark:bg-[#2C4F82] rounded-md hover:bg-[#132744] dark:hover:bg-[#3A639E] inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <BookOpen className="w-3.5 h-3.5" />
                             <span>Lire maintenant</span>
@@ -1296,7 +1300,7 @@ export function JournalView({
                             type="button"
                             disabled={isBusy}
                             onClick={() => void handleRemoveBookmark(bm.storyId)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Retirer des favoris</span>
@@ -1314,21 +1318,21 @@ export function JournalView({
           {subTab === 'quotes' && (
             <section aria-label="Collection de citations favorites" className="space-y-4">
               {quotes.length > 0 && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
-                  <p className="text-xs text-stone-600 tabular-nums">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-3.5">
+                  <p className="text-xs text-stone-600 dark:text-stone-400 tabular-nums">
                     {filteredQuotes.length} citation{filteredQuotes.length > 1 ? 's' : ''} favorite
                     {filteredQuotes.length > 1 ? 's' : ''}
                   </p>
                   {quotes.length > 1 && (
                     <div className="relative w-full sm:w-64">
-                      <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type="search"
                         value={quoteSearch}
                         onChange={(e) => setQuoteSearch(e.target.value)}
                         placeholder="Rechercher une citation, un titre…"
                         aria-label="Rechercher dans mes citations favorites"
-                        className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                        className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                       />
                     </div>
                   )}
@@ -1338,37 +1342,37 @@ export function JournalView({
               {quoteActionError && (
                 <p
                   role="alert"
-                  className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3.5 py-2"
+                  className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-md px-3.5 py-2"
                 >
                   {quoteActionError}
                 </p>
               )}
 
               {quotes.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-2">
-                  <Highlighter className="w-6 h-6 text-amber-700/80 mx-auto" />
-                  <p className="font-display text-xl text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10 text-center space-y-2">
+                  <Highlighter className="w-6 h-6 text-amber-700/80 dark:text-amber-400/80 mx-auto" />
+                  <p className="font-display text-xl text-stone-900 dark:text-stone-100">
                     Aucune citation favorite pour le moment
                   </p>
-                  <p className="text-sm text-stone-600 max-w-md mx-auto leading-relaxed">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto leading-relaxed">
                     Lors de la lecture d’un récit ou d’un roman, sélectionnez n’importe quel passage et cliquez sur « Surligner » pour le retrouver ici.
                   </p>
                 </div>
               ) : filteredQuotes.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-                  <p className="font-display text-lg text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
+                  <p className="font-display text-lg text-stone-900 dark:text-stone-100">
                     Aucune citation ne correspond à cette recherche
                   </p>
                   <button
                     type="button"
                     onClick={() => setQuoteSearch('')}
-                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 dark:hover:border-stone-500"
                   >
                     Tout afficher
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+                <div className="divide-y divide-stone-200 dark:divide-stone-800 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg">
                   {filteredQuotes.map((quote) => {
                     const salonInfo = THEME_MAP[quote.storyTheme];
                     const isBusy = busyQuoteId === quote.quoteId;
@@ -1381,8 +1385,8 @@ export function JournalView({
 
                     return (
                       <article key={quote.quoteId} className="p-5 sm:p-6 space-y-3.5">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-                          <span className="font-medium text-stone-800">{originLabel}</span>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+                          <span className="font-medium text-stone-800 dark:text-stone-200">{originLabel}</span>
                           <span aria-hidden="true">·</span>
                           <span>Par {quote.storyAuthorName}</span>
                           {quote.storyFormat === 'roman' && (
@@ -1400,19 +1404,19 @@ export function JournalView({
                           </span>
                         </div>
 
-                        <blockquote className="bg-[#FBF9F5] border border-stone-200/90 rounded-md px-4 py-3.5">
-                          <p className="font-display italic text-lg sm:text-xl leading-relaxed text-stone-900">
+                        <blockquote className="bg-[#FBF9F5] dark:bg-stone-800/60 border border-stone-200/90 dark:border-stone-700 rounded-md px-4 py-3.5">
+                          <p className="font-display italic text-lg sm:text-xl leading-relaxed text-stone-900 dark:text-stone-100">
                             « {quote.quoteText} »
                           </p>
                         </blockquote>
 
                         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                          <p className="text-xs text-stone-600">
+                          <p className="text-xs text-stone-600 dark:text-stone-400">
                             Extrait de{' '}
                             <button
                               type="button"
                               onClick={() => onOpenStoryById?.(quote.storyId)}
-                              className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left"
+                              className="font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-[#93B4E2] hover:underline text-left"
                             >
                               {quote.storyTitle}
                             </button>
@@ -1422,7 +1426,7 @@ export function JournalView({
                             <button
                               type="button"
                               onClick={() => onOpenStoryById?.(quote.storyId)}
-                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] dark:bg-[#2C4F82] rounded-md hover:bg-[#132744] dark:hover:bg-[#3A639E] inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <BookOpen className="w-3.5 h-3.5" />
                               <span>Lire le récit</span>
@@ -1431,11 +1435,11 @@ export function JournalView({
                             <button
                               type="button"
                               onClick={() => void handleCopyQuote(quote)}
-                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               {isCopied ? (
                                 <>
-                                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                   <span>Copié</span>
                                 </>
                               ) : (
@@ -1450,7 +1454,7 @@ export function JournalView({
                               type="button"
                               disabled={isBusy}
                               onClick={() => void handleDeleteQuote(quote.quoteId)}
-                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-red-700 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                               <span>Retirer</span>
@@ -1471,14 +1475,14 @@ export function JournalView({
               {repostActionError && (
                 <div
                   role="alert"
-                  className="bg-red-50 border border-red-200 rounded-md px-4 py-2.5 text-xs text-red-800"
+                  className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-md px-4 py-2.5 text-xs text-red-800 dark:text-red-300"
                 >
                   {repostActionError}
                 </div>
               )}
 
               {reposts.length > 0 && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg p-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-3.5">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {(
                       [
@@ -1499,8 +1503,8 @@ export function JournalView({
                         onClick={() => setRepostFilter(opt.id)}
                         className={`min-h-[32px] px-3 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap ${
                           repostFilter === opt.id
-                            ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                            ? 'bg-[#1B365D] dark:bg-[#2C4F82] text-white border-[#1B365D] dark:border-[#2C4F82]'
+                            : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
                         }`}
                       >
                         {opt.label}
@@ -1510,14 +1514,14 @@ export function JournalView({
 
                   {reposts.length > 1 && (
                     <div className="relative w-full sm:w-60 shrink-0">
-                      <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         type="search"
                         value={repostSearch}
                         onChange={(e) => setRepostSearch(e.target.value)}
                         placeholder="Filtrer mes repartages…"
                         aria-label="Rechercher dans mes repartages"
-                        className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                        className="w-full min-h-[34px] pl-8 pr-3 py-1 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                       />
                     </div>
                   )}
@@ -1525,18 +1529,18 @@ export function JournalView({
               )}
 
               {reposts.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10 text-center space-y-2">
-                  <Repeat2 className="w-6 h-6 text-stone-400 mx-auto" />
-                  <p className="font-display text-xl text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10 text-center space-y-2">
+                  <Repeat2 className="w-6 h-6 text-stone-400 dark:text-stone-500 mx-auto" />
+                  <p className="font-display text-xl text-stone-900 dark:text-stone-100">
                     Aucun repartage pour le moment
                   </p>
-                  <p className="text-sm text-stone-600 max-w-md mx-auto">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto">
                     Lorsque vous repartagez un récit, il s’affiche ici et sur votre mur en public ou en privé selon le réglage de votre profil.
                   </p>
                 </div>
               ) : filteredReposts.length === 0 ? (
-                <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-                  <p className="font-display text-lg text-stone-900">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
+                  <p className="font-display text-lg text-stone-900 dark:text-stone-100">
                     Aucun repartage ne correspond à ce filtre
                   </p>
                   <button
@@ -1545,13 +1549,13 @@ export function JournalView({
                       setRepostFilter('all');
                       setRepostSearch('');
                     }}
-                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 dark:hover:border-stone-500"
                   >
                     Tout afficher
                   </button>
                 </div>
               ) : (
-                <div className="divide-y divide-stone-200 bg-white border border-stone-200 rounded-lg">
+                <div className="divide-y divide-stone-200 dark:divide-stone-800 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg">
                   {filteredReposts.map((repost) => {
                     const salonInfo = THEME_MAP[repost.storyTheme];
                     const isPrivate = repost.visibility === 'private';
@@ -1559,9 +1563,9 @@ export function JournalView({
 
                     return (
                       <div key={repost.repostId} className="p-5 sm:p-6 space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium text-stone-800">
+                            <span className="font-medium text-stone-800 dark:text-stone-200">
                               {repost.customSalonName ||
                                 (repost.storyScope === 'pelemele' && !repost.customSalonId
                                   ? 'Hors salon · Pêle-mêle'
@@ -1578,8 +1582,8 @@ export function JournalView({
                           <span
                             className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded border text-[11px] font-medium ${
                               isPrivate
-                                ? 'border-stone-300 bg-stone-100 text-stone-700'
-                                : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D]'
+                                ? 'border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                                : 'border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-[#93B4E2]'
                             }`}
                           >
                             {isPrivate ? (
@@ -1597,15 +1601,15 @@ export function JournalView({
                         </div>
 
                         {repost.note && (
-                          <p className="text-xs text-stone-700 italic bg-[#FBF9F5] border-l-2 border-[#1B365D] pl-3 py-1.5 rounded-r">
+                          <p className="text-xs text-stone-700 dark:text-stone-300 italic bg-[#FBF9F5] dark:bg-stone-800/60 border-l-2 border-[#1B365D] dark:border-[#93B4E2] pl-3 py-1.5 rounded-r">
                             « {repost.note} »
                           </p>
                         )}
 
-                        <h3 className="font-display text-xl font-medium text-stone-900">
+                        <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                           {repost.storyTitle}
                         </h3>
-                        <p className="text-sm text-stone-600 leading-relaxed line-clamp-2">
+                        <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-2">
                           {repost.storyExcerpt}
                         </p>
 
@@ -1613,7 +1617,7 @@ export function JournalView({
                           <button
                             type="button"
                             onClick={() => onOpenStoryById?.(repost.storyId)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <BookOpen className="w-3.5 h-3.5" />
                             <span>Lire</span>
@@ -1623,7 +1627,7 @@ export function JournalView({
                             type="button"
                             disabled={isBusy}
                             onClick={() => void handleToggleRepostVisibility(repost)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
                             {isPrivate ? (
                               <>
@@ -1642,7 +1646,7 @@ export function JournalView({
                             type="button"
                             disabled={isBusy}
                             onClick={() => void handleDeleteRepost(repost.storyId)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 ml-auto whitespace-nowrap"
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1.5 ml-auto whitespace-nowrap"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Retirer</span>
@@ -1659,40 +1663,40 @@ export function JournalView({
           {/* Tab 4: Reading Analytics & Summary KPIs */}
           {subTab === 'stats' && (
             <section aria-label="Statistiques de lecture" className="space-y-6">
-              <div className="bg-white border border-stone-200 rounded-lg grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 divide-x divide-stone-200">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg grid grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 divide-x divide-stone-200 dark:divide-stone-800">
                 <div className="p-4 sm:p-5">
-                  <p className="text-xs uppercase tracking-widest text-stone-500">Récits écrits</p>
-                  <p className="font-display text-2xl font-medium text-stone-900 tabular-nums mt-1">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">Récits écrits</p>
+                  <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums mt-1">
                     {myStories.length}
                   </p>
-                  <p className="text-xs text-stone-500 mt-1 tabular-nums">
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1 tabular-nums">
                     {publicCount} publié{publicCount > 1 ? 's' : ''} · {draftCount} brouillon
                     {draftCount > 1 ? 's' : ''}
                   </p>
                 </div>
 
                 <div className="p-4 sm:p-5">
-                  <p className="text-xs uppercase tracking-widest text-stone-500">Vues totales</p>
-                  <p className="font-display text-2xl font-medium text-stone-900 tabular-nums mt-1">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">Vues totales</p>
+                  <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums mt-1">
                     {totalViewsReceived}
                   </p>
-                  <p className="text-xs text-stone-500 mt-1">Ouvertures de vos récits</p>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">Ouvertures de vos récits</p>
                 </div>
 
                 <div className="p-4 sm:p-5">
-                  <p className="text-xs uppercase tracking-widest text-stone-500">Commentaires</p>
-                  <p className="font-display text-2xl font-medium text-stone-900 tabular-nums mt-1">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">Commentaires</p>
+                  <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums mt-1">
                     {totalEchoesReceived}
                   </p>
-                  <p className="text-xs text-stone-500 mt-1">Échos reçus sous vos textes</p>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">Échos reçus sous vos textes</p>
                 </div>
 
                 <div className="p-4 sm:p-5">
-                  <p className="text-xs uppercase tracking-widest text-stone-500">Lecture cumulée</p>
-                  <p className="font-display text-2xl font-medium text-stone-900 tabular-nums mt-1">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">Lecture cumulée</p>
+                  <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums mt-1">
                     {formatCumulativeMinutes(totalReadingMinutes)}
                   </p>
-                  <p className="text-xs text-stone-500 mt-1">Temps de lecture total</p>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">Temps de lecture total</p>
                 </div>
               </div>
 
@@ -1713,30 +1717,30 @@ export function JournalView({
               {moderationError && (
                 <div
                   role="alert"
-                  className="bg-red-50 border border-red-200 rounded-md px-4 py-2.5 text-xs text-red-800"
+                  className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded-md px-4 py-2.5 text-xs text-red-800 dark:text-red-300"
                 >
                   {moderationError}
                 </div>
               )}
 
               {/* 1. Official Warnings Received */}
-              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-red-700" />
-                    <h2 className="font-display text-xl font-medium text-stone-900">
+                    <AlertTriangle className="w-4 h-4 text-red-700 dark:text-red-400" />
+                    <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                       Avertissements officiels reçus ({userWarnings.length})
                     </h2>
                   </div>
                   {unacknowledgedWarningsCount > 0 && (
-                    <span className="px-2.5 py-0.5 rounded border border-red-300 bg-red-50 text-red-900 text-[11px] font-medium tabular-nums">
+                    <span className="px-2.5 py-0.5 rounded border border-red-300 dark:border-red-800/70 bg-red-50 dark:bg-red-950/50 text-red-900 dark:text-red-200 text-[11px] font-medium tabular-nums">
                       {unacknowledgedWarningsCount} à confirmer
                     </span>
                   )}
                 </div>
 
                 {userWarnings.length === 0 ? (
-                  <p className="text-sm text-stone-600">
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
                     Aucun avertissement officiel n’a été émis sur votre compte.
                   </p>
                 ) : (
@@ -1750,8 +1754,8 @@ export function JournalView({
                           key={warning.warningId}
                           className={`p-4 sm:p-5 rounded-md border space-y-3 ${
                             warning.acknowledged
-                              ? 'border-stone-200 bg-[#FBF9F5]'
-                              : 'border-red-300 bg-red-50/40'
+                              ? 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/60'
+                              : 'border-red-300 dark:border-red-800/70 bg-red-50/40 dark:bg-red-950/30'
                           }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -1761,30 +1765,30 @@ export function JournalView({
                               >
                                 {sev.label}
                               </span>
-                              <span className="font-medium text-stone-800">{cat.label}</span>
+                              <span className="font-medium text-stone-800 dark:text-stone-200">{cat.label}</span>
                             </div>
-                            <span className="text-stone-500">
+                            <span className="text-stone-500 dark:text-stone-400">
                               Émis le {formatFrenchDate(warning.createdAt?.toDate() ?? null)}
                             </span>
                           </div>
 
-                          <p className="text-sm text-stone-800 leading-relaxed whitespace-pre-line">
+                          <p className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed whitespace-pre-line">
                             {warning.justification}
                           </p>
 
                           {warning.excerptSnapshot && (
-                            <blockquote className="text-xs text-stone-600 italic bg-white border border-stone-200 rounded p-3 whitespace-pre-line">
+                            <blockquote className="text-xs text-stone-600 dark:text-stone-400 italic bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded p-3 whitespace-pre-line">
                               Extrait retenu lors de l’étude de cas : « {warning.excerptSnapshot} »
                             </blockquote>
                           )}
 
                           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                            <span className="text-[11px] text-stone-500">
+                            <span className="text-[11px] text-stone-500 dark:text-stone-400">
                               Étude de cas clôturée par {warning.issuedByName}
                             </span>
 
                             {warning.acknowledged ? (
-                              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-400">
                                 <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>Accusé de réception confirmé</span>
                               </span>
@@ -1808,20 +1812,20 @@ export function JournalView({
               </div>
 
               {/* 2. My Submitted Moderation Reports */}
-              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 space-y-4">
                 <div className="flex items-center gap-2">
-                  <Flag className="w-4 h-4 text-[#1B365D]" />
-                  <h2 className="font-display text-xl font-medium text-stone-900">
+                  <Flag className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
+                  <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                     Mes signalements transmis ({myModerationCases.length})
                   </h2>
                 </div>
 
                 {myModerationCases.length === 0 ? (
-                  <p className="text-sm text-stone-600">
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
                     Vous n’avez soumis aucun signalement pour le moment.
                   </p>
                 ) : (
-                  <div className="divide-y divide-stone-200 border border-stone-200 rounded-md">
+                  <div className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-800 rounded-md">
                     {myModerationCases.map((c) => {
                       const statusMeta = MODERATION_STATUS_LABELS[c.status];
                       const catMeta = MODERATION_CATEGORY_LABELS[c.category];
@@ -1837,29 +1841,29 @@ export function JournalView({
                               >
                                 {statusMeta.label}
                               </span>
-                              <span className="text-stone-700 font-medium">
+                              <span className="text-stone-700 dark:text-stone-300 font-medium">
                                 {MODERATION_TARGET_LABELS[c.targetType]} · {c.targetUserName}
                               </span>
                             </div>
-                            <span className="text-stone-500">
+                            <span className="text-stone-500 dark:text-stone-400">
                               {formatFrenchDate(c.createdAt?.toDate() ?? null)}
                             </span>
                           </div>
 
-                          <p className="text-xs text-stone-600">
-                            <span className="font-medium text-stone-800">{catMeta.label}</span> · Étape actuelle :{' '}
-                            <span className="text-[#1B365D] font-medium">{stepMeta.label}</span>
+                          <p className="text-xs text-stone-600 dark:text-stone-400">
+                            <span className="font-medium text-stone-800 dark:text-stone-200">{catMeta.label}</span> · Étape actuelle :{' '}
+                            <span className="text-[#1B365D] dark:text-[#93B4E2] font-medium">{stepMeta.label}</span>
                           </p>
 
                           {c.targetExcerpt && (
-                            <blockquote className="text-xs text-stone-600 italic bg-[#FBF9F5] border-l-2 border-stone-300 pl-3 py-1.5 line-clamp-3">
+                            <blockquote className="text-xs text-stone-600 dark:text-stone-400 italic bg-[#FBF9F5] dark:bg-stone-800/60 border-l-2 border-stone-300 dark:border-stone-600 pl-3 py-1.5 line-clamp-3">
                               « {c.targetExcerpt} »
                             </blockquote>
                           )}
 
                           {c.decisionReason && (
-                            <p className="text-xs text-stone-700 bg-[#F3F6FA] border border-[#CBD6E6] rounded px-3 py-2">
-                              <span className="font-semibold text-[#1B365D]">Conclusion de l’étude de cas : </span>
+                            <p className="text-xs text-stone-700 dark:text-stone-300 bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded px-3 py-2">
+                              <span className="font-semibold text-[#1B365D] dark:text-[#93B4E2]">Conclusion de l’étude de cas : </span>
                               {c.decisionReason}
                             </p>
                           )}
@@ -1871,20 +1875,20 @@ export function JournalView({
               </div>
 
               {/* 3. Blocked & Not Interested Members */}
-              <div className="bg-white border border-stone-200 rounded-lg p-6 space-y-4">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 space-y-4">
                 <div className="flex items-center gap-2">
-                  <Ban className="w-4 h-4 text-stone-700" />
-                  <h2 className="font-display text-xl font-medium text-stone-900">
+                  <Ban className="w-4 h-4 text-stone-700 dark:text-stone-300" />
+                  <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                     Membres bloqués &amp; « Pas intéressé » ({relationships.length})
                   </h2>
                 </div>
 
                 {relationships.length === 0 ? (
-                  <p className="text-sm text-stone-600">
+                  <p className="text-sm text-stone-600 dark:text-stone-400">
                     Vous n’avez bloqué ni marqué « Pas intéressé » aucun membre.
                   </p>
                 ) : (
-                  <div className="divide-y divide-stone-200 border border-stone-200 rounded-md">
+                  <div className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-800 rounded-md">
                     {relationships.map((rel) => {
                       const isBlocked = rel.relation === 'blocked';
                       const isBusy = busyRelId === rel.targetUserId;
@@ -1895,20 +1899,20 @@ export function JournalView({
                         >
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-semibold text-stone-900">
+                              <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">
                                 {rel.targetName}
                               </span>
                               <span
                                 className={`px-2 py-0.5 rounded border text-[11px] font-medium ${
                                   isBlocked
-                                    ? 'border-red-200 bg-red-50 text-red-900'
-                                    : 'border-stone-200 bg-stone-100 text-stone-700'
+                                    ? 'border-red-200 dark:border-red-800/70 bg-red-50 dark:bg-red-950/50 text-red-900 dark:text-red-200'
+                                    : 'border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
                                 }`}
                               >
                                 {isBlocked ? 'Bloqué' : 'Pas intéressé'}
                               </span>
                             </div>
-                            <p className="text-xs text-stone-500">
+                            <p className="text-xs text-stone-500 dark:text-stone-400">
                               {isBlocked
                                 ? 'Échanges privés verrouillés dans les deux sens et contenus masqués.'
                                 : 'Ses récits et échanges sont mis à l’écart de vos fils principaux.'}
@@ -1919,7 +1923,7 @@ export function JournalView({
                             type="button"
                             disabled={isBusy}
                             onClick={() => void handleRestoreRelationship(rel.targetUserId)}
-                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap self-start sm:self-center"
+                            className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500 dark:hover:border-stone-500 inline-flex items-center gap-1.5 whitespace-nowrap self-start sm:self-center"
                           >
                             <UserCheck className="w-3.5 h-3.5" />
                             <span>{isBlocked ? 'Débloquer' : 'Rétablir'}</span>

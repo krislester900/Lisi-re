@@ -295,8 +295,8 @@ export function MusicCatalogPicker({
             }}
             className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
               providerTab === tab.id
-                ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                ? 'bg-[#1B365D] dark:bg-[#3B629B] text-white border-[#1B365D] dark:border-[#3B629B]'
+                : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
             }`}
           >
             {tab.label}
@@ -306,21 +306,21 @@ export function MusicCatalogPicker({
 
       {/* Spotify OAuth Connection Bar */}
       {providerTab === 'spotify' && (
-        <div className="rounded-md border border-stone-200 bg-white p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           {providers?.spotify.connected && providers.spotify.user ? (
             <>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-stone-900 truncate">
+                <p className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">
                   Connecté : {providers.spotify.user.displayName}
                 </p>
-                <p className="text-[11px] text-stone-600">
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">
                   Vos titres les plus écoutés et la recherche Spotify sont prêts ci-dessous.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => void handleDisconnectSpotify()}
-                className="min-h-[34px] px-3 py-1 rounded-md border border-stone-300 bg-[#FBF9F5] text-xs font-medium text-stone-700 hover:text-red-700 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 self-start sm:self-center"
+                className="min-h-[34px] px-3 py-1 rounded-md border border-stone-300 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-xs font-medium text-stone-700 dark:text-stone-200 hover:text-red-700 dark:hover:text-red-400 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 self-start sm:self-center"
               >
                 <Unplug className="w-3.5 h-3.5" />
                 <span>Déconnecter</span>
@@ -329,17 +329,17 @@ export function MusicCatalogPicker({
           ) : (
             <>
               <div className="min-w-0">
-                <p className="text-xs font-medium text-stone-900">
+                <p className="text-xs font-medium text-stone-900 dark:text-stone-100">
                   Connecter votre compte Spotify
                 </p>
-                <p className="text-[11px] text-stone-600">
+                <p className="text-[11px] text-stone-600 dark:text-stone-400">
                   Accédez à vos titres préférés et cherchez dans le catalogue Spotify, ou utilisez Audius gratuitement sans compte.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => void handleConnectSpotify()}
-                className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] text-xs font-medium whitespace-nowrap shrink-0 self-start sm:self-center"
+                className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] text-xs font-medium whitespace-nowrap shrink-0 self-start sm:self-center"
               >
                 Connecter Spotify
               </button>
@@ -350,17 +350,17 @@ export function MusicCatalogPicker({
 
       {/* Audius / YouTube / Deezer info note */}
       {providerTab === 'audius' && (
-        <p className="text-[11px] text-stone-600">
+        <p className="text-[11px] text-stone-600 dark:text-stone-400">
           Audius est ouvert sans clé ni abonnement : chaque morceau se lit en entier directement sur votre mur et en mode zen.
         </p>
       )}
       {providerTab === 'youtube' && (
-        <p className="text-[11px] text-stone-600">
+        <p className="text-[11px] text-stone-600 dark:text-stone-400">
           Recherchez directement n’importe quelle musique, bande-son ou ambiance sur YouTube pour l’épingler sur votre mur.
         </p>
       )}
       {providerTab === 'deezer' && (
-        <p className="text-[11px] text-stone-600">
+        <p className="text-[11px] text-stone-600 dark:text-stone-400">
           Recherche dans le catalogue Deezer avec extrait audio lisible directement sur votre mur.
         </p>
       )}
@@ -368,14 +368,14 @@ export function MusicCatalogPicker({
       {authNotice && (
         <div
           role="alert"
-          className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 flex items-start justify-between gap-2"
+          className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-3 py-2 text-xs text-amber-950 dark:text-amber-200 flex items-start justify-between gap-2"
         >
           <span>{authNotice}</span>
           <button
             type="button"
             onClick={() => setAuthNotice(null)}
             aria-label="Fermer l’avis"
-            className="text-amber-800 hover:text-amber-950 shrink-0"
+            className="text-amber-800 dark:text-amber-300 hover:text-amber-950 dark:hover:text-amber-100 shrink-0"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -385,7 +385,7 @@ export function MusicCatalogPicker({
       {providerTab === 'link' ? (
         <div className="space-y-2">
           <div className="relative">
-            <Link2 className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Link2 className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               maxLength={maxUrlLength}
@@ -393,10 +393,10 @@ export function MusicCatalogPicker({
               onChange={(e) => onManualUrlChange?.(e.target.value)}
               placeholder="Coller un lien SoundCloud, Spotify, Deezer ou MP3…"
               aria-label="Lien musical personnalisé"
-              className="w-full min-h-[40px] pl-8 pr-3 py-2 bg-white border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+              className="w-full min-h-[40px] pl-8 pr-3 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
             />
           </div>
-          <p className="text-[11px] text-stone-500">
+          <p className="text-[11px] text-stone-500 dark:text-stone-400">
             Le lecteur du mur n’affiche que le titre, l’artiste et une onde sonore épurée.
           </p>
         </div>
@@ -405,7 +405,7 @@ export function MusicCatalogPicker({
           {/* Search Input (div instead of nested form so parent modals work cleanly) */}
           <div className="flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
-              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="search"
                 value={searchInput}
@@ -426,14 +426,14 @@ export function MusicCatalogPicker({
                         : 'Chercher un morceau ou un artiste sur Audius…'
                 }
                 aria-label="Rechercher une musique pour votre mur"
-                className="w-full min-h-[38px] pl-8 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                className="w-full min-h-[38px] pl-8 pr-3 py-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
               />
             </div>
             <button
               type="button"
               disabled={searching || !searchInput.trim()}
               onClick={() => void runSearch(searchInput, providerTab)}
-              className="min-h-[38px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white hover:bg-[#132744] disabled:opacity-50 text-xs font-medium whitespace-nowrap shrink-0"
+              className="min-h-[38px] px-3.5 py-1.5 rounded-md bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] disabled:opacity-50 text-xs font-medium whitespace-nowrap shrink-0"
             >
               {searching ? 'Recherche…' : 'Chercher'}
             </button>
@@ -441,7 +441,7 @@ export function MusicCatalogPicker({
 
           {/* Mood presets */}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] text-stone-500 mr-1">Ambiances :</span>
+            <span className="text-[11px] text-stone-500 dark:text-stone-400 mr-1">Ambiances :</span>
             {READING_MOOD_PRESETS.map((preset) => (
               <button
                 key={preset.label}
@@ -450,7 +450,7 @@ export function MusicCatalogPicker({
                   setSearchInput(preset.query);
                   void runSearch(preset.query, providerTab);
                 }}
-                className="min-h-[28px] px-2.5 py-0.5 rounded border border-stone-200 bg-white text-[11px] text-stone-700 hover:border-stone-400 hover:text-stone-900 whitespace-nowrap shrink-0"
+                className="min-h-[28px] px-2.5 py-0.5 rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-[11px] text-stone-700 dark:text-stone-300 hover:border-stone-400 dark:hover:border-stone-500 hover:text-stone-900 dark:hover:text-stone-100 whitespace-nowrap shrink-0"
               >
                 {preset.label}
               </button>
@@ -458,13 +458,13 @@ export function MusicCatalogPicker({
           </div>
 
           {searchError && (
-            <p role="alert" className="text-xs text-red-700">
+            <p role="alert" className="text-xs text-red-700 dark:text-red-400">
               {searchError}
             </p>
           )}
 
           {searchResults.length > 0 && (
-            <ul className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-white max-h-56 overflow-y-auto">
+            <ul className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-700 rounded-md bg-white dark:bg-stone-900 max-h-56 overflow-y-auto">
               {searchResults.map((track) => {
                 const candidateUrl = resolvePlayableUrlForSaving(track, maxUrlLength);
                 const isSelected =
@@ -480,7 +480,7 @@ export function MusicCatalogPicker({
                   <li
                     key={track.id}
                     className={`flex items-center justify-between gap-2.5 px-3 py-2 transition-colors ${
-                      isSelected ? 'bg-[#F3F6FA]' : 'hover:bg-[#FBF9F5]'
+                      isSelected ? 'bg-[#F3F6FA] dark:bg-[#1B365D]/20' : 'hover:bg-[#FBF9F5] dark:hover:bg-stone-800/60'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -488,16 +488,16 @@ export function MusicCatalogPicker({
                         <img
                           src={track.coverUrl}
                           alt=""
-                          className="w-9 h-9 rounded object-cover border border-stone-200 shrink-0"
+                          className="w-9 h-9 rounded object-cover border border-stone-200 dark:border-stone-700 shrink-0"
                         />
                       ) : (
-                        <div className="w-9 h-9 rounded bg-stone-200 flex items-center justify-center shrink-0">
-                          <Music2 className="w-4 h-4 text-stone-600" />
+                        <div className="w-9 h-9 rounded bg-stone-200 dark:bg-stone-800 flex items-center justify-center shrink-0">
+                          <Music2 className="w-4 h-4 text-stone-600 dark:text-stone-400" />
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="text-xs font-medium text-stone-900 truncate">{track.title}</p>
-                        <p className="text-[11px] text-stone-500 truncate">
+                        <p className="text-xs font-medium text-stone-900 dark:text-stone-100 truncate">{track.title}</p>
+                        <p className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
                           {track.artist}
                           {track.durationMs ? ` · ${formatMs(track.durationMs)}` : ''}
                           {track.isPreview ? ' · Aperçu' : ''}
@@ -511,7 +511,7 @@ export function MusicCatalogPicker({
                           type="button"
                           onClick={() => void handleTogglePreview(track)}
                           aria-label={isPreviewing ? `Mettre en pause ${track.title}` : `Écouter un extrait de ${track.title}`}
-                          className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 bg-white text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]"
+                          className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:border-[#1B365D] dark:hover:border-[#6088C2] hover:text-[#1B365D] dark:hover:text-[#93B4E2]"
                         >
                           {isPreviewing ? (
                             <Pause className="w-3.5 h-3.5" />
@@ -525,8 +525,8 @@ export function MusicCatalogPicker({
                         onClick={() => handlePickTrack(track)}
                         className={`min-h-[32px] px-2.5 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors ${
                           isSelected
-                            ? 'bg-emerald-800 text-white'
-                            : 'bg-[#1B365D] text-white hover:bg-[#132744]'
+                            ? 'bg-emerald-800 dark:bg-emerald-700 text-white'
+                            : 'bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183]'
                         }`}
                       >
                         {isSelected ? (

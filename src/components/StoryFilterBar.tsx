@@ -155,14 +155,14 @@ export function StoryFilterBar({
               onChange={(e) => handleSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
-              className="w-full min-h-[40px] pl-9 pr-8 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+              className="w-full min-h-[40px] pl-9 pr-8 py-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
             {value.search.length > 0 && (
               <button
                 type="button"
                 onClick={() => handleSearchChange('')}
                 aria-label="Effacer la recherche"
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 rounded"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -181,7 +181,7 @@ export function StoryFilterBar({
             className={`min-h-[40px] px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-md border transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               keywordHelpExpanded || value.searchScope !== 'all'
                 ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
             }`}
           >
             <Sparkles className="w-3.5 h-3.5 shrink-0" />
@@ -194,7 +194,7 @@ export function StoryFilterBar({
           <div
             role="group"
             aria-label="Filtrer par catégorie : confessions ou romans"
-            className="inline-flex items-center rounded-md border border-stone-200 bg-[#FBF9F5] p-0.5 shrink-0"
+            className="inline-flex items-center rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 p-0.5 shrink-0"
           >
             {(
               [
@@ -224,8 +224,8 @@ export function StoryFilterBar({
                         ? 'bg-[#9A3B29] text-white'
                         : cat.id === 'roman'
                           ? 'bg-[#1B365D] text-white'
-                          : 'bg-stone-900 text-white'
-                      : 'text-stone-700 hover:text-stone-950'
+                          : 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950'
+                      : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-stone-100'
                   }`}
                 >
                   {cat.id === 'confession' && <Feather className="w-3 h-3 shrink-0" />}
@@ -238,12 +238,12 @@ export function StoryFilterBar({
 
           <div className="flex items-center gap-2">
             <div className="relative flex items-center">
-              <ArrowUpDown className="w-3.5 h-3.5 text-stone-500 absolute left-2.5 pointer-events-none" />
+              <ArrowUpDown className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400 absolute left-2.5 pointer-events-none" />
               <select
                 aria-label="Trier les récits"
                 value={effectiveSortValue}
                 onChange={(e) => onChange({ ...value, sortMode: e.target.value as StorySortMode })}
-                className="min-h-[40px] pl-8 pr-7 py-1.5 bg-white border border-stone-200 rounded-md text-xs font-medium text-stone-800 hover:border-stone-400 focus:outline-none focus:border-[#1B365D] cursor-pointer"
+                className="min-h-[40px] pl-8 pr-7 py-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 focus:outline-none focus:border-[#1B365D] cursor-pointer"
               >
                 {sortOptions.map((opt) => (
                   <option key={opt.id} value={opt.id}>
@@ -263,7 +263,7 @@ export function StoryFilterBar({
               className={`min-h-[40px] px-3 py-1.5 text-xs font-medium rounded-md border transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                 filtersExpanded || activeFiltersCount > 0
                   ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                  : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                  : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
@@ -281,7 +281,7 @@ export function StoryFilterBar({
                 onClick={handleReset}
                 title="Réinitialiser la recherche et les filtres"
                 aria-label="Réinitialiser"
-                className="min-h-[40px] px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                className="min-h-[40px] px-2.5 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 inline-flex items-center gap-1 whitespace-nowrap shrink-0"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Réinitialiser</span>
@@ -290,7 +290,7 @@ export function StoryFilterBar({
           </div>
 
           {typeof filteredCount === 'number' && typeof totalCount === 'number' && (
-            <span className="text-xs text-stone-500 tabular-nums whitespace-nowrap pl-1">
+            <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums whitespace-nowrap pl-1">
               {filteredCount === totalCount
                 ? `${totalCount} récit${totalCount > 1 ? 's' : ''}`
                 : `${filteredCount}/${totalCount}`}
@@ -301,9 +301,9 @@ export function StoryFilterBar({
 
       {/* Expandable Advanced Keyword Search Panel */}
       {(keywordHelpExpanded || (parsedQuery && (parsedQuery.hasAdvancedSyntax || value.searchScope !== 'all'))) && (
-        <div className="bg-[#FBF9F5] border border-stone-200 rounded-lg p-3.5 space-y-2.5">
+        <div className="bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-3.5 space-y-2.5">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] uppercase tracking-widest text-stone-500 mr-1">
+            <span className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mr-1">
               Chercher dans :
             </span>
             {SEARCH_SCOPE_OPTIONS.map((scope) => (
@@ -313,8 +313,8 @@ export function StoryFilterBar({
                 onClick={() => onChange({ ...value, searchScope: scope.id })}
                 className={`min-h-[30px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                   value.searchScope === scope.id
-                    ? 'bg-stone-900 text-white border-stone-900'
-                    : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                    ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 border-stone-900 dark:border-amber-400'
+                    : 'bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                 }`}
               >
                 {scope.label}
@@ -323,15 +323,15 @@ export function StoryFilterBar({
           </div>
 
           {keywordHelpExpanded && (
-            <div className="pt-2 border-t border-stone-200/80 flex flex-wrap items-center gap-1.5">
-              <span className="text-[11px] text-stone-500 mr-1">Opérateurs :</span>
+            <div className="pt-2 border-t border-stone-200/80 dark:border-stone-800 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] text-stone-500 dark:text-stone-400 mr-1">Opérateurs :</span>
               {KEYWORD_SYNTAX_HELPERS.map((helper) => (
                 <button
                   key={helper.label}
                   type="button"
                   title={helper.hint}
                   onClick={() => handleInsertSyntax(helper.snippet)}
-                  className="px-2 py-1 text-[11px] font-mono bg-white border border-stone-200 rounded hover:border-[#1B365D] hover:text-[#1B365D] text-stone-700 transition-colors"
+                  className="px-2 py-1 text-[11px] font-mono bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-sky-300 text-stone-700 dark:text-stone-200 transition-colors"
                 >
                   {helper.label}
                 </button>
@@ -343,11 +343,11 @@ export function StoryFilterBar({
 
       {/* Expandable Multi-Criteria Filter Panel */}
       {filtersExpanded && (
-        <div className="bg-white border border-stone-200 rounded-lg p-4 sm:p-5 space-y-4">
+        <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-4 sm:p-5 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Format */}
             <div className="space-y-1.5">
-              <p className="text-[11px] uppercase tracking-widest text-stone-500">Format</p>
+              <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">Format</p>
               <div className="flex flex-wrap gap-1.5">
                 {(
                   [
@@ -370,8 +370,8 @@ export function StoryFilterBar({
                     }
                     className={`min-h-[32px] px-3 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                       value.format === fmt.id
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                        ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 border-stone-900 dark:border-amber-400'
+                        : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                     }`}
                   >
                     {fmt.label}
@@ -382,7 +382,7 @@ export function StoryFilterBar({
 
             {/* Reading Duration */}
             <div className="space-y-1.5">
-              <p className="text-[11px] uppercase tracking-widest text-stone-500">Durée</p>
+              <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">Durée</p>
               <div className="flex flex-wrap gap-1.5">
                 {(
                   [
@@ -399,7 +399,7 @@ export function StoryFilterBar({
                     className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                       value.duration === dur.id
                         ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                        : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                     }`}
                   >
                     {dur.label}
@@ -410,7 +410,7 @@ export function StoryFilterBar({
 
             {/* Signature / Anonymity */}
             <div className="space-y-1.5">
-              <p className="text-[11px] uppercase tracking-widest text-stone-500">Signature</p>
+              <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">Signature</p>
               <div className="flex flex-wrap gap-1.5">
                 {(
                   [
@@ -425,8 +425,8 @@ export function StoryFilterBar({
                     onClick={() => onChange({ ...value, signature: sig.id })}
                     className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                       value.signature === sig.id
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                        ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 border-stone-900 dark:border-amber-400'
+                        : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                     }`}
                   >
                     {sig.label}
@@ -438,9 +438,9 @@ export function StoryFilterBar({
 
           {/* Genre & Status for Novels */}
           {value.format !== 'confession' && (
-            <div className="pt-3 border-t border-stone-100 grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="pt-3 border-t border-stone-100 dark:border-stone-800 grid grid-cols-1 lg:grid-cols-12 gap-4">
               <div className="lg:col-span-8 space-y-1.5">
-                <p className="text-[11px] uppercase tracking-widest text-stone-500">
+                <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">
                   Type de roman
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -449,8 +449,8 @@ export function StoryFilterBar({
                     onClick={() => onChange({ ...value, novelGenre: 'all' })}
                     className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                       value.novelGenre === 'all'
-                        ? 'bg-stone-900 text-white border-stone-900'
-                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                        ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 border-stone-900 dark:border-amber-400'
+                        : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                     }`}
                   >
                     Tous genres
@@ -469,7 +469,7 @@ export function StoryFilterBar({
                       className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                         value.novelGenre === genre
                           ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                          : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                          : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                       }`}
                     >
                       {NOVEL_GENRE_LABELS[genre]}
@@ -479,7 +479,7 @@ export function StoryFilterBar({
               </div>
 
               <div className="lg:col-span-4 space-y-1.5">
-                <p className="text-[11px] uppercase tracking-widest text-stone-500">Statut</p>
+                <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">Statut</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(
                     [
@@ -500,8 +500,8 @@ export function StoryFilterBar({
                       }
                       className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                         value.seriesStatus === st.id
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                          ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 border-stone-900 dark:border-amber-400'
+                          : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                       }`}
                     >
                       {st.label}
@@ -513,10 +513,10 @@ export function StoryFilterBar({
           )}
 
           {(showOriginFilter || showThemeFilter) && (
-            <div className="pt-3 border-t border-stone-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="pt-3 border-t border-stone-100 dark:border-stone-800 grid grid-cols-1 md:grid-cols-2 gap-4">
               {showOriginFilter && (
                 <div className="space-y-1.5">
-                  <p className="text-[11px] uppercase tracking-widest text-stone-500">Origine</p>
+                  <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">Origine</p>
                   <div className="flex flex-wrap gap-1.5">
                     {(
                       [
@@ -532,7 +532,7 @@ export function StoryFilterBar({
                         className={`min-h-[32px] px-3 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                           value.origin === orig.id
                             ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                            : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                         }`}
                       >
                         {orig.label}
@@ -544,15 +544,15 @@ export function StoryFilterBar({
 
               {showThemeFilter && (
                 <div className="space-y-1.5">
-                  <p className="text-[11px] uppercase tracking-widest text-stone-500">Salon</p>
+                  <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">Salon</p>
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() => onChange({ ...value, theme: 'all' })}
                       className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                         value.theme === 'all'
-                          ? 'bg-stone-900 text-white border-stone-900'
-                          : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                          ? 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950 border-stone-900 dark:border-amber-400'
+                          : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                       }`}
                     >
                       Tous
@@ -574,7 +574,7 @@ export function StoryFilterBar({
                         className={`min-h-[32px] px-2.5 py-1 text-xs font-medium rounded border transition-colors whitespace-nowrap ${
                           value.theme === t.id
                             ? ''
-                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                            : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                         }`}
                       >
                         {t.shortSalonName}

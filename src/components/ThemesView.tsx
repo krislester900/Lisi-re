@@ -12,8 +12,10 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
+  Share2,
   User as UserIcon,
 } from 'lucide-react';
+import { isStoryCompliantForPublicFeed } from '../lib/contentRegulation';
 import {
   ACCENT_TONE_PALETTES,
   formatFrenchDate,
@@ -48,6 +50,7 @@ interface ThemesViewProps {
   repostedStoryIds: Set<string>;
   onToggleBookmark: (story: Story) => void;
   onOpenRepost: (story: Story) => void;
+  onShareStory?: (story: Story) => void;
   onReadStory: (story: Story) => void;
   onOpenMemberWall: (userId: string) => void;
   onEnterSalon: (salonId: StoryThemeId) => void;
@@ -111,6 +114,7 @@ export function ThemesView({
   repostedStoryIds,
   onToggleBookmark,
   onOpenRepost,
+  onShareStory,
   onReadStory,
   onOpenMemberWall,
   onEnterSalon,
@@ -223,19 +227,19 @@ export function ThemesView({
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 sm:py-12 space-y-12">
       {/* Editorial Header */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end pb-8 border-b border-stone-200">
+      <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end pb-8 border-b border-stone-200 dark:border-stone-800">
         <div className="lg:col-span-7 space-y-3">
-          <p className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-2">
-            <Award className="w-3.5 h-3.5 text-[#1B365D]" />
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 flex items-center gap-2">
+            <Award className="w-3.5 h-3.5 text-[#1B365D] dark:text-amber-300" />
             <span>Palmarès littéraire · Romans &amp; Confessions séparés</span>
           </p>
           <h1
-            className="font-display text-3xl sm:text-4xl font-medium text-stone-900 leading-tight"
+            className="font-display text-3xl sm:text-4xl font-medium text-stone-900 dark:text-stone-100 leading-tight"
             style={{ textWrap: 'balance' }}
           >
             Classement des romans par genre &amp; des confessions par salon
           </h1>
-          <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-2xl">
+          <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 leading-relaxed max-w-2xl">
             Les romans à chapitres et les confessions forment deux catégories distinctes dans le palmarès comme dans la lecture, afin de ne jamais mélanger feuilletons longs et textes intimes.
           </p>
         </div>
@@ -243,22 +247,22 @@ export function ThemesView({
         <div className="lg:col-span-5 flex flex-col sm:flex-row lg:flex-col lg:items-end justify-between gap-4">
           <div className="grid grid-cols-3 gap-5 text-left lg:text-right">
             <div>
-              <p className="font-display text-2xl font-medium text-[#1B365D] tabular-nums">
+              <p className="font-display text-2xl font-medium text-[#1B365D] dark:text-sky-300 tabular-nums">
                 {allPublicNovels.length}
               </p>
-              <p className="text-xs text-stone-500">Romans</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">Romans</p>
             </div>
             <div>
-              <p className="font-display text-2xl font-medium text-[#9A3B29] tabular-nums">
+              <p className="font-display text-2xl font-medium text-[#9A3B29] dark:text-rose-300 tabular-nums">
                 {allPublicConfessions.length}
               </p>
-              <p className="text-xs text-stone-500">Confessions</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">Confessions</p>
             </div>
             <div>
-              <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
+              <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                 {totalAllViews}
               </p>
-              <p className="text-xs text-stone-500">Lectures</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">Lectures</p>
             </div>
           </div>
 
@@ -273,7 +277,7 @@ export function ThemesView({
                       : undefined
                   )
                 }
-                className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-[#9A3B29] bg-[#FDF4F2] border border-[#ECC9C1] rounded-md hover:border-[#9A3B29] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium text-[#9A3B29] dark:text-rose-200 bg-[#FDF4F2] dark:bg-rose-950/40 border border-[#ECC9C1] dark:border-rose-800/70 rounded-md hover:border-[#9A3B29] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <Feather className="w-4 h-4" />
                 <span>Écrire une confession</span>
@@ -318,14 +322,14 @@ export function ThemesView({
       {/* Separated Works Ranking: Romans à chapitres vs Confessions */}
       <section
         aria-label="Classement des romans et des confessions"
-        className="space-y-6 pt-4 border-t border-stone-200"
+        className="space-y-6 pt-4 border-t border-stone-200 dark:border-stone-800"
       >
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div className="space-y-2">
-            <p className="text-xs uppercase tracking-widest text-stone-500">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Classement par catégorie d’œuvre
             </p>
-            <h2 className="font-display text-2xl font-medium text-stone-900">
+            <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
               {workCategory === 'roman'
                 ? 'Romans à chapitres · Les plus lus par genre'
                 : 'Confessions · Les plus lues par salon'}
@@ -336,7 +340,7 @@ export function ThemesView({
           <div
             role="tablist"
             aria-label="Choisir la catégorie du classement"
-            className="inline-flex items-center gap-1.5 p-1 bg-stone-100 rounded-lg border border-stone-200 self-start lg:self-auto"
+            className="inline-flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-800 rounded-lg border border-stone-200 dark:border-stone-700 self-start lg:self-auto"
           >
             <button
               type="button"
@@ -346,7 +350,7 @@ export function ThemesView({
               className={`min-h-[38px] px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                 workCategory === 'roman'
                   ? 'bg-[#1B365D] text-white shadow-xs'
-                  : 'text-stone-700 hover:text-stone-900 hover:bg-white/70'
+                  : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/70 dark:hover:bg-stone-900/60'
               }`}
             >
               <BookOpen className="w-4 h-4 shrink-0" />
@@ -360,7 +364,7 @@ export function ThemesView({
               className={`min-h-[38px] px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                 workCategory === 'confession'
                   ? 'bg-[#9A3B29] text-white shadow-xs'
-                  : 'text-stone-700 hover:text-stone-900 hover:bg-white/70'
+                  : 'text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-white/70 dark:hover:bg-stone-900/60'
               }`}
             >
               <Feather className="w-4 h-4 shrink-0" />
@@ -388,7 +392,7 @@ export function ThemesView({
                 className={`min-h-[38px] px-3.5 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                   selectedGenre === 'all'
                     ? 'border-[#1B365D] bg-[#1B365D] text-white'
-                    : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:border-stone-400'
                 }`}
               >
                 Tous les romans ({allPublicNovels.length})
@@ -406,7 +410,7 @@ export function ThemesView({
                     className={`min-h-[38px] px-3.5 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                       active
                         ? 'border-[#1B365D] bg-[#1B365D] text-white'
-                        : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:border-stone-400'
                     }`}
                   >
                     {NOVEL_GENRE_LABELS[genre]} ({count})
@@ -422,7 +426,7 @@ export function ThemesView({
                   className={`min-h-[38px] px-3.5 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                     selectedGenre === 'uncategorized'
                       ? 'border-stone-800 bg-stone-800 text-white'
-                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                      : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                   }`}
                 >
                   Non classés ({uncategorizedNovels.length})
@@ -431,8 +435,8 @@ export function ThemesView({
             </div>
 
             {selectedGenre !== 'all' && selectedGenre !== 'uncategorized' && (
-              <p className="text-xs text-stone-600 bg-white border border-stone-200 rounded-md px-3.5 py-2.5">
-                <span className="font-semibold text-[#1B365D]">
+              <p className="text-xs text-stone-600 dark:text-stone-300 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md px-3.5 py-2.5">
+                <span className="font-semibold text-[#1B365D] dark:text-sky-300">
                   Rayon {NOVEL_GENRE_LABELS[selectedGenre]} :
                 </span>{' '}
                 {NOVEL_GENRE_DESCRIPTIONS[selectedGenre]}
@@ -440,21 +444,21 @@ export function ThemesView({
             )}
 
             {!storiesLoaded ? (
-              <div className="bg-white border border-stone-200 rounded-lg p-8 text-sm text-stone-500">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-sm text-stone-500 dark:text-stone-400">
                 Chargement des romans…
               </div>
             ) : activeGenreNovels.length === 0 ? (
-              <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
-                <BookOpen className="w-8 h-8 text-[#1B365D]/70 mx-auto" />
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-4">
+                <BookOpen className="w-8 h-8 text-[#1B365D]/70 dark:text-sky-300/70 mx-auto" />
                 <div className="space-y-1.5">
-                  <h3 className="font-display text-2xl text-stone-900">
+                  <h3 className="font-display text-2xl text-stone-900 dark:text-stone-100">
                     {selectedGenre === 'all'
                       ? 'Aucun roman n’est encore paru'
                       : selectedGenre === 'uncategorized'
                         ? 'Aucun roman non classé'
                         : `Aucun roman dans le genre « ${NOVEL_GENRE_LABELS[selectedGenre]} »`}
                   </h3>
-                  <p className="text-sm text-stone-600 max-w-md mx-auto">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto">
                     Soyez la première plume à inaugurer cette catégorie avec un chapitre de deux pages ou plus.
                   </p>
                 </div>
@@ -480,7 +484,7 @@ export function ThemesView({
                   (() => {
                     const leadNovel = podiumNovels[0];
                     return (
-                      <article className="bg-[#FFFDF8] border border-[#C9A227]/80 rounded-xl overflow-hidden shadow-[0_14px_34px_-20px_rgba(122,82,16,0.26)]">
+                      <article className="bg-[#FFFDF8] dark:bg-stone-900 border border-[#C9A227]/80 dark:border-amber-600/60 rounded-xl overflow-hidden shadow-[0_14px_34px_-20px_rgba(122,82,16,0.26)]">
                         <div className="bg-[#7A5210] text-[#FFFDF8] px-5 py-2 flex items-center justify-between gap-2 text-xs font-medium">
                           <span className="inline-flex items-center gap-1.5">
                             <Crown className="w-3.5 h-3.5 shrink-0" />
@@ -507,7 +511,7 @@ export function ThemesView({
                           />
 
                           <div className="min-w-0 flex-1 space-y-4">
-                            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
                               <StoryFormatKicker story={leadNovel} showDetails={true} />
                               <span aria-hidden="true">·</span>
                               {renderOriginLink(leadNovel)}
@@ -519,26 +523,26 @@ export function ThemesView({
 
                             <div className="space-y-2">
                               <h3
-                                className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-snug"
+                                className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100 leading-snug"
                                 style={{ textWrap: 'balance' }}
                               >
                                 <button
                                   type="button"
                                   onClick={() => onReadStory(leadNovel)}
-                                  className="hover:text-[#1B365D] text-left transition-colors"
+                                  className="hover:text-[#1B365D] dark:hover:text-amber-300 text-left transition-colors"
                                 >
                                   {leadNovel.title}
                                 </button>
                               </h3>
-                              <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-prose">
+                              <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 leading-relaxed max-w-prose">
                                 {leadNovel.excerpt}
                               </p>
                             </div>
 
-                            <div className="pt-3 border-t border-stone-200/70 flex flex-wrap items-center justify-between gap-4">
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600">
+                            <div className="pt-3 border-t border-stone-200/70 dark:border-stone-800 flex flex-wrap items-center justify-between gap-4">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600 dark:text-stone-400">
                                 {leadNovel.isAnonymous ? (
-                                  <span className="inline-flex items-center gap-1.5 font-medium text-stone-700">
+                                  <span className="inline-flex items-center gap-1.5 font-medium text-stone-700 dark:text-stone-300">
                                     <EyeOff className="w-3.5 h-3.5 text-stone-400" />
                                     <span>Auteur anonyme</span>
                                   </span>
@@ -546,7 +550,7 @@ export function ThemesView({
                                   <button
                                     type="button"
                                     onClick={() => onOpenMemberWall(leadNovel.authorId)}
-                                    className="inline-flex items-center gap-1.5 font-medium text-stone-800 hover:text-[#1B365D] hover:underline"
+                                    className="inline-flex items-center gap-1.5 font-medium text-stone-800 dark:text-stone-200 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                                   >
                                     <UserIcon className="w-3.5 h-3.5 text-stone-400" />
                                     <span>{leadNovel.authorName}</span>
@@ -555,7 +559,7 @@ export function ThemesView({
                                 <span aria-hidden="true">·</span>
                                 <span>{formatFrenchDate(leadNovel.createdAt?.toDate() ?? null)}</span>
                                 <span aria-hidden="true">·</span>
-                                <span className="inline-flex items-center gap-1 tabular-nums font-medium text-stone-800">
+                                <span className="inline-flex items-center gap-1 tabular-nums font-medium text-stone-800 dark:text-stone-200">
                                   <Eye className="w-3.5 h-3.5 text-stone-400" />
                                   {leadNovel.viewCount ?? 0} vue
                                   {(leadNovel.viewCount ?? 0) > 1 ? 's' : ''}
@@ -584,8 +588,8 @@ export function ThemesView({
                                   }
                                   className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
                                     bookmarkedStoryIds.has(leadNovel.storyId)
-                                      ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                      ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                      : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                   }`}
                                 >
                                   <Bookmark
@@ -602,12 +606,24 @@ export function ThemesView({
                                   title="Repartager sur mon compte"
                                   className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
                                     repostedStoryIds.has(leadNovel.storyId)
-                                      ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                      : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                      ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                      : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                   }`}
                                 >
                                   <Repeat2 className="w-4 h-4" />
                                 </button>
+
+                                {onShareStory && isStoryCompliantForPublicFeed(leadNovel) && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onShareStory(leadNovel)}
+                                    aria-label={`Partager ${leadNovel.title}`}
+                                    title="Partager ce roman"
+                                    className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors"
+                                  >
+                                    <Share2 className="w-4 h-4" />
+                                  </button>
+                                )}
 
                                 <button
                                   type="button"
@@ -627,7 +643,7 @@ export function ThemesView({
                 ) : (
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="text-xs uppercase tracking-widest text-stone-500">
+                      <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                         Podium · Top {podiumNovels.length} des romans les plus lus{' '}
                         {selectedGenre === 'all'
                           ? '(tous genres)'
@@ -635,7 +651,7 @@ export function ThemesView({
                             ? '(non classés)'
                             : `(${NOVEL_GENRE_LABELS[selectedGenre]})`}
                       </p>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         Classés par lectures et résonances
                       </span>
                     </div>
@@ -643,8 +659,8 @@ export function ThemesView({
                     <div
                       className={
                         podiumNovels.length >= 3
-                          ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90'
-                          : 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90'
+                          ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90 dark:lg:border-stone-700'
+                          : 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90 dark:lg:border-stone-700'
                       }
                     >
                       {podiumNovels.map((novel, idx) => {
@@ -664,10 +680,10 @@ export function ThemesView({
                               : 'order-2';
 
                         const cardSurface = isChampion
-                          ? 'bg-[#FFFDF8] border-[#C9A227]/80 shadow-[0_14px_34px_-20px_rgba(122,82,16,0.28)] lg:min-h-[340px]'
+                          ? 'bg-[#FFFDF8] dark:bg-stone-900 border-[#C9A227]/80 dark:border-amber-600/60 shadow-[0_14px_34px_-20px_rgba(122,82,16,0.28)] lg:min-h-[340px]'
                           : isSecond
-                            ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[305px]'
-                            : 'bg-white border-[#D9B9AE] shadow-[0_10px_24px_-20px_rgba(154,59,41,0.14)] lg:min-h-[285px]';
+                            ? 'bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-700 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[305px]'
+                            : 'bg-white dark:bg-stone-900 border-[#D9B9AE] dark:border-rose-900/60 shadow-[0_10px_24px_-20px_rgba(154,59,41,0.14)] lg:min-h-[285px]';
 
                         const stripClass = isChampion
                           ? 'bg-[#7A5210] text-[#FFFDF8]'
@@ -676,10 +692,10 @@ export function ThemesView({
                             : 'bg-[#9A3B29] text-white';
 
                         const plinthClass = isChampion
-                          ? 'h-16 bg-gradient-to-b from-[#F4E7C3] to-[#E8D295] border-x border-t border-[#C9A227]/70 text-[#5C3D0B]'
+                          ? 'h-16 bg-gradient-to-b from-[#F4E7C3] to-[#E8D295] dark:from-amber-950/70 dark:to-amber-900/50 border-x border-t border-[#C9A227]/70 dark:border-amber-700/60 text-[#5C3D0B] dark:text-amber-200'
                           : isSecond
-                            ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 border-x border-t border-stone-300 text-stone-700'
-                            : 'h-7 bg-gradient-to-b from-[#F8EBE7] to-[#EED5CE] border-x border-t border-[#D9B9AE] text-[#7A2D1F]';
+                            ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 dark:from-stone-800 dark:to-stone-900 border-x border-t border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300'
+                            : 'h-7 bg-gradient-to-b from-[#F8EBE7] to-[#EED5CE] dark:from-rose-950/60 dark:to-rose-900/40 border-x border-t border-[#D9B9AE] dark:border-rose-800/60 text-[#7A2D1F] dark:text-rose-200';
 
                         const plinthLabel = isChampion
                           ? '1re marche'
@@ -740,11 +756,11 @@ export function ThemesView({
                                     />
                                     <div className="min-w-0 flex-1 space-y-1.5">
                                       <StoryFormatKicker story={novel} showDetails={false} />
-                                      <p className="text-[11px] text-stone-500 tabular-nums">
+                                      <p className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
                                         {getNovelGenreLabel(novel)} · {novel.chapterCount ?? 1} chap.
                                       </p>
                                       <h3
-                                        className={`font-display font-medium text-stone-900 leading-snug ${
+                                        className={`font-display font-medium text-stone-900 dark:text-stone-100 leading-snug ${
                                           isChampion ? 'text-2xl' : 'text-xl'
                                         }`}
                                         style={{ textWrap: 'balance' }}
@@ -752,12 +768,12 @@ export function ThemesView({
                                         <button
                                           type="button"
                                           onClick={() => onReadStory(novel)}
-                                          className="hover:text-[#1B365D] text-left transition-colors"
+                                          className="hover:text-[#1B365D] dark:hover:text-amber-300 text-left transition-colors"
                                         >
                                           {novel.title}
                                         </button>
                                       </h3>
-                                      <p className="text-xs text-stone-600">
+                                      <p className="text-xs text-stone-600 dark:text-stone-400">
                                         {novel.isAnonymous ? (
                                           <span className="inline-flex items-center gap-1">
                                             <EyeOff className="w-3 h-3 text-stone-400" />
@@ -767,7 +783,7 @@ export function ThemesView({
                                           <button
                                             type="button"
                                             onClick={() => onOpenMemberWall(novel.authorId)}
-                                            className="font-medium text-stone-700 hover:text-[#1B365D] hover:underline"
+                                            className="font-medium text-stone-700 dark:text-stone-300 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                                           >
                                             {novel.authorName}
                                           </button>
@@ -776,11 +792,11 @@ export function ThemesView({
                                     </div>
                                   </div>
 
-                                  <p className="text-xs sm:text-sm text-stone-600 line-clamp-3 leading-relaxed">
+                                  <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 line-clamp-3 leading-relaxed">
                                     {novel.excerpt}
                                   </p>
 
-                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
                                     {renderOriginLink(novel)}
                                     <span aria-hidden="true">·</span>
                                     <span>
@@ -795,9 +811,9 @@ export function ThemesView({
                                 </div>
                               </div>
 
-                              <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2.5">
-                                <div className="flex items-center gap-3 text-xs text-stone-600 tabular-nums">
-                                  <span className="inline-flex items-center gap-1 font-medium text-stone-800">
+                              <div className="px-5 py-3 bg-[#FAF8F4] dark:bg-stone-950/60 border-t border-stone-200/80 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-3 text-xs text-stone-600 dark:text-stone-400 tabular-nums">
+                                  <span className="inline-flex items-center gap-1 font-medium text-stone-800 dark:text-stone-200">
                                     <Eye className="w-3.5 h-3.5 text-stone-400" />
                                     {novel.viewCount ?? 0}
                                   </span>
@@ -818,8 +834,8 @@ export function ThemesView({
                                     aria-label="Enregistrer pour lire plus tard"
                                     className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                       bookmarkedStoryIds.has(novel.storyId)
-                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                        : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                        ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                     }`}
                                   >
                                     <Bookmark
@@ -836,11 +852,23 @@ export function ThemesView({
                                       aria-label="Repartager"
                                       className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                         repostedStoryIds.has(novel.storyId)
-                                          ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                          : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                          ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                          : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                       }`}
                                     >
                                       <Repeat2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  {onShareStory && isStoryCompliantForPublicFeed(novel) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onShareStory(novel)}
+                                      aria-label={`Partager ${novel.title}`}
+                                      title="Partager ce roman"
+                                      className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors"
+                                    >
+                                      <Share2 className="w-3.5 h-3.5" />
                                     </button>
                                   )}
 
@@ -850,7 +878,7 @@ export function ThemesView({
                                     className={`min-h-[32px] px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap ${
                                       isChampion
                                         ? 'bg-[#1B365D] text-white hover:bg-[#132744]'
-                                        : 'bg-white border border-[#CBD6E6] text-[#1B365D] hover:bg-[#F3F6FA]'
+                                        : 'bg-white dark:bg-stone-800 border border-[#CBD6E6] dark:border-sky-800 text-[#1B365D] dark:text-sky-200 hover:bg-[#F3F6FA] dark:hover:bg-sky-950/60'
                                     }`}
                                   >
                                     <span>Lire le roman</span>
@@ -885,17 +913,17 @@ export function ThemesView({
 
                 {/* Ranked List #4+ for Novels */}
                 {otherNovels.length > 0 && (
-                  <div className="bg-white border border-stone-200 rounded-lg divide-y divide-stone-200">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg divide-y divide-stone-200 dark:divide-stone-800">
                     {otherNovels.map((novel, idx) => {
                       const rank = idx + 4;
                       const rankLabel = rank < 10 ? `0${rank}` : `${rank}`;
                       return (
                         <article
                           key={novel.storyId}
-                          className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#FAF8F4] transition-colors"
+                          className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#FAF8F4] dark:hover:bg-stone-800/50 transition-colors"
                         >
                           <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                            <span className="font-display text-xl font-medium text-stone-400 tabular-nums w-7 shrink-0 pt-1">
+                            <span className="font-display text-xl font-medium text-stone-400 dark:text-stone-500 tabular-nums w-7 shrink-0 pt-1">
                               {rankLabel}
                             </span>
                             <NovelCoverArt
@@ -907,7 +935,7 @@ export function ThemesView({
                               showFallbackWhenMissing={true}
                             />
                             <div className="min-w-0 space-y-1 flex-1">
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-stone-500">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-stone-500 dark:text-stone-400">
                                 <StoryFormatKicker story={novel} showDetails={true} />
                                 <span aria-hidden="true">·</span>
                                 {renderOriginLink(novel)}
@@ -917,23 +945,23 @@ export function ThemesView({
                                 />
                               </div>
 
-                              <h3 className="font-display text-xl font-medium text-stone-900">
+                              <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                                 <button
                                   type="button"
                                   onClick={() => onReadStory(novel)}
-                                  className="hover:text-[#1B365D] text-left transition-colors"
+                                  className="hover:text-[#1B365D] dark:hover:text-amber-300 text-left transition-colors"
                                 >
                                   {novel.title}
                                 </button>
                               </h3>
 
-                              <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 max-w-2xl">
+                              <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 line-clamp-2 max-w-2xl">
                                 {novel.excerpt}
                               </p>
 
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 pt-1">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400 pt-1">
                                 {novel.isAnonymous ? (
-                                  <span className="inline-flex items-center gap-1 text-stone-700 font-medium">
+                                  <span className="inline-flex items-center gap-1 text-stone-700 dark:text-stone-300 font-medium">
                                     <EyeOff className="w-3 h-3 text-stone-400" />
                                     <span>Auteur anonyme</span>
                                   </span>
@@ -941,14 +969,14 @@ export function ThemesView({
                                   <button
                                     type="button"
                                     onClick={() => onOpenMemberWall(novel.authorId)}
-                                    className="inline-flex items-center gap-1 text-stone-700 font-medium hover:text-[#1B365D] hover:underline"
+                                    className="inline-flex items-center gap-1 text-stone-700 dark:text-stone-300 font-medium hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                                   >
                                     <UserIcon className="w-3 h-3 text-stone-400" />
                                     <span>{novel.authorName}</span>
                                   </button>
                                 )}
                                 <span aria-hidden="true">·</span>
-                                <span className="inline-flex items-center gap-1 tabular-nums text-stone-700 font-medium">
+                                <span className="inline-flex items-center gap-1 tabular-nums text-stone-700 dark:text-stone-300 font-medium">
                                   <Eye className="w-3 h-3 text-stone-400" />
                                   {novel.viewCount ?? 0} vue{(novel.viewCount ?? 0) > 1 ? 's' : ''}
                                 </span>
@@ -973,8 +1001,8 @@ export function ThemesView({
                               aria-label="Enregistrer pour lire plus tard"
                               className={`min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded border transition-colors ${
                                 bookmarkedStoryIds.has(novel.storyId)
-                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                  : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400'
+                                  ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400'
                               }`}
                             >
                               <Bookmark
@@ -983,10 +1011,21 @@ export function ThemesView({
                                 }`}
                               />
                             </button>
+                            {onShareStory && isStoryCompliantForPublicFeed(novel) && (
+                              <button
+                                type="button"
+                                onClick={() => onShareStory(novel)}
+                                aria-label={`Partager ${novel.title}`}
+                                title="Partager ce roman"
+                                className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => onReadStory(novel)}
-                              className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] border border-[#CBD6E6] bg-[#F3F6FA] rounded hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] dark:text-sky-200 border border-[#CBD6E6] dark:border-sky-800 bg-[#F3F6FA] dark:bg-sky-950/50 rounded hover:bg-[#E7EEF7] dark:hover:bg-sky-900/50 inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <span>Lire</span>
                               <ArrowRight className="w-3.5 h-3.5" />
@@ -1021,7 +1060,7 @@ export function ThemesView({
                 className={`min-h-[38px] px-3.5 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                   selectedConfessionTheme === 'all'
                     ? 'border-[#9A3B29] bg-[#9A3B29] text-white'
-                    : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:border-stone-400 dark:hover:border-stone-500'
                 }`}
               >
                 Toutes les confessions ({allPublicConfessions.length})
@@ -1039,7 +1078,7 @@ export function ThemesView({
                     className={`min-h-[38px] px-3.5 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                       active
                         ? 'border-[#9A3B29] bg-[#9A3B29] text-white'
-                        : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:border-stone-400 dark:hover:border-stone-500'
                     }`}
                   >
                     {theme.shortSalonName} ({count})
@@ -1055,7 +1094,7 @@ export function ThemesView({
                   className={`min-h-[38px] px-3.5 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                     selectedConfessionTheme === 'pelemele'
                       ? 'border-[#9A3B29] bg-[#9A3B29] text-white'
-                      : 'border-stone-200 bg-white text-stone-700 hover:border-stone-400'
+                      : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:border-stone-400 dark:hover:border-stone-500'
                   }`}
                 >
                   Hors salon · Pêle-mêle ({confessionsByTheme.get('pelemele')?.length ?? 0})
@@ -1064,21 +1103,21 @@ export function ThemesView({
             </div>
 
             {!storiesLoaded ? (
-              <div className="bg-white border border-stone-200 rounded-lg p-8 text-sm text-stone-500">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-sm text-stone-500 dark:text-stone-400">
                 Chargement des confessions…
               </div>
             ) : activeConfessions.length === 0 ? (
-              <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
-                <Feather className="w-8 h-8 text-[#9A3B29]/70 mx-auto" />
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-4">
+                <Feather className="w-8 h-8 text-[#9A3B29]/70 dark:text-rose-400/80 mx-auto" />
                 <div className="space-y-1.5">
-                  <h3 className="font-display text-2xl text-stone-900">
+                  <h3 className="font-display text-2xl text-stone-900 dark:text-stone-100">
                     {selectedConfessionTheme === 'all'
                       ? 'Aucune confession n’est encore parue'
                       : selectedConfessionTheme === 'pelemele'
                         ? 'Aucune confession hors salon pour le moment'
                         : `Aucune confession dans « ${THEME_MAP[selectedConfessionTheme].salonName} »`}
                   </h3>
-                  <p className="text-sm text-stone-600 max-w-md mx-auto">
+                  <p className="text-sm text-stone-600 dark:text-stone-400 max-w-md mx-auto">
                     Déposez une confession personnelle (plus de 3 lignes) pour ouvrir le classement de cette pièce.
                   </p>
                 </div>
@@ -1106,7 +1145,7 @@ export function ThemesView({
                   (() => {
                     const leadConf = podiumConfessions[0];
                     return (
-                      <article className="bg-[#FFFBF9] border border-[#C97B6B]/70 rounded-xl overflow-hidden shadow-[0_14px_34px_-20px_rgba(154,59,41,0.25)]">
+                      <article className="bg-[#FFFBF9] dark:bg-stone-900 border border-[#C97B6B]/70 dark:border-rose-900/60 rounded-xl overflow-hidden shadow-[0_14px_34px_-20px_rgba(154,59,41,0.25)]">
                         <div className="bg-[#9A3B29] text-white px-5 py-2 flex items-center justify-between gap-2 text-xs font-medium">
                           <span className="inline-flex items-center gap-1.5">
                             <Crown className="w-3.5 h-3.5 shrink-0" />
@@ -1123,7 +1162,7 @@ export function ThemesView({
                         </div>
 
                         <div className="p-6 sm:p-8 space-y-4">
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
                             <StoryFormatKicker story={leadConf} showDetails={false} />
                             <span aria-hidden="true">·</span>
                             {renderOriginLink(leadConf)}
@@ -1137,55 +1176,55 @@ export function ThemesView({
 
                           <div className="space-y-2">
                             <h3
-                              className="font-display text-2xl sm:text-3xl font-medium text-stone-900 leading-snug"
+                              className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100 leading-snug"
                               style={{ textWrap: 'balance' }}
                             >
                               <button
                                 type="button"
                                 onClick={() => onReadStory(leadConf)}
-                                className="hover:text-[#9A3B29] text-left transition-colors"
+                                className="hover:text-[#9A3B29] dark:hover:text-rose-300 text-left transition-colors"
                               >
                                 {leadConf.title}
                               </button>
                             </h3>
-                            <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-prose">
+                            <p className="text-sm sm:text-base text-stone-600 dark:text-stone-300 leading-relaxed max-w-prose">
                               {leadConf.excerpt}
                             </p>
                           </div>
 
-                          <div className="pt-3 border-t border-stone-200/70 flex flex-wrap items-center justify-between gap-4">
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600">
+                          <div className="pt-3 border-t border-stone-200/70 dark:border-stone-800 flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-600 dark:text-stone-400">
                               {leadConf.isAnonymous ? (
-                                <span className="inline-flex items-center gap-1.5 font-medium text-stone-700">
-                                  <EyeOff className="w-3.5 h-3.5 text-stone-400" />
+                                <span className="inline-flex items-center gap-1.5 font-medium text-stone-700 dark:text-stone-300">
+                                  <EyeOff className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                   <span>Auteur anonyme</span>
                                 </span>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => onOpenMemberWall(leadConf.authorId)}
-                                  className="inline-flex items-center gap-1.5 font-medium text-stone-800 hover:text-[#9A3B29] hover:underline"
+                                  className="inline-flex items-center gap-1.5 font-medium text-stone-800 dark:text-stone-200 hover:text-[#9A3B29] dark:hover:text-rose-300 hover:underline"
                                 >
-                                  <UserIcon className="w-3.5 h-3.5 text-stone-400" />
+                                  <UserIcon className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                   <span>{leadConf.authorName}</span>
                                 </button>
                               )}
                               <span aria-hidden="true">·</span>
                               <span>{formatFrenchDate(leadConf.createdAt?.toDate() ?? null)}</span>
                               <span aria-hidden="true">·</span>
-                              <span className="inline-flex items-center gap-1 tabular-nums font-medium text-stone-800">
-                                <Eye className="w-3.5 h-3.5 text-stone-400" />
+                              <span className="inline-flex items-center gap-1 tabular-nums font-medium text-stone-800 dark:text-stone-200">
+                                <Eye className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                 {leadConf.viewCount ?? 0} vue
                                 {(leadConf.viewCount ?? 0) > 1 ? 's' : ''}
                               </span>
                               <span aria-hidden="true">·</span>
                               <span className="inline-flex items-center gap-1 tabular-nums">
-                                <Heart className="w-3.5 h-3.5 text-stone-400" />
+                                <Heart className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                 {leadConf.resonanceCount}
                               </span>
                               <span aria-hidden="true">·</span>
                               <span className="inline-flex items-center gap-1 tabular-nums">
-                                <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
+                                <MessageCircle className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                 {leadConf.echoCount}
                               </span>
                             </div>
@@ -1197,8 +1236,8 @@ export function ThemesView({
                                 aria-label="Enregistrer pour lire plus tard"
                                 className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
                                   bookmarkedStoryIds.has(leadConf.storyId)
-                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                    ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                 }`}
                               >
                                 <Bookmark
@@ -1213,12 +1252,23 @@ export function ThemesView({
                                 aria-label="Repartager"
                                 className={`min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border transition-colors ${
                                   repostedStoryIds.has(leadConf.storyId)
-                                    ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                    : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                    ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                 }`}
                               >
                                 <Repeat2 className="w-4 h-4" />
                               </button>
+                              {onShareStory && isStoryCompliantForPublicFeed(leadConf) && (
+                                <button
+                                  type="button"
+                                  onClick={() => onShareStory(leadConf)}
+                                  aria-label={`Partager ${leadConf.title}`}
+                                  title="Partager cette confession"
+                                  className="min-h-[36px] min-w-[36px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-[#9A3B29] hover:text-[#9A3B29] dark:hover:text-rose-300 transition-colors"
+                                >
+                                  <Share2 className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => onReadStory(leadConf)}
@@ -1236,7 +1286,7 @@ export function ThemesView({
                 ) : (
                   <div className="space-y-4">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="text-xs uppercase tracking-widest text-stone-500">
+                      <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                         Podium · Top {podiumConfessions.length} des confessions les plus lues{' '}
                         {selectedConfessionTheme === 'all'
                           ? '(tous salons)'
@@ -1244,7 +1294,7 @@ export function ThemesView({
                             ? '(hors salon)'
                             : `(${THEME_MAP[selectedConfessionTheme].shortSalonName})`}
                       </p>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         Classées par lectures et résonances
                       </span>
                     </div>
@@ -1252,8 +1302,8 @@ export function ThemesView({
                     <div
                       className={
                         podiumConfessions.length >= 3
-                          ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90'
-                          : 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90'
+                          ? 'grid grid-cols-1 lg:grid-cols-3 gap-5 lg:gap-4 items-stretch lg:items-end lg:border-b-2 lg:border-stone-300/90 dark:lg:border-stone-700'
+                          : 'grid grid-cols-1 lg:grid-cols-2 gap-5 lg:gap-4 items-stretch lg:items-end max-w-4xl mx-auto lg:border-b-2 lg:border-stone-300/90 dark:lg:border-stone-700'
                       }
                     >
                       {podiumConfessions.map((conf, idx) => {
@@ -1273,10 +1323,10 @@ export function ThemesView({
                               : 'order-2';
 
                         const cardSurface = isChampion
-                          ? 'bg-[#FFFBF9] border-[#C97B6B]/80 shadow-[0_14px_34px_-20px_rgba(154,59,41,0.28)] lg:min-h-[300px]'
+                          ? 'bg-[#FFFBF9] dark:bg-stone-900 border-[#C97B6B]/80 dark:border-rose-900/60 shadow-[0_14px_34px_-20px_rgba(154,59,41,0.28)] lg:min-h-[300px]'
                           : isSecond
-                            ? 'bg-white border-stone-300 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[270px]'
-                            : 'bg-white border-stone-300/80 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.14)] lg:min-h-[250px]';
+                            ? 'bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-700 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.18)] lg:min-h-[270px]'
+                            : 'bg-white dark:bg-stone-900 border-stone-300/80 dark:border-stone-800 shadow-[0_10px_24px_-20px_rgba(28,25,23,0.14)] lg:min-h-[250px]';
 
                         const stripClass = isChampion
                           ? 'bg-[#9A3B29] text-white'
@@ -1285,10 +1335,10 @@ export function ThemesView({
                             : 'bg-[#78350F] text-white';
 
                         const plinthClass = isChampion
-                          ? 'h-16 bg-gradient-to-b from-[#FBE8E3] to-[#EFC9C0] border-x border-t border-[#C97B6B]/70 text-[#6E271A]'
+                          ? 'h-16 bg-gradient-to-b from-[#FBE8E3] to-[#EFC9C0] dark:from-rose-950/60 dark:to-rose-950/90 border-x border-t border-[#C97B6B]/70 dark:border-rose-900/60 text-[#6E271A] dark:text-rose-200'
                           : isSecond
-                            ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 border-x border-t border-stone-300 text-stone-700'
-                            : 'h-7 bg-gradient-to-b from-[#F5ECE2] to-[#E6D3BE] border-x border-t border-[#D6BEAA] text-[#5E290A]';
+                            ? 'h-11 bg-gradient-to-b from-stone-100 to-stone-200/90 dark:from-stone-800 dark:to-stone-900 border-x border-t border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300'
+                            : 'h-7 bg-gradient-to-b from-[#F5ECE2] to-[#E6D3BE] dark:from-amber-950/40 dark:to-amber-950/70 border-x border-t border-[#D6BEAA] dark:border-amber-900/50 text-[#5E290A] dark:text-amber-300';
 
                         const plinthLabel = isChampion
                           ? '1re marche'
@@ -1336,7 +1386,7 @@ export function ThemesView({
                                     isChampion ? 'p-5 sm:p-6 space-y-3.5' : 'p-5 space-y-3'
                                   }
                                 >
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
+                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
                                     <StoryFormatKicker story={conf} showDetails={false} />
                                     <span aria-hidden="true">·</span>
                                     <span className="tabular-nums">{conf.readingMinutes} min</span>
@@ -1348,7 +1398,7 @@ export function ThemesView({
                                   </div>
 
                                   <h3
-                                    className={`font-display font-medium text-stone-900 leading-snug ${
+                                    className={`font-display font-medium text-stone-900 dark:text-stone-100 leading-snug ${
                                       isChampion ? 'text-2xl' : 'text-xl'
                                     }`}
                                     style={{ textWrap: 'balance' }}
@@ -1356,27 +1406,27 @@ export function ThemesView({
                                     <button
                                       type="button"
                                       onClick={() => onReadStory(conf)}
-                                      className="hover:text-[#9A3B29] text-left transition-colors"
+                                      className="hover:text-[#9A3B29] dark:hover:text-rose-300 text-left transition-colors"
                                     >
                                       {conf.title}
                                     </button>
                                   </h3>
 
-                                  <p className="text-xs sm:text-sm text-stone-600 line-clamp-3 leading-relaxed">
+                                  <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 line-clamp-3 leading-relaxed">
                                     {conf.excerpt}
                                   </p>
 
-                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
                                     {conf.isAnonymous ? (
                                       <span className="inline-flex items-center gap-1">
-                                        <EyeOff className="w-3 h-3 text-stone-400" />
+                                        <EyeOff className="w-3 h-3 text-stone-400 dark:text-stone-500" />
                                         <span>Auteur anonyme</span>
                                       </span>
                                     ) : (
                                       <button
                                         type="button"
                                         onClick={() => onOpenMemberWall(conf.authorId)}
-                                        className="font-medium text-stone-700 hover:text-[#9A3B29] hover:underline"
+                                        className="font-medium text-stone-700 dark:text-stone-300 hover:text-[#9A3B29] dark:hover:text-rose-300 hover:underline"
                                       >
                                         {conf.authorName}
                                       </button>
@@ -1387,18 +1437,18 @@ export function ThemesView({
                                 </div>
                               </div>
 
-                              <div className="px-5 py-3 bg-[#FAF8F4] border-t border-stone-200/80 flex flex-wrap items-center justify-between gap-2.5">
-                                <div className="flex items-center gap-3 text-xs text-stone-600 tabular-nums">
-                                  <span className="inline-flex items-center gap-1 font-medium text-stone-800">
-                                    <Eye className="w-3.5 h-3.5 text-stone-400" />
+                              <div className="px-5 py-3 bg-[#FAF8F4] dark:bg-stone-800/70 border-t border-stone-200/80 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2.5">
+                                <div className="flex items-center gap-3 text-xs text-stone-600 dark:text-stone-400 tabular-nums">
+                                  <span className="inline-flex items-center gap-1 font-medium text-stone-800 dark:text-stone-200">
+                                    <Eye className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                     {conf.viewCount ?? 0}
                                   </span>
                                   <span className="inline-flex items-center gap-1">
-                                    <Heart className="w-3.5 h-3.5 text-stone-400" />
+                                    <Heart className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                     {conf.resonanceCount}
                                   </span>
                                   <span className="inline-flex items-center gap-1">
-                                    <MessageCircle className="w-3.5 h-3.5 text-stone-400" />
+                                    <MessageCircle className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500" />
                                     {conf.echoCount}
                                   </span>
                                 </div>
@@ -1410,8 +1460,8 @@ export function ThemesView({
                                     aria-label="Enregistrer pour lire plus tard"
                                     className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                       bookmarkedStoryIds.has(conf.storyId)
-                                        ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                        : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                        ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                     }`}
                                   >
                                     <Bookmark
@@ -1428,11 +1478,23 @@ export function ThemesView({
                                       aria-label="Repartager"
                                       className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                                         repostedStoryIds.has(conf.storyId)
-                                          ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                          : 'border-stone-200 bg-white text-stone-600 hover:border-stone-400'
+                                          ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                          : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-stone-400'
                                       }`}
                                     >
                                       <Repeat2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+
+                                  {onShareStory && isStoryCompliantForPublicFeed(conf) && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onShareStory(conf)}
+                                      aria-label={`Partager ${conf.title}`}
+                                      title="Partager cette confession"
+                                      className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:border-[#9A3B29] hover:text-[#9A3B29] dark:hover:text-rose-300 transition-colors"
+                                    >
+                                      <Share2 className="w-3.5 h-3.5" />
                                     </button>
                                   )}
 
@@ -1442,7 +1504,7 @@ export function ThemesView({
                                     className={`min-h-[32px] px-3 py-1 rounded text-xs font-medium inline-flex items-center gap-1 whitespace-nowrap ${
                                       isChampion
                                         ? 'bg-[#9A3B29] text-white hover:bg-[#7F2F20]'
-                                        : 'bg-white border border-[#ECC9C1] text-[#9A3B29] hover:bg-[#FDF4F2]'
+                                        : 'bg-white dark:bg-stone-800 border border-[#ECC9C1] dark:border-rose-800 text-[#9A3B29] dark:text-rose-200 hover:bg-[#FDF4F2] dark:hover:bg-rose-950/50'
                                     }`}
                                   >
                                     <span>Lire la confession</span>
@@ -1477,21 +1539,21 @@ export function ThemesView({
 
                 {/* Ranked List #4+ for Confessions */}
                 {otherConfessions.length > 0 && (
-                  <div className="bg-white border border-stone-200 rounded-lg divide-y divide-stone-200">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg divide-y divide-stone-200 dark:divide-stone-800">
                     {otherConfessions.map((conf, idx) => {
                       const rank = idx + 4;
                       const rankLabel = rank < 10 ? `0${rank}` : `${rank}`;
                       return (
                         <article
                           key={conf.storyId}
-                          className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#FAF8F4] transition-colors"
+                          className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#FAF8F4] dark:hover:bg-stone-800/50 transition-colors"
                         >
                           <div className="flex items-start gap-3.5 min-w-0 flex-1">
-                            <span className="font-display text-xl font-medium text-stone-400 tabular-nums w-7 shrink-0 pt-1">
+                            <span className="font-display text-xl font-medium text-stone-400 dark:text-stone-500 tabular-nums w-7 shrink-0 pt-1">
                               {rankLabel}
                             </span>
                             <div className="min-w-0 space-y-1 flex-1">
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-stone-500">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-stone-500 dark:text-stone-400">
                                 <StoryFormatKicker story={conf} showDetails={false} />
                                 <span aria-hidden="true">·</span>
                                 {renderOriginLink(conf)}
@@ -1503,49 +1565,49 @@ export function ThemesView({
                                 />
                               </div>
 
-                              <h3 className="font-display text-xl font-medium text-stone-900">
+                              <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                                 <button
                                   type="button"
                                   onClick={() => onReadStory(conf)}
-                                  className="hover:text-[#9A3B29] text-left transition-colors"
+                                  className="hover:text-[#9A3B29] dark:hover:text-rose-300 text-left transition-colors"
                                 >
                                   {conf.title}
                                 </button>
                               </h3>
 
-                              <p className="text-xs sm:text-sm text-stone-600 line-clamp-2 max-w-2xl">
+                              <p className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 line-clamp-2 max-w-2xl">
                                 {conf.excerpt}
                               </p>
 
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 pt-1">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500 dark:text-stone-400 pt-1">
                                 {conf.isAnonymous ? (
-                                  <span className="inline-flex items-center gap-1 text-stone-700 font-medium">
-                                    <EyeOff className="w-3 h-3 text-stone-400" />
+                                  <span className="inline-flex items-center gap-1 text-stone-700 dark:text-stone-300 font-medium">
+                                    <EyeOff className="w-3 h-3 text-stone-400 dark:text-stone-500" />
                                     <span>Auteur anonyme</span>
                                   </span>
                                 ) : (
                                   <button
                                     type="button"
                                     onClick={() => onOpenMemberWall(conf.authorId)}
-                                    className="inline-flex items-center gap-1 text-stone-700 font-medium hover:text-[#9A3B29] hover:underline"
+                                    className="inline-flex items-center gap-1 text-stone-700 dark:text-stone-300 font-medium hover:text-[#9A3B29] dark:hover:text-rose-300 hover:underline"
                                   >
-                                    <UserIcon className="w-3 h-3 text-stone-400" />
+                                    <UserIcon className="w-3 h-3 text-stone-400 dark:text-stone-500" />
                                     <span>{conf.authorName}</span>
                                   </button>
                                 )}
                                 <span aria-hidden="true">·</span>
-                                <span className="inline-flex items-center gap-1 tabular-nums text-stone-700 font-medium">
-                                  <Eye className="w-3 h-3 text-stone-400" />
+                                <span className="inline-flex items-center gap-1 tabular-nums text-stone-700 dark:text-stone-300 font-medium">
+                                  <Eye className="w-3 h-3 text-stone-400 dark:text-stone-500" />
                                   {conf.viewCount ?? 0} vue{(conf.viewCount ?? 0) > 1 ? 's' : ''}
                                 </span>
                                 <span aria-hidden="true">·</span>
                                 <span className="inline-flex items-center gap-1 tabular-nums">
-                                  <Heart className="w-3 h-3 text-stone-400" />
+                                  <Heart className="w-3 h-3 text-stone-400 dark:text-stone-500" />
                                   {conf.resonanceCount}
                                 </span>
                                 <span aria-hidden="true">·</span>
                                 <span className="inline-flex items-center gap-1 tabular-nums">
-                                  <MessageCircle className="w-3 h-3 text-stone-400" />
+                                  <MessageCircle className="w-3 h-3 text-stone-400 dark:text-stone-500" />
                                   {conf.echoCount}
                                 </span>
                               </div>
@@ -1559,8 +1621,8 @@ export function ThemesView({
                               aria-label="Enregistrer pour lire plus tard"
                               className={`min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded border transition-colors ${
                                 bookmarkedStoryIds.has(conf.storyId)
-                                  ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                  : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400'
+                                  ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-amber-950/40 text-[#1B365D] dark:text-amber-300'
+                                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400'
                               }`}
                             >
                               <Bookmark
@@ -1569,10 +1631,21 @@ export function ThemesView({
                                 }`}
                               />
                             </button>
+                            {onShareStory && isStoryCompliantForPublicFeed(conf) && (
+                              <button
+                                type="button"
+                                onClick={() => onShareStory(conf)}
+                                aria-label={`Partager ${conf.title}`}
+                                title="Partager cette confession"
+                                className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-[#9A3B29] hover:text-[#9A3B29] dark:hover:text-rose-300 transition-colors"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => onReadStory(conf)}
-                              className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#9A3B29] border border-[#ECC9C1] bg-[#FDF4F2] rounded hover:bg-[#FAE7E3] inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#9A3B29] dark:text-rose-200 border border-[#ECC9C1] dark:border-rose-800 bg-[#FDF4F2] dark:bg-rose-950/50 rounded hover:bg-[#FAE7E3] dark:hover:bg-rose-900/50 inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <span>Lire</span>
                               <ArrowRight className="w-3.5 h-3.5" />
@@ -1593,18 +1666,18 @@ export function ThemesView({
       {workCategory === 'roman' && selectedGenre === 'all' && storiesLoaded && (
         <section
           aria-label="Meilleur roman dans chaque catégorie"
-          className="space-y-6 pt-4 border-t border-stone-200"
+          className="space-y-6 pt-4 border-t border-stone-200 dark:border-stone-800"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
-              <p className="text-xs uppercase tracking-widest text-stone-500">
+              <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                 Panorama des genres de romans
               </p>
-              <h2 className="font-display text-2xl font-medium text-stone-900 mt-1">
+              <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 mt-1">
                 En tête dans chaque catégorie de roman
               </h2>
             </div>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               Cliquez sur un genre pour afficher son classement complet
             </p>
           </div>
@@ -1617,18 +1690,18 @@ export function ThemesView({
               return (
                 <div
                   key={genre}
-                  className="bg-white border border-stone-200 rounded-lg p-5 flex flex-col justify-between space-y-4"
+                  className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-5 flex flex-col justify-between space-y-4"
                 >
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-stone-100">
+                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-stone-100 dark:border-stone-800">
                       <button
                         type="button"
                         onClick={() => setSelectedGenre(genre)}
-                        className="font-display text-lg font-medium text-stone-900 hover:text-[#1B365D] hover:underline text-left"
+                        className="font-display text-lg font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline text-left"
                       >
                         {NOVEL_GENRE_LABELS[genre]}
                       </button>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {genreList.length} roman{genreList.length > 1 ? 's' : ''}
                       </span>
                     </div>
@@ -1644,33 +1717,33 @@ export function ThemesView({
                           showFallbackWhenMissing={true}
                         />
                         <div className="min-w-0 flex-1 space-y-1">
-                          <p className="text-[11px] uppercase tracking-wider text-[#1B365D] font-medium">
+                          <p className="text-[11px] uppercase tracking-wider text-[#1B365D] dark:text-sky-300 font-medium">
                             N° 1 · Roman
                           </p>
                           <button
                             type="button"
                             onClick={() => onReadStory(champion)}
-                            className="font-display text-lg font-medium text-stone-900 hover:text-[#1B365D] text-left leading-snug line-clamp-2 block"
+                            className="font-display text-lg font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 text-left leading-snug line-clamp-2 block"
                           >
                             {champion.title}
                           </button>
-                          <p className="text-xs text-stone-600">
+                          <p className="text-xs text-stone-600 dark:text-stone-400">
                             {champion.isAnonymous ? (
                               <span className="inline-flex items-center gap-1">
-                                <EyeOff className="w-3 h-3 text-stone-400" />
+                                <EyeOff className="w-3 h-3 text-stone-400 dark:text-stone-500" />
                                 <span>Auteur anonyme</span>
                               </span>
                             ) : (
                               <button
                                 type="button"
                                 onClick={() => onOpenMemberWall(champion.authorId)}
-                                className="hover:text-[#1B365D] hover:underline"
+                                className="hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                               >
                                 {champion.authorName}
                               </button>
                             )}
                           </p>
-                          <p className="text-xs text-stone-500 tabular-nums">
+                          <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                             {champion.viewCount ?? 0} vue
                             {(champion.viewCount ?? 0) > 1 ? 's' : ''} · {champion.chapterCount ?? 1}{' '}
                             chap.
@@ -1678,26 +1751,26 @@ export function ThemesView({
                         </div>
                       </div>
                     ) : (
-                      <div className="py-4 text-xs text-stone-500 space-y-2">
+                      <div className="py-4 text-xs text-stone-500 dark:text-stone-400 space-y-2">
                         <p>Aucun roman n’occupe encore ce rayon.</p>
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
+                  <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
                     {champion ? (
                       <>
                         <button
                           type="button"
                           onClick={() => setSelectedGenre(genre)}
-                          className="text-xs font-medium text-stone-600 hover:text-stone-900"
+                          className="text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                         >
                           Voir les {genreList.length}
                         </button>
                         <button
                           type="button"
                           onClick={() => onReadStory(champion)}
-                          className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1"
+                          className="text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:underline inline-flex items-center gap-1"
                         >
                           <span>Lire le n° 1</span>
                           <ArrowRight className="w-3 h-3" />
@@ -1707,7 +1780,7 @@ export function ThemesView({
                       <button
                         type="button"
                         onClick={() => onWriteNovel(genre)}
-                        className="text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1"
+                        className="text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:underline inline-flex items-center gap-1"
                       >
                         <BookOpen className="w-3 h-3" />
                         <span>Écrire le premier en {NOVEL_GENRE_LABELS[genre].toLowerCase()}</span>
@@ -1725,18 +1798,18 @@ export function ThemesView({
       {workCategory === 'confession' && selectedConfessionTheme === 'all' && storiesLoaded && (
         <section
           aria-label="Meilleure confession par salon"
-          className="space-y-6 pt-4 border-t border-stone-200"
+          className="space-y-6 pt-4 border-t border-stone-200 dark:border-stone-800"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
-              <p className="text-xs uppercase tracking-widest text-stone-500">
+              <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                 Panorama des confessions par salon
               </p>
-              <h2 className="font-display text-2xl font-medium text-stone-900 mt-1">
+              <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 mt-1">
                 En tête dans chaque salon de confession
               </h2>
             </div>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               Cliquez sur un salon pour afficher son classement complet de confessions
             </p>
           </div>
@@ -1749,62 +1822,62 @@ export function ThemesView({
               return (
                 <div
                   key={theme.id}
-                  className="bg-white border border-stone-200 rounded-lg p-5 flex flex-col justify-between space-y-4"
+                  className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-5 flex flex-col justify-between space-y-4"
                 >
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-stone-100">
+                    <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-stone-100 dark:border-stone-800">
                       <button
                         type="button"
                         onClick={() => setSelectedConfessionTheme(theme.id)}
-                        className="font-display text-lg font-medium text-stone-900 hover:text-[#9A3B29] hover:underline text-left"
+                        className="font-display text-lg font-medium text-stone-900 dark:text-stone-100 hover:text-[#9A3B29] dark:hover:text-rose-300 hover:underline text-left"
                       >
                         {theme.shortSalonName}
                       </button>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {themeList.length} confession{themeList.length > 1 ? 's' : ''}
                       </span>
                     </div>
 
                     {champion ? (
                       <div className="space-y-1.5">
-                        <p className="text-[11px] uppercase tracking-wider text-[#9A3B29] font-medium">
+                        <p className="text-[11px] uppercase tracking-wider text-[#9A3B29] dark:text-rose-300 font-medium">
                           N° 1 · Confession
                         </p>
                         <button
                           type="button"
                           onClick={() => onReadStory(champion)}
-                          className="font-display text-lg font-medium text-stone-900 hover:text-[#9A3B29] text-left leading-snug line-clamp-2 block"
+                          className="font-display text-lg font-medium text-stone-900 dark:text-stone-100 hover:text-[#9A3B29] dark:hover:text-rose-300 text-left leading-snug line-clamp-2 block"
                         >
                           {champion.title}
                         </button>
-                        <p className="text-xs text-stone-600 line-clamp-2">{champion.excerpt}</p>
-                        <p className="text-xs text-stone-500 tabular-nums pt-0.5">
+                        <p className="text-xs text-stone-600 dark:text-stone-400 line-clamp-2">{champion.excerpt}</p>
+                        <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums pt-0.5">
                           {champion.isAnonymous ? 'Auteur anonyme' : champion.authorName} ·{' '}
                           {champion.viewCount ?? 0} vue
                           {(champion.viewCount ?? 0) > 1 ? 's' : ''}
                         </p>
                       </div>
                     ) : (
-                      <div className="py-4 text-xs text-stone-500">
+                      <div className="py-4 text-xs text-stone-500 dark:text-stone-400">
                         Aucune confession dans ce salon pour l’instant.
                       </div>
                     )}
                   </div>
 
-                  <div className="pt-2 border-t border-stone-100 flex items-center justify-between gap-2">
+                  <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
                     {champion ? (
                       <>
                         <button
                           type="button"
                           onClick={() => setSelectedConfessionTheme(theme.id)}
-                          className="text-xs font-medium text-stone-600 hover:text-stone-900"
+                          className="text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                         >
                           Voir les {themeList.length}
                         </button>
                         <button
                           type="button"
                           onClick={() => onReadStory(champion)}
-                          className="text-xs font-medium text-[#9A3B29] hover:underline inline-flex items-center gap-1"
+                          className="text-xs font-medium text-[#9A3B29] dark:text-rose-300 hover:underline inline-flex items-center gap-1"
                         >
                           <span>Lire le n° 1</span>
                           <ArrowRight className="w-3 h-3" />
@@ -1814,7 +1887,7 @@ export function ThemesView({
                       <button
                         type="button"
                         onClick={() => onWriteConfession(theme.id)}
-                        className="text-xs font-medium text-[#9A3B29] hover:underline inline-flex items-center gap-1"
+                        className="text-xs font-medium text-[#9A3B29] dark:text-rose-300 hover:underline inline-flex items-center gap-1"
                       >
                         <Feather className="w-3 h-3" />
                         <span>Écrire dans {theme.shortSalonName}</span>
@@ -1823,7 +1896,7 @@ export function ThemesView({
                       <button
                         type="button"
                         onClick={() => onEnterSalon(theme.id)}
-                        className="text-xs font-medium text-[#9A3B29] hover:underline inline-flex items-center gap-1"
+                        className="text-xs font-medium text-[#9A3B29] dark:text-rose-300 hover:underline inline-flex items-center gap-1"
                       >
                         <span>Visiter le salon</span>
                         <ArrowRight className="w-3 h-3" />

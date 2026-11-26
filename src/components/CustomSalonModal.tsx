@@ -172,20 +172,20 @@ export function CustomSalonModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/45 p-4 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/45 dark:bg-stone-950/75 p-4 sm:p-6 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="custom-salon-modal-title"
     >
-      <div className="w-full max-w-2xl bg-[#FBF9F5] border border-stone-300 rounded-lg my-auto overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 bg-white">
+      <div className="w-full max-w-2xl bg-[#FBF9F5] dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg my-auto overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
           <div>
-            <p className="text-xs uppercase tracking-widest text-stone-500">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               {editingSalon ? 'Paramètres du salon' : 'Nouvel espace de la communauté'}
             </p>
             <h2
               id="custom-salon-modal-title"
-              className="font-display text-xl font-medium text-stone-900"
+              className="font-display text-xl font-medium text-stone-900 dark:text-stone-100"
             >
               {editingSalon ? 'Modifier le salon et ses règles' : 'Créer votre propre salon'}
             </h2>
@@ -194,7 +194,7 @@ export function CustomSalonModal({
             type="button"
             onClick={onClose}
             aria-label="Fermer la fenêtre de salon"
-            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors"
+            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center rounded-md text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -203,7 +203,7 @@ export function CustomSalonModal({
         <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-6 max-h-[82vh] overflow-y-auto">
           {/* Visibility: Public vs Private */}
           <div className="space-y-2">
-            <span className="block text-xs uppercase tracking-widest text-stone-500">
+            <span className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Accès et visibilité du salon
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -212,19 +212,19 @@ export function CustomSalonModal({
                 onClick={() => setVisibility('public')}
                 className={`text-left p-4 rounded-md border transition-colors ${
                   visibility === 'public'
-                    ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
-                    : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                    ? 'bg-white dark:bg-stone-800 border-[#1B365D] dark:border-[#6088C2] ring-1 ring-[#1B365D] dark:ring-[#6088C2]'
+                    : 'bg-white/70 dark:bg-stone-800/50 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Globe
                     className={`w-4 h-4 ${
-                      visibility === 'public' ? 'text-[#1B365D]' : 'text-stone-500'
+                      visibility === 'public' ? 'text-[#1B365D] dark:text-[#93B4E2]' : 'text-stone-500 dark:text-stone-400'
                     }`}
                   />
-                  <span className="text-sm font-semibold text-stone-900">Salon public</span>
+                  <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Salon public</span>
                 </div>
-                <p className="text-xs text-stone-600 leading-relaxed">
+                <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
                   Ouvert à toute la communauté : chacun peut lire, rejoindre librement et y publier selon vos règles.
                 </p>
               </button>
@@ -234,19 +234,19 @@ export function CustomSalonModal({
                 onClick={() => setVisibility('private')}
                 className={`text-left p-4 rounded-md border transition-colors ${
                   visibility === 'private'
-                    ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
-                    : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                    ? 'bg-white dark:bg-stone-800 border-[#1B365D] dark:border-[#6088C2] ring-1 ring-[#1B365D] dark:ring-[#6088C2]'
+                    : 'bg-white/70 dark:bg-stone-800/50 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
                 }`}
               >
                 <div className="flex items-center gap-2 mb-1">
                   <Lock
                     className={`w-4 h-4 ${
-                      visibility === 'private' ? 'text-[#1B365D]' : 'text-stone-500'
+                      visibility === 'private' ? 'text-[#1B365D] dark:text-[#93B4E2]' : 'text-stone-500 dark:text-stone-400'
                     }`}
                   />
-                  <span className="text-sm font-semibold text-stone-900">Salon privé</span>
+                  <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">Salon privé</span>
                 </div>
-                <p className="text-xs text-stone-600 leading-relaxed">
+                <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
                   Accès sur demande : vous examinez chaque candidature avant d’ouvrir les récits et le chat privé.
                 </p>
               </button>
@@ -254,14 +254,14 @@ export function CustomSalonModal({
           </div>
 
           {/* Salon Profile Photo */}
-          <div className="p-4 bg-white border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="p-4 bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
             {avatarUrl && !avatarPreviewFailed ? (
               <img
                 src={avatarUrl}
                 alt={name || 'Photo du salon'}
                 referrerPolicy="no-referrer"
                 onError={() => setAvatarPreviewFailed(true)}
-                className="w-16 h-16 rounded-lg object-cover border border-stone-300 shrink-0"
+                className="w-16 h-16 rounded-lg object-cover border border-stone-300 dark:border-stone-700 shrink-0"
               />
             ) : (
               <div
@@ -278,16 +278,16 @@ export function CustomSalonModal({
 
             <div className="flex-1 min-w-0 space-y-2">
               <div>
-                <p className="text-xs font-medium text-stone-800">
+                <p className="text-xs font-medium text-stone-800 dark:text-stone-200">
                   Photo de profil du salon (facultative)
                 </p>
-                <p className="text-xs text-stone-500">
+                <p className="text-xs text-stone-500 dark:text-stone-400">
                   Affichée dans la barre latérale, sur la carte du salon et en tête du salon.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <label className="min-h-[34px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap">
+                <label className="min-h-[34px] px-3 py-1.5 text-xs font-medium text-white bg-[#1B365D] dark:bg-[#3B629B] rounded-md hover:bg-[#132744] dark:hover:bg-[#2F5183] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap">
                   <Camera className="w-3.5 h-3.5" />
                   <span>{avatarBusy ? 'Préparation…' : 'Choisir une image'}</span>
                   <input
@@ -305,7 +305,7 @@ export function CustomSalonModal({
                       setAvatarUrl('');
                       setAvatarPreviewFailed(false);
                     }}
-                    className="min-h-[34px] px-3 py-1.5 text-xs font-medium text-red-700 bg-white border border-stone-200 rounded-md hover:border-red-300 inline-flex items-center gap-1"
+                    className="min-h-[34px] px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-red-300 dark:hover:border-red-700 inline-flex items-center gap-1"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Retirer</span>
@@ -323,7 +323,7 @@ export function CustomSalonModal({
                   setAvatarPreviewFailed(false);
                 }}
                 placeholder="Ou coller un lien d’image (https://…)"
-                className="w-full px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                className="w-full px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
               />
             </div>
           </div>
@@ -331,10 +331,10 @@ export function CustomSalonModal({
           {/* Name */}
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
-              <label htmlFor="salon-name" className="text-sm font-medium text-stone-800">
+              <label htmlFor="salon-name" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 Nom du salon
               </label>
-              <span className="text-xs text-stone-500 tabular-nums">
+              <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                 {name.length}/{FIELD_LIMITS.salonName.max}
               </span>
             </div>
@@ -346,17 +346,17 @@ export function CustomSalonModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex. Le Cercle des Carnets de Nuit…"
-              className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-md font-display text-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+              className="w-full px-4 py-2.5 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md font-display text-lg text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#6088C2]"
             />
           </div>
 
           {/* Description */}
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
-              <label htmlFor="salon-desc" className="text-sm font-medium text-stone-800">
+              <label htmlFor="salon-desc" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 Esprit et présentation du lieu
               </label>
-              <span className="text-xs text-stone-500 tabular-nums">
+              <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                 {description.length}/{FIELD_LIMITS.salonDescription.max}
               </span>
             </div>
@@ -368,23 +368,23 @@ export function CustomSalonModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Expliquez quels types de récits, de romans ou d’échanges trouvent leur place ici…"
-              className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-md text-sm leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+              className="w-full px-4 py-2.5 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm leading-relaxed text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#6088C2]"
             />
           </div>
 
           {/* Admission Rules */}
-          <div className="bg-white border border-stone-200 rounded-md p-4 space-y-2">
+          <div className="bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-md p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
               <label
                 htmlFor="salon-rules"
-                className="text-sm font-medium text-stone-900 inline-flex items-center gap-2"
+                className="text-sm font-medium text-stone-900 dark:text-stone-100 inline-flex items-center gap-2"
               >
-                <ShieldCheck className="w-4 h-4 text-[#1B365D]" />
+                <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
                 <span>
                   Règles d’admission ({visibility === 'private' ? 'salon privé' : 'salon public'})
                 </span>
               </label>
-              <span className="text-xs text-stone-500 tabular-nums">
+              <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                 {admissionRules.length}/{FIELD_LIMITS.salonAdmissionRules.max}
               </span>
             </div>
@@ -399,17 +399,17 @@ export function CustomSalonModal({
                   ? 'Ex. Indiquez dans votre demande quel genre de texte vous aimez lire ou écrire. Confidentialité absolue demandée sur les textes partagés.'
                   : 'Ex. Restez attentif au ton de chacun, pas de spoilers sans prévenir, partagez vos textes avec sincérité.'
               }
-              className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+              className="w-full px-3 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm leading-relaxed text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#6088C2]"
             />
           </div>
 
           {/* Optional Prompt Question */}
           <div>
             <div className="flex items-baseline justify-between mb-1.5">
-              <label htmlFor="salon-prompt" className="text-sm font-medium text-stone-800">
+              <label htmlFor="salon-prompt" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                 Question d’ouverture posée sur la table (facultative)
               </label>
-              <span className="text-xs text-stone-500 tabular-nums">
+              <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                 {promptQuestion.length}/{FIELD_LIMITS.salonPrompt.max}
               </span>
             </div>
@@ -420,20 +420,20 @@ export function CustomSalonModal({
               value={promptQuestion}
               onChange={(e) => setPromptQuestion(e.target.value)}
               placeholder="Ex. Quel souvenir ou chapitre vous habite cette semaine ?"
-              className="w-full px-4 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+              className="w-full px-4 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#6088C2]"
             />
           </div>
 
           {/* Optional Salon Age Restriction */}
-          <div className="bg-white border border-stone-200 rounded-md p-4 space-y-2">
-            <label htmlFor="salon-min-age" className="block text-sm font-medium text-stone-900">
+          <div className="bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-md p-4 space-y-2">
+            <label htmlFor="salon-min-age" className="block text-sm font-medium text-stone-900 dark:text-stone-100">
               Public conseillé pour ce salon
             </label>
             <select
               id="salon-min-age"
               value={minAge}
               onChange={(e) => setMinAge(Number(e.target.value) as AgeRating)}
-              className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
             >
               {AGE_RATING_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -445,7 +445,7 @@ export function CustomSalonModal({
 
           {/* Accent Tone */}
           <div>
-            <span className="block text-xs uppercase tracking-widest text-stone-500 mb-2">
+            <span className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-2">
               Couleur atmosphérique
             </span>
             <div className="flex flex-wrap gap-2">
@@ -467,7 +467,7 @@ export function CustomSalonModal({
                         : { borderColor: pal.borderTint }
                     }
                     className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
-                      active ? '' : 'bg-white text-stone-800 hover:bg-stone-50'
+                      active ? '' : 'bg-white dark:bg-stone-800 text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-700'
                     }`}
                   >
                     <span
@@ -485,24 +485,24 @@ export function CustomSalonModal({
           {error && (
             <p
               role="alert"
-              className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-md px-4 py-2.5"
+              className="text-sm text-red-800 dark:text-red-300 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 rounded-md px-4 py-2.5"
             >
               {error}
             </p>
           )}
 
-          <div className="pt-2 border-t border-stone-200 flex items-center justify-end gap-3">
+          <div className="pt-2 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[40px] px-4 py-2 text-sm font-medium text-stone-700 hover:text-stone-900 transition-colors whitespace-nowrap shrink-0"
+              className="min-h-[40px] px-4 py-2 text-sm font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap shrink-0"
             >
               Annuler
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 transition-colors whitespace-nowrap shrink-0"
+              className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] dark:bg-[#3B629B] rounded-md hover:bg-[#172D6B] dark:hover:bg-[#2F5183] disabled:opacity-60 transition-colors whitespace-nowrap shrink-0"
             >
               {submitting
                 ? 'Enregistrement…'

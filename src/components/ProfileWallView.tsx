@@ -12,10 +12,12 @@ import {
   Image as ImageIcon,
   Lock,
   MessageCircle,
+  MessageSquareOff,
   Music2,
   Plus,
   Repeat2,
   Send,
+  Share2,
   Star,
   Trash2,
   User as UserIcon,
@@ -42,6 +44,7 @@ import {
   subscribeToWallItems,
   toggleFavoriteAuthor,
   updateMemberProfileBadges,
+  updateProfileCommentsDisabled,
   updatePublicProfile,
   updateRepostVisibility,
   upsertUserRelationship,
@@ -84,6 +87,7 @@ interface ProfileWallViewProps {
   onEditProfile?: () => void;
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
+  onShareStory?: (story: Story) => void;
   onOpenExchange: (exchangeId: string) => void;
   onOpenReport?: (draft: ReportDraft) => void;
   embedded?: boolean;
@@ -154,6 +158,7 @@ export function ProfileWallView({
   onEditProfile,
   onReadStory,
   onOpenStoryById,
+  onShareStory,
   onOpenExchange,
   onOpenReport,
   embedded = false,
@@ -223,6 +228,7 @@ export function ProfileWallView({
     kind: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [commentsToggleBusy, setCommentsToggleBusy] = useState(false);
 
   const isOwner = Boolean(user && user.uid === memberId);
   const isGlobalAdmin = isModerationAdminEmail(user?.email);
@@ -709,8 +715,8 @@ export function ProfileWallView({
       <div
         className={
           embedded
-            ? 'py-10 text-center text-sm text-stone-500'
-            : 'max-w-6xl mx-auto px-6 py-14 text-center text-sm text-stone-500'
+            ? 'py-10 text-center text-sm text-stone-500 dark:text-stone-400'
+            : 'max-w-6xl mx-auto px-6 py-14 text-center text-sm text-stone-500 dark:text-stone-400'
         }
       >
         {isOwner ? 'Préparation de votre mur personnel…' : 'Ouverture du mur du membre…'}
@@ -727,12 +733,12 @@ export function ProfileWallView({
             : 'max-w-3xl mx-auto px-6 py-16 text-center space-y-4'
         }
       >
-        <p className="font-display text-2xl text-stone-900">Profil introuvable</p>
+        <p className="font-display text-2xl text-stone-900 dark:text-stone-100">Profil introuvable</p>
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-800 bg-white border border-stone-200 rounded-md hover:border-stone-400"
+            className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400"
           >
             Retour aux membres
           </button>
@@ -764,7 +770,7 @@ export function ProfileWallView({
           <button
             type="button"
             onClick={onBack}
-            className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5"
+            className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Tous les profils</span>
@@ -773,7 +779,7 @@ export function ProfileWallView({
       )}
 
       {/* Unified Member Identity + Grouped Wall Toolbar */}
-      <section className="bg-white border border-stone-200 rounded-xl p-6 sm:p-7 space-y-5">
+      <section className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-xl p-6 sm:p-7 space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
           <div className="flex items-start gap-4 min-w-0">
             {isOwner ? (
@@ -789,14 +795,14 @@ export function ProfileWallView({
                     alt={memberProfile.displayName}
                     referrerPolicy="no-referrer"
                     onError={() => setFailedImages((prev) => ({ ...prev, 'header-avatar': true }))}
-                    className="w-16 h-16 rounded-full object-cover border border-stone-200 group-hover:brightness-95 transition"
+                    className="w-16 h-16 rounded-full object-cover border border-stone-200 dark:border-stone-700 group-hover:brightness-95 transition"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-2xl group-hover:border-[#1B365D] transition-colors">
+                  <div className="w-16 h-16 rounded-full bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 flex items-center justify-center text-[#1B365D] dark:text-amber-300 font-display text-2xl group-hover:border-[#1B365D] transition-colors">
                     {memberProfile.displayName.slice(0, 1).toUpperCase()}
                   </div>
                 )}
-                <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#1B365D] text-white border-2 border-white flex items-center justify-center shadow-sm group-hover:bg-[#132744] transition-colors">
+                <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#1B365D] text-white border-2 border-white dark:border-stone-900 flex items-center justify-center shadow-sm group-hover:bg-[#132744] transition-colors">
                   <Camera className="w-3 h-3" />
                 </span>
               </button>
@@ -806,31 +812,31 @@ export function ProfileWallView({
                 alt={memberProfile.displayName}
                 referrerPolicy="no-referrer"
                 onError={() => setFailedImages((prev) => ({ ...prev, 'header-avatar': true }))}
-                className="w-16 h-16 rounded-full object-cover border border-stone-200 shrink-0"
+                className="w-16 h-16 rounded-full object-cover border border-stone-200 dark:border-stone-700 shrink-0"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-2xl shrink-0">
+              <div className="w-16 h-16 rounded-full bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 flex items-center justify-center text-[#1B365D] dark:text-amber-300 font-display text-2xl shrink-0">
                 {memberProfile.displayName.slice(0, 1).toUpperCase()}
               </div>
             )}
 
             <div className="space-y-1.5 min-w-0">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <p className="text-xs uppercase tracking-widest text-stone-500">
-                  Mur personnel · Photos, musique, romans & notes
+                <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
+                  Mur personnel · Photos, musique, romans &amp; notes
                 </p>
                 {isOwner && (
                   <button
                     type="button"
                     onClick={openAvatarModal}
-                    className="text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
+                    className="text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:underline whitespace-nowrap"
                   >
                     {memberProfile.avatarUrl ? 'Changer la photo de profil' : 'Ajouter une photo de profil'}
                   </button>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="font-display text-3xl font-medium text-stone-900">
+                <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100">
                   {memberProfile.displayName}
                 </h1>
                 <RoleBadgesRow
@@ -856,7 +862,7 @@ export function ProfileWallView({
                       setShowAdminBadgesPanel((prev) => !prev);
                       setAdminBadgeFeedback(null);
                     }}
-                    className="min-h-[28px] px-2.5 py-0.5 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D] text-xs font-medium hover:border-[#1B365D] inline-flex items-center gap-1 whitespace-nowrap"
+                    className="min-h-[28px] px-2.5 py-0.5 rounded border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-sky-300 text-xs font-medium hover:border-[#1B365D] inline-flex items-center gap-1 whitespace-nowrap"
                   >
                     <Award className="w-3 h-3" />
                     <span>{showAdminBadgesPanel ? 'Fermer badges' : 'Gérer les badges'}</span>
@@ -864,16 +870,16 @@ export function ProfileWallView({
                 )}
               </div>
               {memberProfile.bio ? (
-                <p className="text-sm text-stone-700 leading-relaxed max-w-2xl">
+                <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed max-w-2xl">
                   {memberProfile.bio}
                 </p>
               ) : (
-                <p className="text-sm text-stone-500 italic">
+                <p className="text-sm text-stone-500 dark:text-stone-400 italic">
                   Ce membre n’a pas encore rédigé sa présentation.
                 </p>
               )}
               {(memberProfile.interests || memberProfile.listeningNote) && (
-                <p className="text-xs text-stone-600 pt-1">
+                <p className="text-xs text-stone-600 dark:text-stone-400 pt-1">
                   {memberProfile.interests && <span>{memberProfile.interests}</span>}
                   {memberProfile.interests && memberProfile.listeningNote && (
                     <span aria-hidden="true"> · </span>
@@ -883,15 +889,21 @@ export function ProfileWallView({
                   )}
                 </p>
               )}
+              {memberProfile.commentsDisabled && (
+                <p className="inline-flex items-center gap-1.5 text-xs text-[#9A3B29] dark:text-amber-300 pt-0.5">
+                  <MessageSquareOff className="w-3.5 h-3.5 shrink-0" />
+                  <span>Commentaires désactivés sur les écrits de ce profil</span>
+                </p>
+              )}
 
               {isGlobalAdmin && showAdminBadgesPanel && (
-                <div className="mt-3 p-3.5 rounded-md border border-[#CBD6E6] bg-[#F3F6FA]/70 space-y-2.5 max-w-2xl">
+                <div className="mt-3 p-3.5 rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA]/70 dark:bg-stone-900 space-y-2.5 max-w-2xl">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-[#1B365D] inline-flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-[#1B365D] dark:text-sky-300 inline-flex items-center gap-1.5">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       <span>Badges distinctifs sur ce profil (administration)</span>
                     </p>
-                    <span className="text-[11px] text-stone-500 tabular-nums">
+                    <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
                       {getProfileBadges(memberProfile).length}/{FIELD_LIMITS.memberBadgesMax}
                     </span>
                   </div>
@@ -935,11 +947,11 @@ export function ProfileWallView({
                           title={def.description}
                           className={`min-h-[32px] px-2.5 py-1 rounded border text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 ${
                             hasBadge
-                              ? 'border-[#1B365D] bg-white ring-1 ring-[#1B365D]/35'
-                              : 'border-stone-200 bg-white/80 opacity-80 hover:opacity-100 hover:border-stone-400'
+                              ? 'border-[#1B365D] bg-white dark:bg-stone-800 ring-1 ring-[#1B365D]/35'
+                              : 'border-stone-200 dark:border-stone-700 bg-white/80 dark:bg-stone-950 opacity-80 hover:opacity-100 hover:border-stone-400'
                           }`}
                         >
-                          {hasBadge && <Check className="w-3 h-3 text-[#1B365D]" />}
+                          {hasBadge && <Check className="w-3 h-3 text-[#1B365D] dark:text-amber-300" />}
                           <ProfileBadgeChip badgeId={def.id} compact />
                           {busy && <span className="text-[10px] text-stone-500">…</span>}
                         </button>
@@ -949,7 +961,7 @@ export function ProfileWallView({
                   {adminBadgeFeedback && (
                     <p
                       className={`text-xs ${
-                        adminBadgeFeedback.kind === 'error' ? 'text-red-700' : 'text-emerald-800'
+                        adminBadgeFeedback.kind === 'error' ? 'text-red-700 dark:text-red-400' : 'text-emerald-800 dark:text-emerald-300'
                       }`}
                     >
                       {adminBadgeFeedback.message}
@@ -981,7 +993,7 @@ export function ProfileWallView({
                       className={`min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-[background-color,border-color,transform] duration-150 active:scale-[0.97] ${
                         isActiveAction
                           ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                          : 'bg-[#FBF9F5] text-stone-800 border-stone-200 hover:border-[#1B365D] hover:text-[#1B365D]'
+                          : 'bg-[#FBF9F5] dark:bg-stone-900 text-stone-800 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
                       }`}
                     >
                       <Plus className="w-3.5 h-3.5" />
@@ -990,11 +1002,52 @@ export function ProfileWallView({
                     </button>
                   );
                 })}
+                <button
+                  type="button"
+                  disabled={commentsToggleBusy}
+                  aria-pressed={Boolean(memberProfile.commentsDisabled)}
+                  onClick={async () => {
+                    if (!user || commentsToggleBusy) return;
+                    setCommentsToggleBusy(true);
+                    try {
+                      await updateProfileCommentsDisabled(
+                        user.uid,
+                        !memberProfile.commentsDisabled
+                      );
+                    } catch {
+                      // Handled via live listener / error boundary
+                    } finally {
+                      setCommentsToggleBusy(false);
+                    }
+                  }}
+                  title={
+                    memberProfile.commentsDisabled
+                      ? 'Réactiver les commentaires sur vos écrits'
+                      : 'Désactiver les commentaires sur vos écrits'
+                  }
+                  className={`min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors disabled:opacity-60 ${
+                    memberProfile.commentsDisabled
+                      ? 'border-[#9A3B29]/50 bg-[#FDF3F1] dark:bg-amber-950/40 text-[#9A3B29] dark:text-amber-300 hover:border-[#9A3B29]'
+                      : 'border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 hover:border-[#1B365D]'
+                  }`}
+                >
+                  {memberProfile.commentsDisabled ? (
+                    <>
+                      <MessageSquareOff className="w-3.5 h-3.5" />
+                      <span>Commentaires désactivés</span>
+                    </>
+                  ) : (
+                    <>
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      <span>Commentaires actifs</span>
+                    </>
+                  )}
+                </button>
                 {onEditProfile && (
                   <button
                     type="button"
                     onClick={onEditProfile}
-                    className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border border-stone-300 bg-white text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                    className="min-h-[40px] px-3.5 py-2 text-xs font-medium rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                   >
                     <Settings className="w-3.5 h-3.5" />
                     <span>Paramètres</span>
@@ -1040,8 +1093,8 @@ export function ProfileWallView({
                       onClick={() => void handleToggleFavoriteMember()}
                       className={`min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
                         isFavoriteAuthor
-                          ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                          : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
+                          ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                          : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:border-[#1B365D] hover:text-[#1B365D]'
                       } disabled:opacity-50`}
                     >
                       <Star className={`w-3.5 h-3.5 ${isFavoriteAuthor ? 'fill-current' : ''}`} />
@@ -1058,8 +1111,8 @@ export function ProfileWallView({
                       }
                       className={`min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border inline-flex items-center gap-1.5 whitespace-nowrap ${
                         isNotInterestedMember
-                          ? 'border-amber-300 bg-amber-50 text-amber-900'
-                          : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-stone-400'
+                          ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200'
+                          : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:border-stone-400'
                       }`}
                     >
                       <EyeOff className="w-3.5 h-3.5" />
@@ -1073,7 +1126,7 @@ export function ProfileWallView({
                         type="button"
                         disabled={relBusy}
                         onClick={() => void handleSetMemberRelation(null)}
-                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-red-300 bg-red-50 text-red-900 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/40 text-red-900 dark:text-red-200 inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Ban className="w-3.5 h-3.5" />
                         <span>Débloquer</span>
@@ -1082,7 +1135,7 @@ export function ProfileWallView({
                       <button
                         type="button"
                         onClick={() => setConfirmBlock((prev) => !prev)}
-                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:border-red-300 hover:text-red-800 dark:hover:text-red-300 inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Ban className="w-3.5 h-3.5" />
                         <span>Bloquer</span>
@@ -1104,7 +1157,7 @@ export function ProfileWallView({
                             targetSummaryLabel: `Signaler ${memberProfile.displayName}`,
                           })
                         }
-                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[42px] px-3 py-2 text-xs font-medium rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:border-red-300 hover:text-red-800 dark:hover:text-red-300 inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Flag className="w-3.5 h-3.5" />
                         <span>Signaler</span>
@@ -1118,7 +1171,7 @@ export function ProfileWallView({
         </div>
 
         {!isOwner && confirmBlock && !isBlockedMember && (
-          <div className="p-3.5 bg-red-50 border border-red-200 rounded-md flex flex-wrap items-center justify-between gap-3 text-xs text-red-950">
+          <div className="p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md flex flex-wrap items-center justify-between gap-3 text-xs text-red-950 dark:text-red-200">
             <span>
               Bloquer <strong>{memberProfile.displayName}</strong> empêchera tout message privé entre vous et masquera ses récits et commentaires.
             </span>
@@ -1134,7 +1187,7 @@ export function ProfileWallView({
               <button
                 type="button"
                 onClick={() => setConfirmBlock(false)}
-                className="px-2.5 py-1.5 text-stone-700 hover:text-stone-900"
+                className="px-2.5 py-1.5 text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
               >
                 Annuler
               </button>
@@ -1146,8 +1199,8 @@ export function ProfileWallView({
           <div
             className={`px-4 py-2.5 rounded-md border flex flex-wrap items-center justify-between gap-2 text-xs ${
               isBlockedMember
-                ? 'bg-red-50 border-red-200 text-red-950'
-                : 'bg-amber-50 border-amber-200 text-amber-950'
+                ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800 text-red-950 dark:text-red-200'
+                : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-950 dark:text-amber-200'
             }`}
           >
             <span>
@@ -1168,8 +1221,8 @@ export function ProfileWallView({
 
         {/* Direct 1-on-1 Message Box */}
         {showDmBox && !isOwner && !isBlockedMember && (
-          <form onSubmit={handleStartDm} className="pt-5 border-t border-stone-200 space-y-3">
-            <p className="text-sm font-medium text-stone-900">
+          <form onSubmit={handleStartDm} className="pt-5 border-t border-stone-200 dark:border-stone-800 space-y-3">
+            <p className="text-sm font-medium text-stone-900 dark:text-stone-100">
               Démarrer un chat privé avec {memberProfile.displayName}
             </p>
             <textarea
@@ -1178,10 +1231,10 @@ export function ProfileWallView({
               value={dmText}
               onChange={(e) => setDmText(e.target.value)}
               placeholder={`Bonjour ${memberProfile.displayName}, j’ai vu ton mur et…`}
-              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
             {dmError && (
-              <p role="alert" className="text-xs text-red-700">
+              <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                 {dmError}
               </p>
             )}
@@ -1189,7 +1242,7 @@ export function ProfileWallView({
               <button
                 type="button"
                 onClick={() => setShowDmBox(false)}
-                className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
+                className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
               >
                 Annuler
               </button>
@@ -1208,14 +1261,14 @@ export function ProfileWallView({
         {wallActionError && (
           <div
             role="alert"
-            className="flex items-center justify-between gap-3 bg-red-50 border border-red-200 text-red-900 px-4 py-2.5 rounded-md text-xs"
+            className="flex items-center justify-between gap-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-900 dark:text-red-200 px-4 py-2.5 rounded-md text-xs"
           >
             <span>{wallActionError}</span>
             <button
               type="button"
               onClick={() => setWallActionError(null)}
               aria-label="Fermer l’erreur"
-              className="text-red-700 hover:text-red-900"
+              className="text-red-700 dark:text-red-300 hover:text-red-900"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -1227,7 +1280,7 @@ export function ProfileWallView({
       <div
         role="tablist"
         aria-label="Sections du profil"
-        className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 rounded-lg w-fit"
+        className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-lg w-fit"
       >
         {(
           [
@@ -1247,8 +1300,8 @@ export function ProfileWallView({
               onClick={() => setProfileSection(tab.id)}
               className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                 active
-                  ? 'bg-white text-stone-900 shadow-sm'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
               }`}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -1746,14 +1799,14 @@ export function ProfileWallView({
           className="space-y-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-display text-2xl font-medium text-stone-900">
+            <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
               Confessions &amp; romans de {memberProfile.displayName}
             </h2>
             {publicStories.length > 0 && (
               <div
                 role="group"
                 aria-label="Filtrer les écrits par catégorie"
-                className="inline-flex items-center rounded-md border border-stone-200 bg-[#FBF9F5] p-0.5 shrink-0"
+                className="inline-flex items-center rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 p-0.5 shrink-0"
               >
                 {(
                   [
@@ -1775,8 +1828,8 @@ export function ProfileWallView({
                             ? 'bg-[#9A3B29] text-white'
                             : cat.id === 'roman'
                               ? 'bg-[#1B365D] text-white'
-                              : 'bg-stone-900 text-white'
-                          : 'text-stone-700 hover:text-stone-950'
+                              : 'bg-stone-900 dark:bg-amber-400 text-white dark:text-stone-950'
+                          : 'text-stone-700 dark:text-stone-300 hover:text-stone-950 dark:hover:text-stone-100'
                       }`}
                     >
                       {cat.id === 'confession' && <Feather className="w-3 h-3 shrink-0" />}
@@ -1789,14 +1842,14 @@ export function ProfileWallView({
             )}
           </div>
           {publicStories.length === 0 ? (
-            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center text-sm text-stone-600">
+            <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center text-sm text-stone-600 dark:text-stone-400">
               {isOwner
                 ? 'Vous n’avez pas encore publié de récit public.'
                 : `${memberProfile.displayName} n’a pas encore publié de récit public.`}
             </div>
           ) : displayedPublicStories.length === 0 ? (
-            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center space-y-3">
-              <p className="text-sm text-stone-600">
+            <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center space-y-3">
+              <p className="text-sm text-stone-600 dark:text-stone-400">
                 {storyFormatFilter === 'roman'
                   ? 'Aucun roman publié dans cette section.'
                   : 'Aucune confession publiée dans cette section.'}
@@ -1804,7 +1857,7 @@ export function ProfileWallView({
               <button
                 type="button"
                 onClick={() => setStoryFormatFilter('all')}
-                className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                className="min-h-[36px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
               >
                 Tout afficher
               </button>
@@ -1817,10 +1870,10 @@ export function ProfileWallView({
                 return (
                   <article
                     key={story.storyId}
-                    className="bg-white border border-stone-200 rounded-lg p-5 flex flex-col justify-between space-y-4"
+                    className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-5 flex flex-col justify-between space-y-4"
                   >
                     <div className="space-y-2">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                         <StoryFormatKicker story={story} showDetails={true} />
                         <span aria-hidden="true">·</span>
                         <span
@@ -1830,7 +1883,7 @@ export function ProfileWallView({
                                 ? '#1B365D'
                                 : salonInfo?.palette.textAccent,
                           }}
-                          className="font-medium"
+                          className="font-medium dark:!text-sky-300"
                         >
                           {story.customSalonName ||
                             (story.storyScope === 'pelemele' && !story.customSalonId
@@ -1840,7 +1893,7 @@ export function ProfileWallView({
                         {isOwner && story.isAnonymous && (
                           <>
                             <span aria-hidden="true">·</span>
-                            <span className="inline-flex items-center gap-1 text-stone-700 font-medium">
+                            <span className="inline-flex items-center gap-1 text-stone-700 dark:text-stone-300 font-medium">
                               <EyeOff className="w-3 h-3" />
                               <span>Anonyme (masqué aux visiteurs)</span>
                             </span>
@@ -1849,7 +1902,7 @@ export function ProfileWallView({
                         {isOwner && !compliance.compliant && (
                           <>
                             <span aria-hidden="true">·</span>
-                            <span className="text-amber-800 font-medium">
+                            <span className="text-amber-800 dark:text-amber-300 font-medium">
                               À régulariser (masqué aux visiteurs · {compliance.shortReason})
                             </span>
                           </>
@@ -1864,27 +1917,27 @@ export function ProfileWallView({
                             size="sm"
                           />
                           <div className="min-w-0 flex-1 space-y-1.5">
-                            <h3 className="font-display text-xl font-medium text-stone-900">
+                            <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                               {story.title}
                             </h3>
-                            <p className="text-sm text-stone-600 leading-relaxed">
+                            <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
                               {story.excerpt}
                             </p>
                           </div>
                         </div>
                       ) : (
                         <>
-                          <h3 className="font-display text-xl font-medium text-stone-900">
+                          <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                             {story.title}
                           </h3>
-                          <p className="text-sm text-stone-600 leading-relaxed">{story.excerpt}</p>
+                          <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">{story.excerpt}</p>
                         </>
                       )}
                     </div>
 
-                    <div className="pt-3 border-t border-stone-100 space-y-2.5">
+                    <div className="pt-3 border-t border-stone-100 dark:border-stone-800 space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="text-xs text-stone-500 tabular-nums">
+                        <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                           {story.echoCount} commentaire{story.echoCount > 1 ? 's' : ''}
                         </span>
                         <div className="flex flex-wrap items-center gap-2">
@@ -1895,16 +1948,30 @@ export function ProfileWallView({
                                 setClaimStoryError(null);
                                 setConfirmClaimStoryId(story.storyId);
                               }}
-                              className="min-h-[34px] px-2.5 py-1 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[34px] px-2.5 py-1 text-xs font-medium text-[#1B365D] dark:text-sky-300 bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded hover:bg-[#E7EEF7] inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <UserCheck className="w-3.5 h-3.5" />
                               <span>Revendiquer</span>
                             </button>
                           )}
+                          {onShareStory &&
+                            compliance.compliant &&
+                            story.customSalonVisibility !== 'private' && (
+                              <button
+                                type="button"
+                                onClick={() => onShareStory(story)}
+                                title="Partager ce récit"
+                                aria-label="Partager ce récit"
+                                className="min-h-[34px] px-2.5 py-1 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded hover:border-[#1B365D] inline-flex items-center gap-1 whitespace-nowrap"
+                              >
+                                <Share2 className="w-3.5 h-3.5" />
+                                <span>Partager</span>
+                              </button>
+                            )}
                           <button
                             type="button"
                             onClick={() => onReadStory(story)}
-                            className="min-h-[36px] px-3 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap"
+                            className="min-h-[36px] px-3 py-1 text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:underline whitespace-nowrap"
                           >
                             Lire et commenter
                           </button>
@@ -1912,8 +1979,8 @@ export function ProfileWallView({
                       </div>
 
                       {isOwner && story.isAnonymous && confirmClaimStoryId === story.storyId && (
-                        <div className="rounded border border-[#CBD6E6] bg-[#F3F6FA] p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
-                          <span className="text-stone-800">
+                        <div className="rounded border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-900 p-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span className="text-stone-800 dark:text-stone-200">
                             Publier ce récit sous votre nom ({memberProfile.displayName}) ?
                           </span>
                           <div className="flex items-center gap-2 shrink-0">
@@ -1955,7 +2022,7 @@ export function ProfileWallView({
                                 setConfirmClaimStoryId(null);
                                 setClaimStoryError(null);
                               }}
-                              className="min-h-[32px] px-2.5 py-1 rounded border border-stone-300 bg-white text-stone-700 hover:border-stone-500 whitespace-nowrap"
+                              className="min-h-[32px] px-2.5 py-1 rounded border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:border-stone-500 whitespace-nowrap"
                             >
                               Annuler
                             </button>
@@ -1964,7 +2031,7 @@ export function ProfileWallView({
                       )}
 
                       {claimStoryError && confirmClaimStoryId === story.storyId && (
-                        <p role="alert" className="text-xs text-red-700">
+                        <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                           {claimStoryError}
                         </p>
                       )}
@@ -1985,23 +2052,23 @@ export function ProfileWallView({
         >
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <h2 className="font-display text-2xl font-medium text-stone-900 inline-flex items-center gap-2">
-                <Repeat2 className="w-5 h-5 text-[#1B365D]" />
+              <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 inline-flex items-center gap-2">
+                <Repeat2 className="w-5 h-5 text-[#1B365D] dark:text-sky-400" />
                 <span>Histoires repartagées</span>
               </h2>
-              <p className="text-xs text-stone-500 mt-1">
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
                 {isOwner
                   ? 'Vos repartages publics apparaissent sur votre mur ; vos repartages privés restent visibles uniquement pour vous.'
                   : `Récits partagés publiquement par ${memberProfile.displayName} sur son mur.`}
               </p>
             </div>
-            <span className="text-xs text-stone-500 tabular-nums">
+            <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
               {reposts.length} histoire{reposts.length > 1 ? 's' : ''}
             </span>
           </div>
 
           {reposts.length === 0 ? (
-            <div className="bg-white border border-stone-200 rounded-lg p-8 text-center text-sm text-stone-600">
+            <div className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-8 text-center text-sm text-stone-600 dark:text-stone-400">
               {isOwner
                 ? 'Vous n’avez pas encore repartagé d’histoire.'
                 : `${memberProfile.displayName} n’a pas encore repartagé d’histoire publiquement.`}
@@ -2016,10 +2083,10 @@ export function ProfileWallView({
               return (
                 <article
                   key={repost.repostId}
-                  className="bg-white border border-stone-200 rounded-lg p-5 flex flex-col justify-between space-y-4"
+                  className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-5 flex flex-col justify-between space-y-4"
                 >
                   <div className="space-y-2.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                       <div className="flex flex-wrap items-center gap-1.5">
                         <StoryFormatKicker
                           story={{ storyFormat: repost.storyFormat }}
@@ -2033,7 +2100,7 @@ export function ProfileWallView({
                                 ? '#1B365D'
                                 : salonInfo?.palette.textAccent,
                           }}
-                          className="font-medium"
+                          className="font-medium dark:!text-sky-300"
                         >
                           {repost.customSalonName ||
                             (repost.storyScope === 'pelemele' && !repost.customSalonId
@@ -2048,8 +2115,8 @@ export function ProfileWallView({
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-medium ${
                             isPrivate
-                              ? 'border-stone-300 bg-stone-100 text-stone-700'
-                              : 'border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D]'
+                              ? 'border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                              : 'border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-sky-300'
                           }`}
                         >
                           {isPrivate ? (
@@ -2068,20 +2135,20 @@ export function ProfileWallView({
                     </div>
 
                     {repost.note && (
-                      <p className="text-xs text-stone-700 italic bg-[#FBF9F5] border-l-2 border-[#1B365D] pl-3 py-1.5 rounded-r">
+                      <p className="text-xs text-stone-700 dark:text-stone-300 italic bg-[#FBF9F5] dark:bg-stone-900 border-l-2 border-[#1B365D] dark:border-amber-400 pl-3 py-1.5 rounded-r">
                         « {repost.note} »
                       </p>
                     )}
 
-                    <h3 className="font-display text-xl font-medium text-stone-900">
+                    <h3 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                       {repost.storyTitle}
                     </h3>
-                    <p className="text-sm text-stone-600 leading-relaxed line-clamp-3">
+                    <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-3">
                       {repost.storyExcerpt}
                     </p>
                   </div>
 
-                  <div className="pt-3 border-t border-stone-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       {isOwner && (
                         <>
@@ -2089,7 +2156,7 @@ export function ProfileWallView({
                             type="button"
                             disabled={isBusy}
                             onClick={() => void handleToggleRepostVisibility(repost)}
-                            className="min-h-[32px] px-2.5 py-1 text-[11px] font-medium text-stone-700 bg-[#FBF9F5] border border-stone-200 rounded hover:border-stone-400 inline-flex items-center gap-1 whitespace-nowrap"
+                            className="min-h-[32px] px-2.5 py-1 text-[11px] font-medium text-stone-700 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded hover:border-stone-400 inline-flex items-center gap-1 whitespace-nowrap"
                           >
                             {isPrivate ? (
                               <>
@@ -2108,7 +2175,7 @@ export function ProfileWallView({
                             disabled={isBusy}
                             onClick={() => void handleDeleteRepost(repost.storyId)}
                             aria-label={`Retirer le repartage de ${repost.storyTitle}`}
-                            className="min-h-[32px] px-2 py-1 text-[11px] font-medium text-red-700 hover:bg-red-50 rounded inline-flex items-center gap-1"
+                            className="min-h-[32px] px-2 py-1 text-[11px] font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded inline-flex items-center gap-1"
                           >
                             <Trash2 className="w-3 h-3" />
                             <span>Retirer</span>
@@ -2127,7 +2194,7 @@ export function ProfileWallView({
                           onOpenStoryById(repost.storyId);
                         }
                       }}
-                      className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] hover:underline whitespace-nowrap ml-auto"
+                      className="min-h-[34px] px-3 py-1 text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:underline whitespace-nowrap ml-auto"
                     >
                       Lire l’histoire
                     </button>
@@ -2153,14 +2220,14 @@ export function ProfileWallView({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl bg-white border border-stone-300 rounded-xl p-6 sm:p-7 space-y-5 shadow-xl my-auto"
+            className="w-full max-w-2xl bg-white dark:bg-[#1A1815] border border-stone-300 dark:border-stone-700 rounded-xl p-6 sm:p-7 space-y-5 shadow-xl my-auto"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-200">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-200 dark:border-stone-800">
               <div>
-                <h2 className="font-display text-2xl font-medium text-stone-900">
+                <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
                   Ajouter sur votre mur
                 </h2>
-                <p className="text-xs text-stone-600 mt-0.5">
+                <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
                   Photos depuis le téléphone, musique avec lecteur immersif, romans ou notes.
                 </p>
               </div>
@@ -2170,7 +2237,7 @@ export function ProfileWallView({
                 disabled={savingItem}
                 onClick={() => setComposerOpen(false)}
                 aria-label="Fermer le formulaire"
-                className="self-start sm:self-auto min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-md inline-flex items-center gap-1.5"
+                className="self-start sm:self-auto min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 border border-stone-200 dark:border-stone-700 rounded-md inline-flex items-center gap-1.5"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>Fermer</span>
@@ -2178,7 +2245,7 @@ export function ProfileWallView({
             </div>
 
             {/* Kind switcher tabs inside modal */}
-            <div className="flex flex-wrap gap-1.5 p-1 bg-stone-100 rounded-md w-fit">
+            <div className="flex flex-wrap gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-md w-fit">
               {(
                 [
                   { id: 'photo', label: 'Photo', icon: Camera },
@@ -2200,8 +2267,8 @@ export function ProfileWallView({
                     }}
                     className={`min-h-[36px] px-3 py-1.5 text-xs font-medium rounded inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                       active
-                        ? 'bg-white text-stone-900 shadow-sm'
-                        : 'text-stone-600 hover:text-stone-900'
+                        ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
+                        : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5" />
@@ -2213,13 +2280,13 @@ export function ProfileWallView({
 
             <form onSubmit={handleCreateWallItem} className="space-y-5">
               {kind === 'photo' && (
-                <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-lg space-y-3">
+                <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs font-medium text-stone-800">
+                      <p className="text-xs font-medium text-stone-800 dark:text-stone-200">
                         Photo depuis votre téléphone ou ordinateur
                       </p>
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-stone-500 dark:text-stone-400">
                         Optimisée automatiquement sans aucune configuration externe.
                       </p>
                     </div>
@@ -2241,13 +2308,13 @@ export function ProfileWallView({
                         src={mediaUrl}
                         alt="Aperçu de votre photo"
                         referrerPolicy="no-referrer"
-                        className="max-h-56 rounded-md border border-stone-200 object-cover"
+                        className="max-h-56 rounded-md border border-stone-200 dark:border-stone-700 object-cover"
                       />
                     </div>
                   )}
 
                   <div>
-                    <label htmlFor="wall-photo-url" className="block text-xs text-stone-600 mb-1">
+                    <label htmlFor="wall-photo-url" className="block text-xs text-stone-600 dark:text-stone-400 mb-1">
                       Ou coller un lien d’image directe (facultatif)
                     </label>
                     <input
@@ -2256,19 +2323,19 @@ export function ProfileWallView({
                       value={mediaUrl.startsWith('data:') ? '' : mediaUrl}
                       onChange={(e) => setMediaUrl(e.target.value)}
                       placeholder="https://…"
-                      className="w-full px-3 py-2 bg-white border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                      className="w-full px-3 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
                     />
                   </div>
                 </div>
               )}
 
               {kind === 'music' && (
-                <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-lg space-y-4">
+                <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg space-y-4">
                   <div>
-                    <p className="text-xs font-semibold text-stone-900">
+                    <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">
                       Rechercher un titre ou connecter votre service musical
                     </p>
-                    <p className="text-xs text-stone-600 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
                       Choisissez un morceau sur <strong>Audius</strong> (gratuit, morceaux complets),{' '}
                       <strong>Spotify</strong>, <strong>Deezer</strong> ou via un lien. Il jouera directement sur votre mur et dans le mode zen.
                     </p>
@@ -2287,7 +2354,7 @@ export function ProfileWallView({
                     onManualUrlChange={(url) => setMediaUrl(url)}
                   />
 
-                  <label className="flex items-center gap-2 text-xs text-stone-700 pt-1 cursor-pointer">
+                  <label className="flex items-center gap-2 text-xs text-stone-700 dark:text-stone-300 pt-1 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={setAsFavoriteMusic}
@@ -2301,7 +2368,7 @@ export function ProfileWallView({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="wall-title" className="block text-xs font-medium text-stone-700 mb-1">
+                  <label htmlFor="wall-title" className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
                     {kind === 'music'
                       ? 'Titre de la musique'
                       : kind === 'novel'
@@ -2324,14 +2391,14 @@ export function ProfileWallView({
                           ? 'Ex. L’Étranger, Les Yeux jaunes…'
                           : 'Un titre court…'
                     }
-                    className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                    className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
                   />
                 </div>
 
                 <div>
                   <label
                     htmlFor="wall-subtitle"
-                    className="block text-xs font-medium text-stone-700 mb-1"
+                    className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
                   >
                     {kind === 'music'
                       ? 'Artiste ou interprète'
@@ -2352,13 +2419,13 @@ export function ProfileWallView({
                           ? 'Ex. Albert Camus…'
                           : 'Facultatif'
                     }
-                    className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                    className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="wall-body" className="block text-xs font-medium text-stone-700 mb-1">
+                <label htmlFor="wall-body" className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
                   {kind === 'note'
                     ? 'Votre note ou pensée'
                     : 'Pourquoi cela compte pour vous (facultatif)'}
@@ -2370,13 +2437,13 @@ export function ProfileWallView({
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
                   placeholder="Un souvenir lié à cette photo, ce morceau, ce roman ou une pensée du jour…"
-                  className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
                 />
               </div>
 
               {(kind === 'note' || kind === 'novel') && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-stone-600">Papier de la note :</span>
+                  <span className="text-xs text-stone-600 dark:text-stone-400">Papier de la note :</span>
                   {(Object.keys(TONE_STYLES) as WallAccentTone[]).map((tone) => (
                     <button
                       key={tone}
@@ -2399,7 +2466,7 @@ export function ProfileWallView({
               )}
 
               {itemError && (
-                <p role="alert" className="text-xs text-red-700">
+                <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                   {itemError}
                 </p>
               )}
@@ -2409,7 +2476,7 @@ export function ProfileWallView({
                   type="button"
                   disabled={savingItem}
                   onClick={() => setComposerOpen(false)}
-                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 hover:text-stone-900"
+                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
                 >
                   Annuler
                 </button>
@@ -2439,14 +2506,14 @@ export function ProfileWallView({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-white border border-stone-300 rounded-xl p-6 space-y-5 shadow-xl my-auto"
+            className="w-full max-w-md bg-white dark:bg-[#1A1815] border border-stone-300 dark:border-stone-700 rounded-xl p-6 space-y-5 shadow-xl my-auto"
           >
-            <div className="flex items-start justify-between gap-4 pb-3 border-b border-stone-200">
+            <div className="flex items-start justify-between gap-4 pb-3 border-b border-stone-200 dark:border-stone-800">
               <div>
-                <h2 className="font-display text-2xl font-medium text-stone-900">
+                <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
                   Photo de profil
                 </h2>
-                <p className="text-xs text-stone-600 mt-0.5">
+                <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
                   Visible sur votre mur, votre portrait et dans l’annuaire des membres.
                 </p>
               </div>
@@ -2456,7 +2523,7 @@ export function ProfileWallView({
                 disabled={savingAvatar}
                 onClick={() => setAvatarModalOpen(false)}
                 aria-label="Fermer"
-                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-md inline-flex items-center gap-1.5"
+                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 border border-stone-200 dark:border-stone-700 rounded-md inline-flex items-center gap-1.5"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>Fermer</span>
@@ -2471,10 +2538,10 @@ export function ProfileWallView({
                     alt="Aperçu de votre photo de profil"
                     referrerPolicy="no-referrer"
                     onError={() => setAvatarDraftFailed(true)}
-                    className="w-28 h-28 rounded-full object-cover ring-4 ring-stone-100 border border-stone-200"
+                    className="w-28 h-28 rounded-full object-cover ring-4 ring-stone-100 dark:ring-stone-800 border border-stone-200 dark:border-stone-700"
                   />
                 ) : (
-                  <div className="w-28 h-28 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-4xl">
+                  <div className="w-28 h-28 rounded-full bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 flex items-center justify-center text-[#1B365D] dark:text-amber-300 font-display text-4xl">
                     {memberProfile.displayName.slice(0, 1).toUpperCase()}
                   </div>
                 )}
@@ -2499,7 +2566,7 @@ export function ProfileWallView({
                         setAvatarDraftUrl('');
                         setAvatarDraftFailed(false);
                       }}
-                      className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-red-700 bg-white border border-red-200 rounded-md hover:bg-red-50 whitespace-nowrap"
+                      className="min-h-[40px] px-3.5 py-2 text-xs font-medium text-red-700 dark:text-red-300 bg-white dark:bg-stone-900 border border-red-200 dark:border-red-800 rounded-md hover:bg-red-50 whitespace-nowrap"
                     >
                       Retirer
                     </button>
@@ -2508,7 +2575,7 @@ export function ProfileWallView({
               </div>
 
               <div>
-                <label htmlFor="wall-avatar-url" className="block text-xs text-stone-600 mb-1">
+                <label htmlFor="wall-avatar-url" className="block text-xs text-stone-600 dark:text-stone-400 mb-1">
                   Ou coller un lien d’image directe (facultatif)
                 </label>
                 <input
@@ -2520,12 +2587,12 @@ export function ProfileWallView({
                     setAvatarDraftFailed(false);
                   }}
                   placeholder="https://…"
-                  className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full px-3 py-2 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
                 />
               </div>
 
               {avatarError && (
-                <p role="alert" className="text-xs text-red-700">
+                <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                   {avatarError}
                 </p>
               )}
@@ -2535,7 +2602,7 @@ export function ProfileWallView({
                   type="button"
                   disabled={savingAvatar}
                   onClick={() => setAvatarModalOpen(false)}
-                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 hover:text-stone-900"
+                  className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
                 >
                   Annuler
                 </button>
@@ -2563,7 +2630,7 @@ export function ProfileWallView({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative max-w-3xl w-full bg-[#FAF9F6] rounded-xl p-3 sm:p-4 space-y-3 shadow-xl"
+            className="relative max-w-3xl w-full bg-[#FAF9F6] dark:bg-[#1A1815] rounded-xl p-3 sm:p-4 space-y-3 shadow-xl border border-transparent dark:border-stone-800"
           >
             <button
               type="button"
@@ -2583,11 +2650,11 @@ export function ProfileWallView({
 
             <div className="px-1 flex items-start justify-between gap-4">
               <div>
-                <p className="font-display text-lg font-medium text-stone-900">
+                <p className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
                   {lightboxItem.title}
                 </p>
                 {lightboxItem.body && (
-                  <p className="text-sm text-stone-600 mt-1">{lightboxItem.body}</p>
+                  <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">{lightboxItem.body}</p>
                 )}
               </div>
 
@@ -2596,7 +2663,7 @@ export function ProfileWallView({
                   type="button"
                   disabled={deletingItemId === lightboxItem.itemId}
                   onClick={() => void handleDeleteWallItem(lightboxItem.itemId!)}
-                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 shrink-0"
+                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1.5 shrink-0"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Supprimer</span>

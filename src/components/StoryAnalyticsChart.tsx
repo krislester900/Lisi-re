@@ -65,22 +65,22 @@ function ChartTooltip({
 
   const heading = 'fullDate' in row ? row.fullDate : row.fullTitle;
   return (
-    <div className="bg-white border border-stone-200 rounded-md shadow-sm px-3.5 py-2.5 text-xs space-y-1.5 max-w-[240px]">
-      <p className="font-medium text-stone-900 capitalize truncate">{heading}</p>
+    <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md shadow-sm px-3.5 py-2.5 text-xs space-y-1.5 max-w-[240px]">
+      <p className="font-medium text-stone-900 dark:text-stone-100 capitalize truncate">{heading}</p>
       <div className="space-y-1 tabular-nums">
-        <div className="flex items-center justify-between gap-4 text-stone-700">
+        <div className="flex items-center justify-between gap-4 text-stone-700 dark:text-stone-300">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#1B365D]" aria-hidden="true" />
+            <span className="w-2 h-2 rounded-full bg-[#1B365D] dark:bg-[#7FA3D6]" aria-hidden="true" />
             Vues
           </span>
-          <span className="font-semibold text-stone-900">{row.vues}</span>
+          <span className="font-semibold text-stone-900 dark:text-stone-100">{row.vues}</span>
         </div>
-        <div className="flex items-center justify-between gap-4 text-stone-700">
+        <div className="flex items-center justify-between gap-4 text-stone-700 dark:text-stone-300">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#9A3B29]" aria-hidden="true" />
+            <span className="w-2 h-2 rounded-full bg-[#9A3B29] dark:bg-[#E08A79]" aria-hidden="true" />
             Résonances
           </span>
-          <span className="font-semibold text-stone-900">{row.resonances}</span>
+          <span className="font-semibold text-stone-900 dark:text-stone-100">{row.resonances}</span>
         </div>
       </div>
     </div>
@@ -250,29 +250,29 @@ export function StoryAnalyticsChart({
   return (
     <section
       aria-label="Statistiques de lecture de vos récits"
-      className="bg-white border border-stone-200 rounded-lg p-5 sm:p-6 space-y-5"
+      className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-5 sm:p-6 space-y-5"
     >
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-stone-200">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-stone-200 dark:border-stone-800">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500">
-            <BarChart3 className="w-3.5 h-3.5 text-[#1B365D]" />
+          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
+            <BarChart3 className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2]" />
             <span>Statistiques de lecture</span>
           </div>
-          <h2 className="font-display text-2xl font-medium text-stone-900">
+          <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
             Vues et résonances par jour
           </h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Mode toggle */}
-          <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md">
+          <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-800 rounded-md">
             <button
               type="button"
               onClick={() => setChartMode('daily')}
               className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                 chartMode === 'daily'
-                  ? 'bg-white text-stone-900 shadow-sm'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
               }`}
             >
               Par jour
@@ -282,8 +282,8 @@ export function StoryAnalyticsChart({
               onClick={() => setChartMode('by-story')}
               className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                 chartMode === 'by-story'
-                  ? 'bg-white text-stone-900 shadow-sm'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
               }`}
             >
               Par récit
@@ -291,7 +291,7 @@ export function StoryAnalyticsChart({
           </div>
 
           {chartMode === 'daily' && (
-            <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md">
+            <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-800 rounded-md">
               {([7, 14, 30] as DayRange[]).map((days) => (
                 <button
                   key={days}
@@ -299,8 +299,8 @@ export function StoryAnalyticsChart({
                   onClick={() => setDayRange(days)}
                   className={`min-h-[34px] px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 tabular-nums ${
                     dayRange === days
-                      ? 'bg-white text-stone-900 shadow-sm'
-                      : 'text-stone-600 hover:text-stone-900'
+                      ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                   }`}
                 >
                   {days} j
@@ -314,7 +314,7 @@ export function StoryAnalyticsChart({
               aria-label="Filtrer par récit"
               value={selectedStoryId}
               onChange={(e) => setSelectedStoryId(e.target.value)}
-              className="min-h-[38px] max-w-[220px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+              className="min-h-[38px] max-w-[220px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
             >
               <option value="all">Tous mes récits ({publicStories.length})</option>
               {publicStories.map((s) => (
@@ -330,7 +330,7 @@ export function StoryAnalyticsChart({
             onClick={() => setReloadTick((n) => n + 1)}
             disabled={loading}
             aria-label="Actualiser les statistiques"
-            className="min-h-[38px] px-2.5 py-1.5 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-stone-400 disabled:opacity-50 inline-flex items-center justify-center"
+            className="min-h-[38px] px-2.5 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 dark:hover:border-stone-500 disabled:opacity-50 inline-flex items-center justify-center"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -341,15 +341,15 @@ export function StoryAnalyticsChart({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center gap-2.5">
-            <Eye className="w-4 h-4 text-[#1B365D] shrink-0" />
+            <Eye className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2] shrink-0" />
             <div>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 Vues {chartMode === 'daily' ? `(${dayRange} j)` : '(total)'}
               </p>
-              <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+              <p className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                 {chartMode === 'daily' ? periodViews : totalViewsAllTime}
                 {chartMode === 'daily' && totalViewsAllTime !== periodViews && (
-                  <span className="text-xs font-sans font-normal text-stone-500 ml-1.5">
+                  <span className="text-xs font-sans font-normal text-stone-500 dark:text-stone-400 ml-1.5">
                     / {totalViewsAllTime} au total
                   </span>
                 )}
@@ -358,15 +358,15 @@ export function StoryAnalyticsChart({
           </div>
 
           <div className="flex items-center gap-2.5">
-            <Heart className="w-4 h-4 text-[#9A3B29] shrink-0" />
+            <Heart className="w-4 h-4 text-[#9A3B29] dark:text-[#E08A79] shrink-0" />
             <div>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 Résonances {chartMode === 'daily' ? `(${dayRange} j)` : '(total)'}
               </p>
-              <p className="font-display text-xl font-medium text-stone-900 tabular-nums">
+              <p className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                 {chartMode === 'daily' ? periodResonances : totalResonancesAllTime}
                 {chartMode === 'daily' && totalResonancesAllTime !== periodResonances && (
-                  <span className="text-xs font-sans font-normal text-stone-500 ml-1.5">
+                  <span className="text-xs font-sans font-normal text-stone-500 dark:text-stone-400 ml-1.5">
                     / {totalResonancesAllTime} au total
                   </span>
                 )}
@@ -375,30 +375,30 @@ export function StoryAnalyticsChart({
           </div>
         </div>
 
-        <div className="flex items-center gap-5 text-xs text-stone-600">
+        <div className="flex items-center gap-5 text-xs text-stone-600 dark:text-stone-400">
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-[#1B365D]" aria-hidden="true" />
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#1B365D] dark:bg-[#7FA3D6]" aria-hidden="true" />
             <span>Nombre de vues</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-sm bg-[#9A3B29]" aria-hidden="true" />
+            <span className="w-2.5 h-2.5 rounded-sm bg-[#9A3B29] dark:bg-[#E08A79]" aria-hidden="true" />
             <span>Résonances par jour</span>
           </span>
         </div>
       </div>
 
       {error && (
-        <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+        <p role="alert" className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800/60 rounded px-3 py-2">
           {error}
         </p>
       )}
 
       {publicStories.length === 0 ? (
-        <div className="py-10 px-4 text-center bg-[#FBF9F5] border border-stone-200 rounded-md space-y-1.5">
-          <p className="font-display text-lg text-stone-900">
+        <div className="py-10 px-4 text-center bg-[#FBF9F5] dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 rounded-md space-y-1.5">
+          <p className="font-display text-lg text-stone-900 dark:text-stone-100">
             Aucun récit publié pour le moment
           </p>
-          <p className="text-xs text-stone-600 max-w-md mx-auto">
+          <p className="text-xs text-stone-600 dark:text-stone-400 max-w-md mx-auto">
             Publiez votre premier récit dans un salon pour suivre ici les lectures quotidiennes et les résonances de la communauté.
           </p>
         </div>
@@ -488,24 +488,24 @@ export function StoryAnalyticsChart({
       )}
 
       {publicStories.length > 0 && !loading && totalViewsAllTime === 0 && totalResonancesAllTime === 0 && (
-        <p className="text-xs text-stone-500">
+        <p className="text-xs text-stone-500 dark:text-stone-400">
           Les courbes se rempliront automatiquement au fil des lectures et des résonances déposées sur vos récits publiés.
         </p>
       )}
 
       {publicStories.length > 0 && (
-        <div className="pt-5 border-t border-stone-200 space-y-3">
+        <div className="pt-5 border-t border-stone-200 dark:border-stone-800 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <h3 className="font-display text-lg font-medium text-stone-900">
+              <h3 className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
                 Détail des lectures par récit
               </h3>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 Performance de chacun de vos récits publiés
               </p>
             </div>
 
-            <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-md self-start sm:self-auto">
+            <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-stone-800 rounded-md self-start sm:self-auto">
               {(
                 [
                   { id: 'views', label: 'Plus vus' },
@@ -519,8 +519,8 @@ export function StoryAnalyticsChart({
                   onClick={() => setBreakdownSort(opt.id)}
                   className={`min-h-[30px] px-2.5 py-1 text-xs font-medium rounded transition-colors whitespace-nowrap shrink-0 ${
                     breakdownSort === opt.id
-                      ? 'bg-white text-stone-900 shadow-sm'
-                      : 'text-stone-600 hover:text-stone-900'
+                      ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                   }`}
                 >
                   {opt.label}
@@ -529,7 +529,7 @@ export function StoryAnalyticsChart({
             </div>
           </div>
 
-          <div className="divide-y divide-stone-200 border border-stone-200 rounded-md bg-[#FBF9F5]">
+          <div className="divide-y divide-stone-200 dark:divide-stone-800 border border-stone-200 dark:border-stone-800 rounded-md bg-[#FBF9F5] dark:bg-stone-950/60">
             {sortedBreakdownStories.map((story) => {
               const viewsCount = story.viewCount ?? 0;
               const barPct = viewsCount > 0 ? Math.max(4, Math.round((viewsCount / maxStoryViews) * 100)) : 0;
@@ -543,14 +543,16 @@ export function StoryAnalyticsChart({
                       <button
                         type="button"
                         onClick={() => onReadStory(story)}
-                        className="font-medium text-sm text-stone-900 hover:text-[#1B365D] hover:underline text-left truncate block max-w-full"
+                        className="font-medium text-sm text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-[#93B4E2] hover:underline text-left truncate block max-w-full"
                       >
                         {story.title}
                       </button>
                     ) : (
-                      <p className="font-medium text-sm text-stone-900 truncate">{story.title}</p>
+                      <p className="font-medium text-sm text-stone-900 dark:text-stone-100 truncate">
+                        {story.title}
+                      </p>
                     )}
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
                       <span>{STORY_FORMAT_LABELS[story.storyFormat ?? 'confession']?.label}</span>
                       <span aria-hidden="true">·</span>
                       <span>{formatFrenchDate(story.createdAt?.toDate() ?? null)}</span>
@@ -561,25 +563,25 @@ export function StoryAnalyticsChart({
 
                   <div className="flex items-center gap-5 shrink-0">
                     <div className="w-24 hidden md:block">
-                      <div className="h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
+                      <div className="h-1.5 w-full bg-stone-200 dark:bg-stone-800 rounded-full overflow-hidden">
                         <div
                           style={{ width: `${barPct}%` }}
-                          className="h-full bg-[#1B365D] rounded-full transition-[width] duration-200 motion-reduce:transition-none"
+                          className="h-full bg-[#1B365D] dark:bg-[#7FA3D6] rounded-full transition-[width] duration-200 motion-reduce:transition-none"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs text-stone-700 tabular-nums">
-                      <span className="inline-flex items-center gap-1 font-medium text-stone-900" title="Vues">
-                        <Eye className="w-3.5 h-3.5 text-[#1B365D]" />
+                    <div className="flex items-center gap-4 text-xs text-stone-700 dark:text-stone-300 tabular-nums">
+                      <span className="inline-flex items-center gap-1 font-medium text-stone-900 dark:text-stone-100" title="Vues">
+                        <Eye className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2]" />
                         {viewsCount}
                       </span>
                       <span className="inline-flex items-center gap-1" title="Résonances">
-                        <Heart className="w-3.5 h-3.5 text-[#9A3B29]" />
+                        <Heart className="w-3.5 h-3.5 text-[#9A3B29] dark:text-[#E08A79]" />
                         {story.resonanceCount ?? 0}
                       </span>
                       <span className="inline-flex items-center gap-1" title="Commentaires">
-                        <MessageCircle className="w-3.5 h-3.5 text-stone-500" />
+                        <MessageCircle className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                         {story.echoCount ?? 0}
                       </span>
                     </div>

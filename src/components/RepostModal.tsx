@@ -113,18 +113,18 @@ export function RepostModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-white border border-stone-300 rounded-xl p-6 sm:p-7 space-y-5 shadow-xl my-auto"
+        className="w-full max-w-lg bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-xl p-6 sm:p-7 space-y-5 shadow-xl my-auto"
       >
-        <div className="flex items-start justify-between gap-4 pb-4 border-b border-stone-200">
+        <div className="flex items-start justify-between gap-4 pb-4 border-b border-stone-200 dark:border-stone-800">
           <div className="space-y-1">
-            <p className="text-xs uppercase tracking-widest text-stone-500 inline-flex items-center gap-1.5">
-              <Repeat2 className="w-3.5 h-3.5 text-[#1B365D]" />
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 inline-flex items-center gap-1.5">
+              <Repeat2 className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2]" />
               <span>{existingRepost ? 'Modifier le repartage' : 'Repartager sur mon compte'}</span>
             </p>
-            <h2 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+            <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
               {story.title}
             </h2>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-stone-500 dark:text-stone-400">
               Par {story.isAnonymous ? 'Auteur anonyme' : story.authorName}
             </p>
           </div>
@@ -134,7 +134,7 @@ export function RepostModal({
             disabled={saving}
             onClick={onClose}
             aria-label="Fermer"
-            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900 border border-stone-200 rounded-md inline-flex items-center gap-1.5 shrink-0"
+            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 border border-stone-200 dark:border-stone-700 rounded-md inline-flex items-center gap-1.5 shrink-0"
           >
             <X className="w-3.5 h-3.5" />
             <span>Fermer</span>
@@ -145,18 +145,18 @@ export function RepostModal({
           {/* Visibility selector */}
           <div className="space-y-2.5">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-xs font-medium text-stone-800">
+              <span className="text-xs font-medium text-stone-800 dark:text-stone-200">
                 Visibilité sur votre compte
               </span>
-              <span className="text-[11px] text-stone-500">
+              <span className="text-[11px] text-stone-500 dark:text-stone-400">
                 Profil actuel :{' '}
                 <strong>{userProfile?.discoverable === false ? 'Privé' : 'Public'}</strong>
               </span>
             </div>
 
             {isSourceRestricted ? (
-              <div className="p-3.5 rounded-md border border-stone-200 bg-[#FBF9F5] flex items-start gap-2.5 text-xs text-stone-700">
-                <Lock className="w-4 h-4 text-[#1B365D] shrink-0 mt-0.5" />
+              <div className="p-3.5 rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/80 flex items-start gap-2.5 text-xs text-stone-700 dark:text-stone-300">
+                <Lock className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2] shrink-0 mt-0.5" />
                 <p className="leading-relaxed">
                   Ce récit est privé ou provient d’un salon privé. Par respect pour la confidentialité de son salon, votre repartage est enregistré <strong>en privé sur votre compte uniquement</strong>.
                 </p>
@@ -168,15 +168,15 @@ export function RepostModal({
                   onClick={() => setVisibility('public')}
                   className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
                     visibility === 'public'
-                      ? 'border-[#1B365D] bg-[#F3F6FA]'
-                      : 'border-stone-200 bg-[#FBF9F5] hover:border-stone-400'
+                      ? 'border-[#1B365D] dark:border-[#6088C2] bg-[#F3F6FA] dark:bg-[#1B365D]/20'
+                      : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/60 hover:border-stone-400 dark:hover:border-stone-500'
                   }`}
                 >
-                  <div className="flex items-center gap-2 text-xs font-semibold text-stone-900">
-                    <Globe className="w-4 h-4 text-[#1B365D]" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
+                    <Globe className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
                     <span>Public · Sur mon mur</span>
                   </div>
-                  <p className="text-[11px] text-stone-600 leading-relaxed">
+                  <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
                     Visible par les personnes qui visitent votre mur et votre profil.
                   </p>
                 </button>
@@ -186,15 +186,15 @@ export function RepostModal({
                   onClick={() => setVisibility('private')}
                   className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
                     visibility === 'private'
-                      ? 'border-[#1B365D] bg-[#F3F6FA]'
-                      : 'border-stone-200 bg-[#FBF9F5] hover:border-stone-400'
+                      ? 'border-[#1B365D] dark:border-[#6088C2] bg-[#F3F6FA] dark:bg-[#1B365D]/20'
+                      : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/60 hover:border-stone-400 dark:hover:border-stone-500'
                   }`}
                 >
-                  <div className="flex items-center gap-2 text-xs font-semibold text-stone-900">
-                    <Lock className="w-4 h-4 text-[#1B365D]" />
+                  <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
+                    <Lock className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
                     <span>Privé · Mon compte seul</span>
                   </div>
-                  <p className="text-[11px] text-stone-600 leading-relaxed">
+                  <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
                     Conservé dans votre carnet privé sans apparaître aux visiteurs.
                   </p>
                 </button>
@@ -203,7 +203,7 @@ export function RepostModal({
           </div>
 
           <div>
-            <label htmlFor="repost-note" className="block text-xs font-medium text-stone-700 mb-1.5">
+            <label htmlFor="repost-note" className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1.5">
               Un mot d’accompagnement (facultatif)
             </label>
             <textarea
@@ -213,15 +213,15 @@ export function RepostModal({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Pourquoi souhaitez-vous garder ou partager cette histoire ?"
-              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#6088C2]"
             />
-            <p className="text-[11px] text-stone-500 mt-1 text-right tabular-nums">
+            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 text-right tabular-nums">
               {note.length}/{FIELD_LIMITS.repostNote.max}
             </p>
           </div>
 
           {error && (
-            <p role="alert" className="text-xs text-red-700">
+            <p role="alert" className="text-xs text-red-700 dark:text-red-400">
               {error}
             </p>
           )}
@@ -232,7 +232,7 @@ export function RepostModal({
                 type="button"
                 disabled={saving}
                 onClick={() => void handleRemove()}
-                className="min-h-[40px] px-3 py-2 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
+                className="min-h-[40px] px-3 py-2 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Retirer le repartage</span>
@@ -246,14 +246,14 @@ export function RepostModal({
                 type="button"
                 disabled={saving}
                 onClick={onClose}
-                className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 hover:text-stone-900"
+                className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100"
               >
                 Annuler
               </button>
               <button
                 type="submit"
                 disabled={saving}
-                className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60 inline-flex items-center gap-2 whitespace-nowrap"
+                className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] dark:bg-[#3B629B] rounded-md hover:bg-[#132744] dark:hover:bg-[#2F5183] disabled:opacity-60 inline-flex items-center gap-2 whitespace-nowrap"
               >
                 <Repeat2 className="w-4 h-4" />
                 <span>

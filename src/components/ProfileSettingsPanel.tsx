@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { Camera, Globe, Lock, Music2, ShieldCheck } from 'lucide-react';
+import {
+  Camera,
+  Globe,
+  Lock,
+  MessageCircle,
+  MessageSquareOff,
+  Music2,
+  ShieldCheck,
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { compressAvatarForProfile } from '../lib/storageService';
@@ -36,6 +44,7 @@ export function ProfileSettingsPanel({
   const [favoriteNovel, setFavoriteNovel] = useState('');
   const [interests, setInterests] = useState('');
   const [discoverable, setDiscoverable] = useState(true);
+  const [commentsDisabled, setCommentsDisabled] = useState(false);
   const [syncRepostsOnSave, setSyncRepostsOnSave] = useState(true);
   const [declaredAgeInput, setDeclaredAgeInput] = useState('');
 
@@ -56,6 +65,7 @@ export function ProfileSettingsPanel({
       setFavoriteNovel(profile.favoriteNovel ?? '');
       setInterests(profile.interests ?? '');
       setDiscoverable(profile.discoverable !== false);
+      setCommentsDisabled(profile.commentsDisabled === true);
     } else if (user) {
       setDisplayName(user.displayName || 'Auteur');
       setAvatarUrl(user.photoURL ?? '');
@@ -67,6 +77,7 @@ export function ProfileSettingsPanel({
       setFavoriteNovel('');
       setInterests('');
       setDiscoverable(true);
+      setCommentsDisabled(false);
     }
   }, [profile, user]);
 
@@ -136,6 +147,7 @@ export function ProfileSettingsPanel({
         favoriteNovel,
         interests,
         discoverable,
+        commentsDisabled,
       });
 
       if (parsedAge !== null) {
@@ -172,20 +184,20 @@ export function ProfileSettingsPanel({
   };
 
   return (
-    <section className="max-w-3xl bg-white border border-stone-200 rounded-lg p-6 sm:p-8">
-      <h2 className="font-display text-2xl font-medium text-stone-900 mb-1">
+    <section className="max-w-3xl bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-6 sm:p-8">
+      <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 mb-1">
         Paramètres du profil & musique préférée
       </h2>
-      <p className="text-xs text-stone-600 mb-4 leading-relaxed">
+      <p className="text-xs text-stone-600 dark:text-stone-400 mb-4 leading-relaxed">
         Ces informations s’affichent sur votre page de profil pour aider les autres membres à mieux vous connaître. Votre e-mail reste strictement privé.
       </p>
 
       {(profile?.isAdmin ||
         isModerationAdminEmail(user.email) ||
         (profile?.badges && profile.badges.length > 0)) && (
-        <div className="mb-5 p-3.5 rounded-md border border-stone-200 bg-[#FBF9F5] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="mb-5 p-3.5 rounded-md border border-stone-200 dark:border-stone-800 bg-[#FBF9F5] dark:bg-stone-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="space-y-1">
-            <p className="text-xs font-medium text-stone-800">
+            <p className="text-xs font-medium text-stone-800 dark:text-stone-200">
               Vos badges distinctifs sur Lisière
             </p>
             <RoleBadgesRow
@@ -193,7 +205,7 @@ export function ProfileSettingsPanel({
               profileBadges={profile?.badges}
             />
           </div>
-          <p className="text-[11px] text-stone-500">
+          <p className="text-[11px] text-stone-500 dark:text-stone-400">
             Attribués par l’administration du site.
           </p>
         </div>
@@ -201,31 +213,31 @@ export function ProfileSettingsPanel({
 
       <form onSubmit={handleSaveProfile} className="space-y-5">
         {/* Profile Photo Uploader */}
-        <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
           {avatarUrl && !avatarPreviewFailed ? (
             <img
               src={avatarUrl}
               alt={displayName || 'Votre photo de profil'}
               referrerPolicy="no-referrer"
               onError={() => setAvatarPreviewFailed(true)}
-              className="w-16 h-16 rounded-full object-cover border border-stone-300 shrink-0"
+              className="w-16 h-16 rounded-full object-cover border border-stone-300 dark:border-stone-700 shrink-0"
             />
           ) : (
-            <div className="w-16 h-16 rounded-full bg-[#F3F6FA] border border-[#CBD6E6] flex items-center justify-center text-[#1B365D] font-display text-2xl shrink-0">
+            <div className="w-16 h-16 rounded-full bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 flex items-center justify-center text-[#1B365D] dark:text-amber-300 font-display text-2xl shrink-0">
               {(displayName || 'A').slice(0, 1).toUpperCase()}
             </div>
           )}
 
           <div className="flex-1 min-w-0 space-y-2">
             <div>
-              <p className="text-xs font-medium text-stone-800">Photo de profil</p>
-              <p className="text-xs text-stone-500">
+              <p className="text-xs font-medium text-stone-800 dark:text-stone-200">Photo de profil</p>
+              <p className="text-xs text-stone-500 dark:text-stone-400">
                 Affichée sur votre profil, votre portrait et dans l’annuaire.
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <label className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap">
+              <label className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] dark:hover:bg-amber-500 cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap">
                 <Camera className="w-3.5 h-3.5" />
                 <span>{avatarBusy ? 'Préparation…' : 'Choisir une photo'}</span>
                 <input
@@ -243,7 +255,7 @@ export function ProfileSettingsPanel({
                     setAvatarUrl('');
                     setAvatarPreviewFailed(false);
                   }}
-                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-red-300 hover:text-red-700 whitespace-nowrap"
+                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-md hover:border-red-300 hover:text-red-700 dark:hover:text-red-300 whitespace-nowrap"
                 >
                   Retirer
                 </button>
@@ -259,7 +271,7 @@ export function ProfileSettingsPanel({
                 setAvatarPreviewFailed(false);
               }}
               placeholder="Ou coller un lien d’image (https://…)"
-              className="w-full px-3 py-1.5 bg-white border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3 py-1.5 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
           </div>
         </div>
@@ -268,7 +280,7 @@ export function ProfileSettingsPanel({
           <div>
             <label
               htmlFor="profile-name"
-              className="block text-xs font-medium text-stone-700 mb-1"
+              className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
             >
               Prénom ou nom de plume
             </label>
@@ -279,14 +291,14 @@ export function ProfileSettingsPanel({
               maxLength={FIELD_LIMITS.displayName.max}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
           </div>
 
           <div>
             <label
               htmlFor="profile-novel"
-              className="block text-xs font-medium text-stone-700 mb-1"
+              className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
             >
               Roman ou livre préféré du moment
             </label>
@@ -297,13 +309,13 @@ export function ProfileSettingsPanel({
               value={favoriteNovel}
               onChange={(e) => setFavoriteNovel(e.target.value)}
               placeholder="Ex. Le Petit Prince, Kafka sur le rivage…"
-              className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
           </div>
         </div>
 
         <div>
-          <label htmlFor="profile-bio" className="block text-xs font-medium text-stone-700 mb-1">
+          <label htmlFor="profile-bio" className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
             Quelques mots sur vous
           </label>
           <textarea
@@ -313,17 +325,17 @@ export function ProfileSettingsPanel({
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             placeholder="Ex. Étudiant qui aime écrire le soir, écouter du piano et discuter calmement…"
-            className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+            className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
           />
         </div>
 
-        <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md space-y-4">
+        <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-widest text-stone-500">
+              <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                 Musique préférée épinglée sur votre profil
               </p>
-              <p className="text-xs text-stone-600 mt-0.5">
+              <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
                 Cherchez sur Audius (gratuit), Spotify, Deezer ou collez un lien audio.
               </p>
             </div>
@@ -331,7 +343,7 @@ export function ProfileSettingsPanel({
             <button
               type="button"
               onClick={() => setShowMusicSearch((prev) => !prev)}
-              className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] bg-white border border-[#1B365D]/40 rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 self-start sm:self-center"
+              className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] dark:text-amber-300 bg-white dark:bg-stone-800 border border-[#1B365D]/40 dark:border-amber-400/40 rounded-md hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 self-start sm:self-center"
             >
               <Music2 className="w-3.5 h-3.5" />
               <span>{showMusicSearch ? 'Masquer le catalogue' : 'Chercher / Connecter un service'}</span>
@@ -339,7 +351,7 @@ export function ProfileSettingsPanel({
           </div>
 
           {showMusicSearch && (
-            <div className="pt-2 border-t border-stone-200">
+            <div className="pt-2 border-t border-stone-200 dark:border-stone-800">
               <MusicCatalogPicker
                 selectedUrl={favoriteTrackUrl}
                 selectedTitle={favoriteTrackTitle}
@@ -359,7 +371,7 @@ export function ProfileSettingsPanel({
             <div>
               <label
                 htmlFor="profile-track-title"
-                className="block text-xs font-medium text-stone-700 mb-1"
+                className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
               >
                 Titre de la musique préférée
               </label>
@@ -370,13 +382,13 @@ export function ProfileSettingsPanel({
                 value={favoriteTrackTitle}
                 onChange={(e) => setFavoriteTrackTitle(e.target.value)}
                 placeholder="Ex. Experience"
-                className="w-full px-3.5 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                className="w-full px-3.5 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
               />
             </div>
             <div>
               <label
                 htmlFor="profile-track-artist"
-                className="block text-xs font-medium text-stone-700 mb-1"
+                className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
               >
                 Artiste
               </label>
@@ -387,7 +399,7 @@ export function ProfileSettingsPanel({
                 value={favoriteTrackArtist}
                 onChange={(e) => setFavoriteTrackArtist(e.target.value)}
                 placeholder="Ex. Ludovico Einaudi"
-                className="w-full px-3.5 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                className="w-full px-3.5 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
               />
             </div>
           </div>
@@ -395,7 +407,7 @@ export function ProfileSettingsPanel({
           <div>
             <label
               htmlFor="profile-track-url"
-              className="block text-xs font-medium text-stone-700 mb-1"
+              className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
             >
               Lien audio enregistré (Audius, Spotify, Deezer ou MP3)
             </label>
@@ -406,7 +418,7 @@ export function ProfileSettingsPanel({
               value={favoriteTrackUrl}
               onChange={(e) => setFavoriteTrackUrl(e.target.value)}
               placeholder="https://… ou /api/music/audius/stream/…"
-              className="w-full px-3.5 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
           </div>
         </div>
@@ -415,7 +427,7 @@ export function ProfileSettingsPanel({
           <div>
             <label
               htmlFor="profile-interests"
-              className="block text-xs font-medium text-stone-700 mb-1"
+              className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
             >
               Passions et goûts personnels
             </label>
@@ -426,14 +438,14 @@ export function ProfileSettingsPanel({
               value={interests}
               onChange={(e) => setInterests(e.target.value)}
               placeholder="Ex. Cinéma japonais, photographie argentique, romans…"
-              className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
           </div>
 
           <div>
             <label
               htmlFor="profile-note"
-              className="block text-xs font-medium text-stone-700 mb-1"
+              className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
             >
               Ce dont vous aimez échanger
             </label>
@@ -444,19 +456,19 @@ export function ProfileSettingsPanel({
               value={listeningNote}
               onChange={(e) => setListeningNote(e.target.value)}
               placeholder="Ex. Musique, projets créatifs, conseils de lecture…"
-              className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+              className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
             />
           </div>
         </div>
 
-        <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md space-y-3">
+        <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <p className="text-xs uppercase tracking-widest text-stone-500 flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D]" />
+              <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-[#1B365D] dark:text-amber-300" />
                 <span>Votre âge (strictement privé · filtre d’accès)</span>
               </p>
-              <p className="text-xs text-stone-600 mt-0.5 leading-relaxed">
+              <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
                 Jamais affiché aux autres membres. Sert à proposer des récits et fils adaptés à votre âge et à activer les alertes « Contenu mature ».
               </p>
             </div>
@@ -473,18 +485,18 @@ export function ProfileSettingsPanel({
                 value={declaredAgeInput}
                 onChange={(e) => setDeclaredAgeInput(e.target.value)}
                 placeholder="Ex. 24"
-                className="w-full px-3 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                className="w-full px-3 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
               />
             </div>
           </div>
         </div>
 
-        <div className="p-4 bg-[#FBF9F5] border border-stone-200 rounded-md space-y-3">
+        <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md space-y-3">
           <div>
-            <p className="text-xs uppercase tracking-widest text-stone-500">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
               Confidentialité du profil & des repartages
             </p>
-            <p className="text-xs text-stone-600 mt-0.5">
+            <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
               Choisissez si votre compte et vos histoires repartagées apparaissent en public ou restent privés.
             </p>
           </div>
@@ -495,15 +507,15 @@ export function ProfileSettingsPanel({
               onClick={() => setDiscoverable(true)}
               className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
                 discoverable
-                  ? 'border-[#1B365D] bg-[#F3F6FA]'
-                  : 'border-stone-200 bg-white hover:border-stone-400'
+                  ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800'
+                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-950 hover:border-stone-400'
               }`}
             >
-              <div className="flex items-center gap-2 text-xs font-semibold text-stone-900">
-                <Globe className="w-4 h-4 text-[#1B365D]" />
+              <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
+                <Globe className="w-4 h-4 text-[#1B365D] dark:text-amber-300" />
                 <span>Profil public</span>
               </div>
-              <p className="text-[11px] text-stone-600 leading-relaxed">
+              <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
                 Apparaît dans l’annuaire des profils. Vos repartages sont publics sur votre mur par défaut.
               </p>
             </button>
@@ -513,22 +525,22 @@ export function ProfileSettingsPanel({
               onClick={() => setDiscoverable(false)}
               className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
                 !discoverable
-                  ? 'border-[#1B365D] bg-[#F3F6FA]'
-                  : 'border-stone-200 bg-white hover:border-stone-400'
+                  ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800'
+                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-950 hover:border-stone-400'
               }`}
             >
-              <div className="flex items-center gap-2 text-xs font-semibold text-stone-900">
-                <Lock className="w-4 h-4 text-[#1B365D]" />
+              <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
+                <Lock className="w-4 h-4 text-[#1B365D] dark:text-amber-300" />
                 <span>Profil privé</span>
               </div>
-              <p className="text-[11px] text-stone-600 leading-relaxed">
+              <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
                 Masqué de l’annuaire. Vos repartages restent privés sur votre compte par défaut.
               </p>
             </button>
           </div>
 
           {reposts.length > 0 && (
-            <label className="flex items-center gap-2 text-xs text-stone-700 pt-1 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-stone-700 dark:text-stone-300 pt-1 cursor-pointer">
               <input
                 type="checkbox"
                 checked={syncRepostsOnSave}
@@ -542,13 +554,64 @@ export function ProfileSettingsPanel({
           )}
         </div>
 
+        <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md space-y-3">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
+              Commentaires sur vos écrits (profil, confessions &amp; romans)
+            </p>
+            <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5 leading-relaxed">
+              Permet à tout auteur ou personne publiant des confessions de bloquer les nouveaux commentaires sur l’ensemble de ses écrits.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              aria-pressed={!commentsDisabled}
+              onClick={() => setCommentsDisabled(false)}
+              className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
+                !commentsDisabled
+                  ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800'
+                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-950 hover:border-stone-400'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
+                <MessageCircle className="w-4 h-4 text-[#1B365D] dark:text-amber-300" />
+                <span>Commentaires autorisés</span>
+              </div>
+              <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+                Les lecteurs peuvent commenter vos histoires, confessions et chapitres.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              aria-pressed={commentsDisabled}
+              onClick={() => setCommentsDisabled(true)}
+              className={`p-3.5 rounded-lg border text-left transition-colors space-y-1 ${
+                commentsDisabled
+                  ? 'border-[#9A3B29] dark:border-amber-400 bg-[#FDF3F1] dark:bg-stone-800'
+                  : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-950 hover:border-stone-400'
+              }`}
+            >
+              <div className="flex items-center gap-2 text-xs font-semibold text-stone-900 dark:text-stone-100">
+                <MessageSquareOff className="w-4 h-4 text-[#9A3B29] dark:text-amber-300" />
+                <span>Commentaires désactivés</span>
+              </div>
+              <p className="text-[11px] text-stone-600 dark:text-stone-400 leading-relaxed">
+                Aucun nouveau commentaire ne peut être posté sous vos textes (anonymat inclus).
+              </p>
+            </button>
+          </div>
+        </div>
+
         {profileError && (
-          <p role="alert" className="text-xs text-red-700">
+          <p role="alert" className="text-xs text-red-700 dark:text-red-400">
             {profileError}
           </p>
         )}
         {profileMessage && (
-          <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+          <p className="text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-3 py-2">
             {profileMessage}
           </p>
         )}

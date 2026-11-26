@@ -24,10 +24,10 @@ export function MatureContentBadge({
   if (mature) {
     return (
       <span
-        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-900 text-[11px] font-medium whitespace-nowrap shrink-0 ${className}`}
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-300 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[11px] font-medium whitespace-nowrap shrink-0 ${className}`}
         title="Contenu mature : thèmes sensibles ou réservés à un public averti"
       >
-        <ShieldAlert className="w-3 h-3 text-amber-700 shrink-0" />
+        <ShieldAlert className="w-3 h-3 text-amber-700 dark:text-amber-400 shrink-0" />
         <span>
           {compact
             ? ageLabel && ageLabel !== 'Mature'
@@ -43,7 +43,7 @@ export function MatureContentBadge({
 
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded border border-stone-300 bg-stone-100 text-stone-700 text-[11px] font-medium whitespace-nowrap shrink-0 ${className}`}
+      className={`inline-flex items-center px-2 py-0.5 rounded border border-stone-300 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 text-[11px] font-medium whitespace-nowrap shrink-0 ${className}`}
       title={`Contenu conseillé à partir de ${ageLabel}`}
     >
       {ageLabel}

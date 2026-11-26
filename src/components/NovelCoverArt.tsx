@@ -45,7 +45,7 @@ export function NovelCoverArt({
   if (cleanUrl && !imgFailed) {
     return (
       <div
-        className={`${sizeClass} overflow-hidden border border-stone-200 bg-stone-100 shadow-xs shrink-0 ${className}`}
+        className={`${sizeClass} overflow-hidden border border-stone-200 dark:border-stone-700 bg-stone-100 dark:bg-stone-800 shadow-xs shrink-0 ${className}`}
       >
         <img
           src={cleanUrl}
@@ -61,7 +61,7 @@ export function NovelCoverArt({
   return (
     <div
       style={{ borderTopColor: accentColor }}
-      className={`${sizeClass} overflow-hidden border border-stone-200 border-t-2 bg-[#F4EFE4] flex flex-col justify-between p-2 text-left shrink-0 select-none ${className}`}
+      className={`${sizeClass} overflow-hidden border border-stone-200 dark:border-stone-700 border-t-2 bg-[#F4EFE4] dark:bg-stone-800/90 flex flex-col justify-between p-2 text-left shrink-0 select-none ${className}`}
       aria-hidden="true"
     >
       <BookOpen
@@ -70,11 +70,11 @@ export function NovelCoverArt({
       />
       {size !== 'xs' && (
         <div className="space-y-0.5 min-w-0">
-          <p className="font-display text-[11px] leading-tight font-medium text-stone-900 line-clamp-3">
+          <p className="font-display text-[11px] leading-tight font-medium text-stone-900 dark:text-stone-100 line-clamp-3">
             {title || 'Roman'}
           </p>
           {genre && (
-            <p className="text-[9px] uppercase tracking-wider text-stone-500 truncate">
+            <p className="text-[9px] uppercase tracking-wider text-stone-500 dark:text-stone-400 truncate">
               {NOVEL_GENRE_LABELS[genre]}
             </p>
           )}

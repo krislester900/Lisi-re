@@ -152,14 +152,14 @@ export function ImmersiveMusicPlayer({
               ? 'bg-[#FAF9F6] border-stone-200 text-stone-900 shadow-sm'
               : darkSurface
                 ? 'bg-white/15 border-white/25 text-white'
-                : 'bg-white border-stone-200 text-stone-900'
+                : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100'
           }`}
         >
           <button
             type="button"
             onClick={handleTogglePlayClick}
             aria-label={`Mettre en pause ${title}`}
-            className="w-8 h-8 rounded-full bg-[#1B365D] text-white hover:bg-[#132744] flex items-center justify-center shrink-0 transition-transform duration-150 active:scale-[0.95]"
+            className="w-8 h-8 rounded-full bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183] flex items-center justify-center shrink-0 transition-transform duration-150 active:scale-[0.95]"
           >
             <Pause className="w-3.5 h-3.5" />
           </button>
@@ -178,7 +178,15 @@ export function ImmersiveMusicPlayer({
               }}
               className="w-full h-1.5 rounded-full appearance-none cursor-pointer accent-[#1B365D]"
             />
-            <div className="flex items-center justify-between text-[11px] text-stone-500 tabular-nums">
+            <div
+              className={`flex items-center justify-between text-[11px] tabular-nums ${
+                variant === 'wall-widget'
+                  ? 'text-stone-500'
+                  : darkSurface
+                    ? 'text-white/75'
+                    : 'text-stone-500 dark:text-stone-400'
+              }`}
+            >
               <span>{audioLoading ? 'Chargement audio…' : formatAudioTime(currentTime)}</span>
               <span>{duration > 0 ? formatAudioTime(duration) : '--:--'}</span>
             </div>
@@ -188,7 +196,13 @@ export function ImmersiveMusicPlayer({
             type="button"
             onClick={() => setIsMuted((prev) => !prev)}
             aria-label={isMuted ? 'Réactiver le son' : 'Couper le son'}
-            className="w-8 h-8 rounded-full border border-stone-200 text-stone-700 hover:bg-stone-100 flex items-center justify-center shrink-0"
+            className={`w-8 h-8 rounded-full border flex items-center justify-center shrink-0 ${
+              variant === 'wall-widget'
+                ? 'border-stone-200 text-stone-700 hover:bg-stone-100'
+                : darkSurface
+                  ? 'border-white/25 text-white hover:bg-white/10'
+                  : 'border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800'
+            }`}
           >
             {isMuted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>
@@ -274,7 +288,7 @@ export function ImmersiveMusicPlayer({
               className={`mt-2 rounded-lg px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2 ${
                 variant === 'wall-widget'
                   ? 'bg-amber-950/80 border border-amber-400/40 text-amber-100'
-                  : 'bg-amber-50 border border-amber-200 text-amber-900'
+                  : 'bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-100'
               }`}
             >
               <span>Ce morceau ne répond plus chez le fournisseur.</span>
@@ -296,7 +310,7 @@ export function ImmersiveMusicPlayer({
 
       {/* Visible embedded player for YouTube and SoundCloud so mobile & desktop browsers allow playback */}
       {isActive && (parsed.type === 'youtube' || parsed.type === 'soundcloud') && parsed.embedUrl && (
-        <div className="rounded-xl overflow-hidden border border-stone-200/80 bg-black mt-2">
+        <div className="rounded-xl overflow-hidden border border-stone-200/80 dark:border-stone-700/80 bg-black mt-2">
           <iframe
             title={`Lecteur audio de ${title}`}
             src={parsed.embedUrl}
@@ -314,7 +328,7 @@ export function ImmersiveMusicPlayer({
       {isActive &&
         (parsed.type === 'spotify' || parsed.type === 'deezer') &&
         parsed.embedUrl && (
-          <div className="rounded-xl overflow-hidden border border-stone-200/80 bg-white mt-2">
+          <div className="rounded-xl overflow-hidden border border-stone-200/80 dark:border-stone-700/80 bg-white dark:bg-stone-900 mt-2">
             <iframe
               title={`Lecteur audio pour ${title}`}
               src={parsed.embedUrl}
@@ -455,14 +469,14 @@ export function ImmersiveMusicPlayer({
     );
   }
 
-  const primaryText = darkSurface ? 'text-white' : 'text-stone-900';
-  const secondaryText = darkSurface ? 'text-white/75' : 'text-stone-600';
+  const primaryText = darkSurface ? 'text-white' : 'text-stone-900 dark:text-stone-100';
+  const secondaryText = darkSurface ? 'text-white/75' : 'text-stone-600 dark:text-stone-400';
   const badgeSurface = darkSurface
     ? 'bg-white/15 border-white/25 text-white'
-    : 'bg-[#FBF9F5] border-stone-200 text-stone-800';
+    : 'bg-[#FBF9F5] dark:bg-stone-800/80 border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-100';
   const btnSurface = darkSurface
     ? 'bg-white text-stone-900 hover:bg-stone-100'
-    : 'bg-[#1B365D] text-white hover:bg-[#132744]';
+    : 'bg-[#1B365D] dark:bg-[#3B629B] text-white hover:bg-[#132744] dark:hover:bg-[#2F5183]';
 
   return (
     <div className="space-y-3">
@@ -479,10 +493,10 @@ export function ImmersiveMusicPlayer({
               isActive
                 ? darkSurface
                   ? 'bg-white/20 border-white/45 text-white lisiere-music-pulse-light'
-                  : 'bg-[#1B365D]/10 border-[#1B365D]/35 text-[#1B365D] lisiere-music-pulse'
+                  : 'bg-[#1B365D]/10 dark:bg-[#3B629B]/20 border-[#1B365D]/35 dark:border-[#6088C2]/40 text-[#1B365D] dark:text-[#93B4E2] lisiere-music-pulse'
                 : darkSurface
                   ? 'bg-white/10 border-white/20 text-white/80'
-                  : 'bg-white border-stone-200 text-stone-600'
+                  : 'bg-white dark:bg-stone-900 border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300'
             }`}
           >
             {isActive ? (
@@ -502,18 +516,18 @@ export function ImmersiveMusicPlayer({
                 >
                   <span
                     className={`w-[2px] h-2.5 rounded-full lisiere-eq-bar ${
-                      darkSurface ? 'bg-white' : 'bg-[#1B365D]'
+                      darkSurface ? 'bg-white' : 'bg-[#1B365D] dark:bg-[#93B4E2]'
                     }`}
                   />
                   <span
                     className={`w-[2px] h-3 rounded-full lisiere-eq-bar ${
-                      darkSurface ? 'bg-white' : 'bg-[#1B365D]'
+                      darkSurface ? 'bg-white' : 'bg-[#1B365D] dark:bg-[#93B4E2]'
                     }`}
                     style={{ animationDelay: '220ms' }}
                   />
                   <span
                     className={`w-[2px] h-2 rounded-full lisiere-eq-bar ${
-                      darkSurface ? 'bg-white' : 'bg-[#1B365D]'
+                      darkSurface ? 'bg-white' : 'bg-[#1B365D] dark:bg-[#93B4E2]'
                     }`}
                     style={{ animationDelay: '440ms' }}
                   />

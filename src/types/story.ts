@@ -58,6 +58,7 @@ export interface PublicProfile {
   interests?: string;
   avatarUrl?: string;
   discoverable?: boolean;
+  commentsDisabled?: boolean;
   isAdmin?: boolean;
   badges?: MemberBadgeId[];
   createdAt: Timestamp | null;

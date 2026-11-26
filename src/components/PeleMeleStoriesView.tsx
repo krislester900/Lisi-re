@@ -10,10 +10,14 @@ import {
   Heart,
   MessageCircle,
   Repeat2,
+  Share2,
   Shuffle,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { isContentAllowedForAge } from '../lib/contentRegulation';
+import {
+  isContentAllowedForAge,
+  isStoryCompliantForPublicFeed,
+} from '../lib/contentRegulation';
 import {
   createDefaultStoryFilterState,
   filterAndSortStories,
@@ -38,6 +42,7 @@ interface PeleMeleStoriesViewProps {
   repostedStoryIds?: Set<string>;
   onToggleBookmark?: (story: Story) => void;
   onOpenRepost?: (story: Story) => void;
+  onShareStory?: (story: Story) => void;
   onReadStory: (story: Story) => void;
   onEnterSalon: (salonId: StoryThemeId) => void;
   onEnterCustomSalon: (customSalonId: string) => void;
@@ -54,6 +59,7 @@ export function PeleMeleStoriesView({
   repostedStoryIds,
   onToggleBookmark,
   onOpenRepost,
+  onShareStory,
   onReadStory,
   onEnterSalon,
   onEnterCustomSalon,
@@ -104,12 +110,12 @@ export function PeleMeleStoriesView({
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 sm:py-14 space-y-8 sm:space-y-10">
       {/* Header */}
-      <section className="space-y-6 pb-8 border-b border-stone-200">
+      <section className="space-y-6 pb-8 border-b border-stone-200 dark:border-stone-800">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <button
             type="button"
             onClick={onBackToSalons}
-            className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 bg-white border border-stone-200 rounded-md hover:border-stone-400 hover:text-stone-900 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+            className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 hover:text-stone-900 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Vue des salons</span>
@@ -119,7 +125,7 @@ export function PeleMeleStoriesView({
             <button
               type="button"
               onClick={handleReshuffle}
-              className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] bg-white border border-[#1B365D]/30 rounded-md hover:border-[#1B365D] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] dark:text-amber-300 bg-white dark:bg-stone-900 border border-[#1B365D]/30 dark:border-stone-700 rounded-md hover:border-[#1B365D] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <Shuffle className="w-3.5 h-3.5" />
               <span>Mélanger l’ordre</span>
@@ -127,7 +133,7 @@ export function PeleMeleStoriesView({
             <button
               type="button"
               onClick={onWriteStory}
-              className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] dark:hover:bg-amber-500 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <Feather className="w-3.5 h-3.5" />
               <span>Écrire hors salon</span>
@@ -137,35 +143,35 @@ export function PeleMeleStoriesView({
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-end">
           <div className="lg:col-span-8 space-y-3">
-            <p className="text-xs uppercase tracking-widest text-stone-500 inline-flex items-center gap-2">
+            <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 inline-flex items-center gap-2">
               <Compass className="w-3.5 h-3.5" />
               <span>Bibliothèque ouverte · Hors salons &amp; salons publics</span>
             </p>
             <h1
-              className="font-display text-3xl sm:text-5xl font-medium text-stone-900 leading-[1.12]"
+              className="font-display text-3xl sm:text-5xl font-medium text-stone-900 dark:text-stone-100 leading-[1.12]"
               style={{ textWrap: 'balance' }}
             >
               Histoires pêle-mêle
             </h1>
-            <p className="text-sm sm:text-base text-stone-600 leading-relaxed max-w-2xl">
+            <p className="text-sm sm:text-base text-stone-600 dark:text-stone-400 leading-relaxed max-w-2xl">
               Retrouvez ici toutes les histoires publiées hors salons pour tout le monde, ainsi que les récits des cinq salons publics de Lisière et des salons publics de la communauté. Les salons privés restent strictement confidentiels et n’apparaissent jamais ici.
             </p>
           </div>
 
           <div className="lg:col-span-4 flex lg:justify-end">
-            <div className="bg-white border border-stone-200 rounded-md px-5 py-3.5 flex items-center gap-6">
+            <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md px-5 py-3.5 flex items-center gap-6">
               <div>
-                <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
+                <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                   {peleMeleEligibleStories.length}
                 </p>
-                <p className="text-xs text-stone-500">Récits ouverts</p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">Récits ouverts</p>
               </div>
-              <div className="h-8 w-px bg-stone-200" aria-hidden="true" />
+              <div className="h-8 w-px bg-stone-200 dark:bg-stone-800" aria-hidden="true" />
               <div>
-                <p className="font-display text-2xl font-medium text-stone-900 tabular-nums">
+                <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                   {displayedStories.length}
                 </p>
-                <p className="text-xs text-stone-500">Affichés</p>
+                <p className="text-xs text-stone-500 dark:text-stone-400">Affichés</p>
               </div>
             </div>
           </div>
@@ -173,7 +179,7 @@ export function PeleMeleStoriesView({
       </section>
 
       {hiddenByAgeCount > 0 && (
-        <div className="bg-amber-50/80 border border-amber-200 rounded-md px-4 py-2.5 text-xs text-amber-950">
+        <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md px-4 py-2.5 text-xs text-amber-950 dark:text-amber-100">
           {hiddenByAgeCount} histoire{hiddenByAgeCount > 1 ? 's' : ''} classée{hiddenByAgeCount > 1 ? 's' : ''} pour un public plus âgé ou mature {hiddenByAgeCount > 1 ? 'sont masquées' : 'est masquée'} selon votre profil d’âge{viewerAge === null ? ' (renseignez votre âge dans Profils pour adapter le filtre)' : ''}.
         </div>
       )}
@@ -194,28 +200,28 @@ export function PeleMeleStoriesView({
 
       {/* Content */}
       {!storiesLoaded ? (
-        <div className="py-12 text-center text-sm text-stone-500">
+        <div className="py-12 text-center text-sm text-stone-500 dark:text-stone-400">
           Ouverture des pages de la bibliothèque…
         </div>
       ) : peleMeleEligibleStories.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
-          <p className="font-display text-2xl text-stone-900">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-4">
+          <p className="font-display text-2xl text-stone-900 dark:text-stone-100">
             Aucun récit public n’a encore été déposé
           </p>
-          <p className="text-sm text-stone-600 max-w-lg mx-auto">
+          <p className="text-sm text-stone-600 dark:text-stone-400 max-w-lg mx-auto">
             Publiez une première histoire libre hors salon ou ouvrez un salon public pour lancer cette bibliothèque pêle-mêle.
           </p>
           <button
             type="button"
             onClick={onWriteStory}
-            className="min-h-[42px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors whitespace-nowrap"
+            className="min-h-[42px] px-5 py-2 text-sm font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] transition-colors whitespace-nowrap"
           >
             Écrire hors salon
           </button>
         </div>
       ) : displayedStories.length === 0 ? (
-        <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-4">
-          <p className="font-display text-xl text-stone-900">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-4">
+          <p className="font-display text-xl text-stone-900 dark:text-stone-100">
             Aucune histoire ne correspond à votre recherche
           </p>
           <button
@@ -225,7 +231,7 @@ export function PeleMeleStoriesView({
                 createDefaultStoryFilterState('shuffled', prev.shuffleSeed)
               )
             }
-            className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+            className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
           >
             Réinitialiser les filtres
           </button>
@@ -262,7 +268,7 @@ export function PeleMeleStoriesView({
               <article
                 key={story.storyId}
                 style={{ borderTopColor: borderTop }}
-                className="bg-white border border-stone-200 border-t-2 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 border-t-2 rounded-lg p-6 flex flex-col justify-between space-y-5"
               >
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
@@ -316,7 +322,7 @@ export function PeleMeleStoriesView({
                         size="sm"
                       />
                       <div className="min-w-0 flex-1 space-y-2">
-                        <h2 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                        <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                           <button
                             type="button"
                             onClick={() => onReadStory(story)}
@@ -326,14 +332,14 @@ export function PeleMeleStoriesView({
                           </button>
                         </h2>
 
-                        <p className="text-sm text-stone-600 leading-relaxed line-clamp-4">
+                        <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-4">
                           {story.excerpt}
                         </p>
                       </div>
                     </div>
                   ) : (
                     <>
-                      <h2 className="font-display text-2xl font-medium text-stone-900 leading-snug">
+                      <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 leading-snug">
                         <button
                           type="button"
                           onClick={() => onReadStory(story)}
@@ -343,22 +349,22 @@ export function PeleMeleStoriesView({
                         </button>
                       </h2>
 
-                      <p className="text-sm text-stone-600 leading-relaxed line-clamp-4">
+                      <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed line-clamp-4">
                         {story.excerpt}
                       </p>
                     </>
                   )}
                 </div>
 
-                <div className="space-y-4 pt-3 border-t border-stone-100">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+                <div className="space-y-4 pt-3 border-t border-stone-100 dark:border-stone-800">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400">
                     {story.isAnonymous ? (
-                      <span className="font-medium text-stone-600">Par Auteur anonyme</span>
+                      <span className="font-medium text-stone-600 dark:text-stone-400">Par Auteur anonyme</span>
                     ) : (
                       <button
                         type="button"
                         onClick={() => onOpenMemberWall(story.authorId)}
-                        className="font-medium text-stone-800 hover:underline"
+                        className="font-medium text-stone-800 dark:text-stone-200 hover:underline"
                       >
                         Par {story.authorName}
                       </button>
@@ -369,7 +375,7 @@ export function PeleMeleStoriesView({
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-3 text-xs text-stone-500 tabular-nums">
+                    <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                       <span className="inline-flex items-center gap-1" title="Vues">
                         <Eye className="w-3.5 h-3.5" />
                         {story.viewCount ?? 0}
@@ -401,8 +407,8 @@ export function PeleMeleStoriesView({
                           }
                           className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                             bookmarkedStoryIds?.has(story.storyId)
-                              ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                              : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                              ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                              : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800'
                           }`}
                         >
                           <Bookmark
@@ -424,18 +430,31 @@ export function PeleMeleStoriesView({
                           aria-label={`Repartager ${story.title}`}
                           className={`min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border transition-colors ${
                             repostedStoryIds?.has(story.storyId)
-                              ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                              : 'border-stone-200 bg-white text-stone-500 hover:border-stone-400 hover:text-stone-800'
+                              ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                              : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-stone-400 hover:text-stone-800'
                           }`}
                         >
                           <Repeat2 className="w-3.5 h-3.5" />
                         </button>
                       )}
+                      {onShareStory &&
+                        isStoryCompliantForPublicFeed(story) &&
+                        story.customSalonVisibility !== 'private' && (
+                          <button
+                            type="button"
+                            onClick={() => onShareStory(story)}
+                            title="Partager ce récit"
+                            aria-label={`Partager ${story.title}`}
+                            className="min-h-[32px] min-w-[32px] inline-flex items-center justify-center rounded border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D] dark:hover:text-amber-300 transition-colors"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       <button
                         type="button"
                         onClick={() => onReadStory(story)}
                         style={{ color: accentColor }}
-                        className="min-h-[34px] px-2 py-1 text-xs font-medium hover:underline inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                        className="min-h-[34px] px-2 py-1 text-xs font-medium hover:underline inline-flex items-center gap-1 whitespace-nowrap shrink-0 dark:brightness-125"
                       >
                         <span>Lire</span>
                         <ArrowRight className="w-3.5 h-3.5" />

@@ -17,6 +17,7 @@ import {
   Lock,
   Maximize2,
   MessageCircle,
+  MessageSquareOff,
   Minimize2,
   Music2,
   Pause,
@@ -70,6 +71,7 @@ import {
   toggleFavoriteAuthor,
   toggleStoryResonance,
   updateNovelSeriesStatus,
+  updateProfileCommentsDisabled,
   updateStoryVisibility,
 } from '../lib/storyService';
 import {
@@ -119,6 +121,7 @@ interface StoryReaderModalProps {
   onOpenAgeSettings?: () => void;
   onEditStory?: (story: Story) => void;
   onStoryClaimed?: (authorName: string) => void;
+  onShareStory?: (story: Story) => void;
 }
 
 export function StoryReaderModal({
@@ -145,6 +148,7 @@ export function StoryReaderModal({
   onOpenAgeSettings,
   onEditStory,
   onStoryClaimed,
+  onShareStory,
 }: StoryReaderModalProps) {
   const { user, profile, viewerAge, favoriteAuthors, signInWithGoogle } = useAuth();
   const isGlobalAdmin = isModerationAdminEmail(user?.email);
@@ -167,6 +171,8 @@ export function StoryReaderModal({
   const [activeChapterIdx, setActiveChapterIdx] = useState(0); // 0 = Chapitre 1 (story.content), >=1 = chapters[idx - 1]
   const [hasResonated, setHasResonated] = useState(false);
   const [authorProfile, setAuthorProfile] = useState<PublicProfile | null>(null);
+  const [authorCommentsDisabled, setAuthorCommentsDisabled] = useState(false);
+  const [commentsToggleBusy, setCommentsToggleBusy] = useState(false);
   const [fetchedProfilesByUserId, setFetchedProfilesByUserId] = useState<
     Record<string, PublicProfile | null>
   >({});
@@ -457,6 +463,7 @@ export function StoryReaderModal({
       setEchoes([]);
       setHasResonated(false);
       setAuthorProfile(null);
+      setAuthorCommentsDisabled(false);
       return () => {
         unsubChapters();
       };
@@ -473,10 +480,19 @@ export function StoryReaderModal({
 
     if (story.isAnonymous) {
       setAuthorProfile(null);
+      void fetchPublicProfile(story.authorId)
+        .then((p) => setAuthorCommentsDisabled(Boolean(p?.commentsDisabled)))
+        .catch(() => setAuthorCommentsDisabled(false));
     } else {
       void fetchPublicProfile(story.authorId)
-        .then((p) => setAuthorProfile(p))
-        .catch(() => setAuthorProfile(null));
+        .then((p) => {
+          setAuthorProfile(p);
+          setAuthorCommentsDisabled(Boolean(p?.commentsDisabled));
+        })
+        .catch(() => {
+          setAuthorProfile(null);
+          setAuthorCommentsDisabled(false);
+        });
     }
 
     if (user && user.emailVerified) {
@@ -632,6 +648,8 @@ export function StoryReaderModal({
   if (!story) return null;
 
   const isAuthor = Boolean(user && user.uid === story.authorId);
+  const effectiveCommentsDisabled =
+    isAuthor && profile ? Boolean(profile.commentsDisabled) : authorCommentsDisabled;
   const formatCompliance = evaluateStoryFormatCompliance(story);
   const isBlockedByRetroactiveRule = Boolean(
     story.visibility === 'public' && !formatCompliance.compliant && !isAuthor
@@ -802,6 +820,10 @@ export function StoryReaderModal({
       await signInWithGoogle();
       return;
     }
+    if (effectiveCommentsDisabled) {
+      setEchoError('Les commentaires sont désactivés par l’auteur sur son profil.');
+      return;
+    }
     setEchoError(null);
     if (echoText.trim().length < FIELD_LIMITS.echoContent.min) {
       setEchoError('Écrivez au moins 2 caractères pour publier votre commentaire.');
@@ -837,9 +859,12 @@ export function StoryReaderModal({
       await addStoryEcho(story.storyId, user.uid, displayName, 'comment', echoText);
       setEchoText('');
     } catch (err) {
-      setEchoError(
-        err instanceof Error ? err.message : 'Impossible de publier ce commentaire.'
-      );
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.toLowerCase().includes('permission-denied') || msg.toLowerCase().includes('insufficient permissions')) {
+        setEchoError('Les commentaires sont désactivés par l’auteur sur son profil.');
+      } else {
+        setEchoError(msg || 'Impossible de publier ce commentaire.');
+      }
     } finally {
       setEchoBusy(false);
     }
@@ -1065,7 +1090,9 @@ export function StoryReaderModal({
       ? 'bg-amber-300/25 text-[#FFF7E6] border-b border-amber-300/60 rounded-[2px] px-0.5 cursor-pointer hover:bg-amber-300/40 transition-colors'
       : zenMode && zenTheme === 'sepia'
         ? 'bg-[#D9B66A]/45 text-[#2F261D] rounded-[2px] px-0.5 cursor-pointer hover:bg-[#D9B66A]/65 transition-colors'
-        : 'bg-amber-200/75 text-stone-900 rounded-[2px] px-0.5 cursor-pointer hover:bg-amber-300/75 transition-colors';
+        : zenMode && zenTheme === 'paper'
+          ? 'bg-amber-200/75 text-stone-900 rounded-[2px] px-0.5 cursor-pointer hover:bg-amber-300/75 transition-colors'
+          : 'bg-amber-200/75 dark:bg-amber-400/25 text-stone-900 dark:text-amber-100 rounded-[2px] px-0.5 cursor-pointer hover:bg-amber-300/75 dark:hover:bg-amber-400/40 transition-colors';
 
   const findQuoteSpanInParagraph = (
     paragraphText: string,
@@ -1262,14 +1289,14 @@ export function StoryReaderModal({
         className={`overflow-hidden flex flex-col transition-all duration-200 motion-reduce:transition-none ${
           zenMode
             ? `relative w-full h-full max-w-none border-0 rounded-none ${zenSurfaceClass}`
-            : 'relative bg-[#FBF9F5] w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[92vh] border-0 sm:border sm:border-stone-300 sm:rounded-lg my-auto'
+            : 'relative bg-[#FBF9F5] dark:bg-stone-950 w-full max-w-4xl h-[100dvh] sm:h-auto sm:max-h-[92vh] border-0 sm:border sm:border-stone-300 dark:sm:border-stone-800 sm:rounded-lg my-auto'
         }`}
       >
         {audioController.renderHiddenStreams()}
 
         <div
           className={`relative z-10 flex-1 min-h-0 flex flex-col ${
-            zenMode ? zenSurfaceClass : 'bg-[#FBF9F5]'
+            zenMode ? zenSurfaceClass : 'bg-[#FBF9F5] dark:bg-stone-950'
           }`}
         >
           {/* Fine reading progress bar pinned at the top edge of the modal */}
@@ -1280,13 +1307,13 @@ export function StoryReaderModal({
             aria-valuemax={100}
             aria-valuenow={roundedScrollProgress}
             className={`h-[3px] w-full shrink-0 ${
-              zenMode ? 'bg-black/15' : 'bg-stone-200/80'
+              zenMode ? 'bg-black/15' : 'bg-stone-200/80 dark:bg-stone-800'
             }`}
           >
           <div
             style={{ width: `${scrollProgress}%` }}
             className={`h-full transition-[width] duration-150 ease-out motion-reduce:transition-none ${
-              zenMode && zenTheme === 'night' ? 'bg-amber-300/90' : 'bg-[#1B365D]'
+              zenMode && zenTheme === 'night' ? 'bg-amber-300/90' : 'bg-[#1B365D] dark:bg-amber-400'
             }`}
           />
         </div>
@@ -1581,7 +1608,7 @@ export function StoryReaderModal({
           </>
         ) : (
           <>
-            <div className="px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:py-3.5 border-b border-stone-200 bg-white space-y-2 shrink-0">
+            <div className="px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:py-3.5 border-b border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 space-y-2 shrink-0">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1 overflow-hidden">
                   {hasOriginSalon ? (
@@ -1598,11 +1625,11 @@ export function StoryReaderModal({
                       title={`Salon d’origine : ${originSalonLabel} — Cliquer pour ouvrir ce salon`}
                       aria-label={`Ouvrir le salon d’origine : ${originSalonLabel}`}
                       style={{
-                        backgroundColor: originPalette?.softBg ?? '#F4F0E8',
+                        ['--pill-bg' as string]: originPalette?.softBg ?? '#F4F0E8',
                         borderColor: originPalette?.borderTint ?? '#D6D3D1',
                         color: originPalette?.textAccent ?? '#1B365D',
                       }}
-                      className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border text-[11px] font-medium hover:brightness-95 transition max-w-full cursor-pointer"
+                      className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border bg-[var(--pill-bg)] dark:bg-stone-800 text-[11px] font-medium hover:brightness-95 transition max-w-full cursor-pointer dark:brightness-125"
                     >
                       <span className="truncate">{originSalonLabel}</span>
                       <ArrowUpRight className="w-3 h-3 shrink-0 opacity-80 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
@@ -1621,7 +1648,7 @@ export function StoryReaderModal({
                         onOpenPeleMele();
                       }}
                       title="Histoire libre publiée hors salon — Voir tout Pêle-mêle"
-                      className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium hover:border-stone-400 transition max-w-full cursor-pointer"
+                      className="group relative inline-flex items-center gap-1 px-2.5 py-1 rounded border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 text-[11px] font-medium hover:border-stone-400 transition max-w-full cursor-pointer"
                     >
                       <span className="truncate">{originSalonLabel}</span>
                       <ArrowUpRight className="w-3 h-3 shrink-0 opacity-75" />
@@ -1633,7 +1660,7 @@ export function StoryReaderModal({
                       </span>
                     </button>
                   ) : (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded border border-stone-200 bg-stone-50 text-[#1B365D] text-[11px] font-medium truncate max-w-full">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 text-[11px] font-medium truncate max-w-full">
                       {originSalonLabel}
                     </span>
                   )}
@@ -1654,7 +1681,7 @@ export function StoryReaderModal({
                           ? 'Afficher la vidéo'
                           : 'Mettre en arrière-plan'
                       }
-                      className="min-h-[38px] px-2.5 py-1.5 rounded-md border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-700 hover:text-stone-900 hover:border-stone-400 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                      className="min-h-[38px] px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-xs font-medium text-stone-700 dark:text-stone-200 hover:text-stone-900 dark:hover:text-white hover:border-stone-400 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                     >
                       {audioController.embedBackground ? (
                         <>
@@ -1677,7 +1704,7 @@ export function StoryReaderModal({
                     className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                       showMusicPanel || audioController.isPlaying
                         ? 'border-[#1B365D] bg-[#1B365D] text-white'
-                        : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:text-stone-900 hover:border-stone-400'
+                        : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:text-stone-900 dark:hover:text-white hover:border-stone-400'
                     }`}
                   >
                     {audioController.isPlaying ? (
@@ -1694,13 +1721,16 @@ export function StoryReaderModal({
                   {canSharePublicLink && (
                     <button
                       type="button"
-                      onClick={() => setShowSharePanel((prev) => !prev)}
+                      onClick={() => {
+                        if (onShareStory) onShareStory(story);
+                        else setShowSharePanel((prev) => !prev);
+                      }}
                       aria-label="Partager ce récit"
-                      aria-expanded={showSharePanel}
+                      aria-expanded={onShareStory ? undefined : showSharePanel}
                       className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                         showSharePanel
                           ? 'border-[#1B365D] bg-[#1B365D] text-white'
-                          : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:text-stone-900 hover:border-stone-400'
+                          : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:text-stone-900 dark:hover:text-white hover:border-stone-400'
                       }`}
                     >
                       <Share2 className="w-3.5 h-3.5" />
@@ -1713,7 +1743,7 @@ export function StoryReaderModal({
                       onClick={() => setZenMode(true)}
                       aria-label="Activer le Mode lecture zen"
                       aria-pressed={false}
-                      className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border border-[#1B365D]/35 bg-[#F3F6FA] text-xs font-medium text-[#1B365D] hover:bg-[#1B365D] hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                      className="min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border border-[#1B365D]/35 dark:border-amber-400/40 bg-[#F3F6FA] dark:bg-stone-800 text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:bg-[#1B365D] hover:text-white dark:hover:bg-amber-600 dark:hover:text-white inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                     >
                       <Maximize2 className="w-3.5 h-3.5" />
                       <span className="sm:hidden">Zen</span>
@@ -1724,19 +1754,19 @@ export function StoryReaderModal({
                     type="button"
                     onClick={onClose}
                     aria-label="Fermer la lecture"
-                    className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors"
+                    className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-stone-500 dark:text-stone-400">
                 <StoryFormatKicker story={story} showDetails={true} />
                 {isRoman && totalChapters > 1 && (
                   <>
                     <span aria-hidden="true">·</span>
-                    <span className="tabular-nums text-stone-700 font-medium">
+                    <span className="tabular-nums text-stone-700 dark:text-stone-300 font-medium">
                       Chap. {activeChapterIdx + 1}/{totalChapters}
                     </span>
                   </>
@@ -1744,19 +1774,19 @@ export function StoryReaderModal({
                 <span aria-hidden="true">·</span>
                 <span className="whitespace-nowrap tabular-nums">{displayedMinutes} min de lecture</span>
                 <span aria-hidden="true">·</span>
-                <span className="whitespace-nowrap tabular-nums text-[#1B365D] font-medium">
+                <span className="whitespace-nowrap tabular-nums text-[#1B365D] dark:text-amber-300 font-medium">
                   {roundedScrollProgress} % lu
                 </span>
                 {story.customSalonVisibility === 'private' ? (
                   <>
                     <span aria-hidden="true">·</span>
-                    <span className="text-[#1E3A8A]">Salon privé</span>
+                    <span className="text-[#1E3A8A] dark:text-amber-300">Salon privé</span>
                   </>
                 ) : (
                   story.visibility === 'private' && (
                     <>
                       <span aria-hidden="true">·</span>
-                      <span className="text-[#1E3A8A]">Brouillon privé</span>
+                      <span className="text-[#1E3A8A] dark:text-amber-300">Brouillon privé</span>
                     </>
                   )
                 )}
@@ -1800,8 +1830,8 @@ export function StoryReaderModal({
                     zenMode && zenTheme === 'night'
                       ? 'text-amber-300/90'
                       : isRoman
-                        ? 'text-[#1B365D]'
-                        : 'text-[#9A3B29]'
+                        ? 'text-[#1B365D] dark:text-[#93B4E2]'
+                        : 'text-[#9A3B29] dark:text-[#E59887]'
                   }`}
                 >
                   <span className="inline-flex items-center gap-1.5">
@@ -1819,7 +1849,13 @@ export function StoryReaderModal({
                       <span aria-hidden="true" className="opacity-45">
                         ·
                       </span>
-                      <span className={zenMode && zenTheme === 'night' ? 'text-stone-300' : 'text-stone-700'}>
+                      <span
+                        className={
+                          zenMode && zenTheme === 'night'
+                            ? 'text-stone-300'
+                            : 'text-stone-700 dark:text-stone-300'
+                        }
+                      >
                         {NOVEL_GENRE_LABELS[story.novelGenre]}
                       </span>
                     </>
@@ -1829,7 +1865,13 @@ export function StoryReaderModal({
                       <span aria-hidden="true" className="opacity-45">
                         ·
                       </span>
-                      <span className={`tabular-nums ${zenMode && zenTheme === 'night' ? 'text-stone-300' : 'text-stone-600'}`}>
+                      <span
+                        className={`tabular-nums ${
+                          zenMode && zenTheme === 'night'
+                            ? 'text-stone-300'
+                            : 'text-stone-600 dark:text-stone-400'
+                        }`}
+                      >
                         Chapitre {activeChapterIdx + 1} sur {totalChapters}
                       </span>
                     </>
@@ -1838,7 +1880,13 @@ export function StoryReaderModal({
                       <span aria-hidden="true" className="opacity-45">
                         ·
                       </span>
-                      <span className={zenMode && zenTheme === 'night' ? 'text-stone-300' : 'text-stone-600'}>
+                      <span
+                        className={
+                          zenMode && zenTheme === 'night'
+                            ? 'text-stone-300'
+                            : 'text-stone-600 dark:text-stone-400'
+                        }
+                      >
                         Texte unique
                         {readingOriginLabel ? ` · ${readingOriginLabel}` : ''}
                       </span>
@@ -1860,18 +1908,18 @@ export function StoryReaderModal({
                     <div className="min-w-0 flex-1 space-y-2">
                       {categoryBanner}
                       {story.promptQuestion && (
-                        <p className="text-xs text-stone-500 italic">
+                        <p className="text-xs text-stone-500 dark:text-stone-400 italic">
                           En réponse au fil : « {story.promptQuestion} »
                         </p>
                       )}
                       <h1
                         id="reader-story-title"
-                        className="font-display text-3xl sm:text-4xl font-medium leading-tight text-stone-900"
+                        className="font-display text-3xl sm:text-4xl font-medium leading-tight text-stone-900 dark:text-stone-100"
                         style={{ textWrap: 'balance' }}
                       >
                         {story.title}
                       </h1>
-                      <p className="text-xs text-stone-500 tabular-nums">
+                      <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {SERIES_STATUS_LABELS[story.seriesStatus ?? 'en-cours']} ·{' '}
                         {RELEASE_CADENCE_LABELS[story.releaseCadence ?? 'hebdomadaire']}
                       </p>
@@ -1884,7 +1932,7 @@ export function StoryReaderModal({
                 <div className={zenMode ? 'mb-8 sm:mb-10 space-y-3' : 'mb-4 space-y-2.5'}>
                   {categoryBanner}
                   {!zenMode && story.promptQuestion && (
-                    <p className="text-xs text-stone-500 italic">
+                    <p className="text-xs text-stone-500 dark:text-stone-400 italic">
                       En réponse au fil : « {story.promptQuestion} »
                     </p>
                   )}
@@ -1896,7 +1944,7 @@ export function StoryReaderModal({
                         ? zenTheme === 'night'
                           ? 'text-[#F5F0E6]'
                           : 'text-stone-900'
-                        : 'text-stone-900'
+                        : 'text-stone-900 dark:text-stone-100'
                     }`}
                     style={{ textWrap: 'balance' }}
                   >
@@ -1907,13 +1955,13 @@ export function StoryReaderModal({
             })()}
 
             {!zenMode && (
-              <div className="pb-5 border-b border-stone-200 mb-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-600">
+              <div className="pb-5 border-b border-stone-200 dark:border-stone-800 mb-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-stone-600 dark:text-stone-400">
                   <div className="flex flex-wrap items-center gap-2">
                     {isAnonymousStory ? (
                       <span className="inline-flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-stone-700 inline-flex items-center gap-1.5">
-                          <EyeOff className="w-3.5 h-3.5 text-stone-500" />
+                        <span className="font-medium text-stone-700 dark:text-stone-300 inline-flex items-center gap-1.5">
+                          <EyeOff className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                           <span>
                             Auteur anonyme{isAuthor ? ' (votre texte)' : ''}
                           </span>
@@ -1925,7 +1973,7 @@ export function StoryReaderModal({
                               setClaimError(null);
                               setConfirmClaimAnon(true);
                             }}
-                            className="px-2.5 py-0.5 rounded border border-[#CBD6E6] bg-[#F3F6FA] text-[#1B365D] text-xs font-medium hover:bg-[#E7EEF7] inline-flex items-center gap-1 whitespace-nowrap"
+                            className="px-2.5 py-0.5 rounded border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 text-xs font-medium hover:bg-[#E7EEF7] inline-flex items-center gap-1 whitespace-nowrap"
                           >
                             <UserCheck className="w-3 h-3" />
                             <span>Revendiquer cet écrit</span>
@@ -1940,9 +1988,9 @@ export function StoryReaderModal({
                             onClose();
                             onOpenMemberWall(story.authorId);
                           }}
-                          className="font-medium text-stone-900 hover:text-[#1B365D] hover:underline inline-flex items-center gap-1.5"
+                          className="font-medium text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline inline-flex items-center gap-1.5"
                         >
-                          <UserIcon className="w-3.5 h-3.5 text-stone-500" />
+                          <UserIcon className="w-3.5 h-3.5 text-stone-500 dark:text-stone-400" />
                           <span>{story.authorName}</span>
                         </button>
                         <RoleBadgesRow
@@ -1985,8 +2033,8 @@ export function StoryReaderModal({
                             }
                             className={`px-2 py-0.5 rounded border text-[11px] font-medium inline-flex items-center gap-1 transition-colors ${
                               favoriteAuthors.some((a) => a.authorId === story.authorId)
-                                ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                : 'border-stone-200 bg-white text-stone-600 hover:border-[#1B365D] hover:text-[#1B365D]'
+                                ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-600 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D]'
                             } disabled:opacity-50`}
                           >
                             <Star
@@ -2010,7 +2058,7 @@ export function StoryReaderModal({
                     {story.visibility === 'public' && (
                       <>
                         <span aria-hidden="true">·</span>
-                        <span className="inline-flex items-center gap-1 tabular-nums text-stone-500">
+                        <span className="inline-flex items-center gap-1 tabular-nums text-stone-500 dark:text-stone-400">
                           <Eye className="w-3.5 h-3.5" />
                           {story.viewCount ?? 0} vue{(story.viewCount ?? 0) > 1 ? 's' : ''}
                         </span>
@@ -2032,7 +2080,7 @@ export function StoryReaderModal({
                         type="button"
                         disabled={statusToggleBusy}
                         onClick={() => void handleToggleSeriesStatus()}
-                        className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-800 bg-white border border-stone-200 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[34px] px-3 py-1 text-xs font-medium text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Check className="w-3.5 h-3.5" />
                         <span>
@@ -2044,7 +2092,7 @@ export function StoryReaderModal({
                       <button
                         type="button"
                         onClick={() => setShowChapterForm((prev) => !prev)}
-                        className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[34px] px-3 py-1 text-xs font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] dark:hover:bg-amber-500 inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Publier le chapitre {totalChapters + 1}</span>
@@ -2053,22 +2101,22 @@ export function StoryReaderModal({
                   )}
                 </div>
                 {statusToggleError && (
-                  <p role="alert" className="text-xs text-red-700">
+                  <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                     {statusToggleError}
                   </p>
                 )}
 
                 {isAuthor && isAnonymousStory && confirmClaimAnon && (
-                  <div className="rounded-md border border-[#CBD6E6] bg-[#F3F6FA] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div className="space-y-0.5 text-stone-800">
-                      <p className="font-medium text-stone-900">
+                  <div className="rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-900 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5 text-stone-800 dark:text-stone-200">
+                      <p className="font-medium text-stone-900 dark:text-stone-100">
                         Revendiquer la paternité de cet écrit ?
                       </p>
-                      <p className="text-stone-600">
+                      <p className="text-stone-600 dark:text-stone-400">
                         Votre nom ({profile?.displayName || user?.displayName || 'Auteur'}) remplace « Auteur anonyme » sur ce récit et le relie à votre profil.
                       </p>
                       {claimError && (
-                        <p role="alert" className="text-red-700 pt-1">
+                        <p role="alert" className="text-red-700 dark:text-red-400 pt-1">
                           {claimError}
                         </p>
                       )}
@@ -2078,7 +2126,7 @@ export function StoryReaderModal({
                         type="button"
                         disabled={claimBusy}
                         onClick={() => void handleClaimAnonymousInReader()}
-                        className="min-h-[34px] px-3 py-1 rounded bg-[#1B365D] text-white font-medium hover:bg-[#132744] disabled:opacity-50 whitespace-nowrap"
+                        className="min-h-[34px] px-3 py-1 rounded bg-[#1B365D] dark:bg-amber-600 text-white font-medium hover:bg-[#132744] disabled:opacity-50 whitespace-nowrap"
                       >
                         {claimBusy ? 'Publication…' : 'Confirmer'}
                       </button>
@@ -2089,7 +2137,7 @@ export function StoryReaderModal({
                           setConfirmClaimAnon(false);
                           setClaimError(null);
                         }}
-                        className="min-h-[34px] px-3 py-1 rounded border border-stone-300 bg-white text-stone-700 hover:border-stone-500 whitespace-nowrap"
+                        className="min-h-[34px] px-3 py-1 rounded border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:border-stone-500 whitespace-nowrap"
                       >
                         Annuler
                       </button>
@@ -2099,9 +2147,9 @@ export function StoryReaderModal({
 
                 {/* Quick Zen Reading & Ambient Music Invitation Bar */}
                 {!isReadingBlocked && (
-                  <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white border border-stone-200 rounded-md px-3.5 py-2.5">
-                    <div className="flex items-center gap-2 text-xs text-stone-600">
-                      <Maximize2 className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                  <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md px-3.5 py-2.5">
+                    <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-400">
+                      <Maximize2 className="w-3.5 h-3.5 text-[#1B365D] dark:text-amber-300 shrink-0" />
                       <span>Lire au calme en plein écran avec musique</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -2114,7 +2162,7 @@ export function StoryReaderModal({
                               publicAuthorLabel
                             )
                           }
-                          className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 bg-[#FBF9F5] text-xs font-medium text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                          className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
                         >
                           <Play className="w-3 h-3 fill-current" />
                           <span className="max-w-[160px] truncate">
@@ -2125,7 +2173,7 @@ export function StoryReaderModal({
                       <button
                         type="button"
                         onClick={() => setZenMode(true)}
-                        className="min-h-[32px] px-3 py-1 rounded bg-[#1B365D] text-white hover:bg-[#132744] text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[32px] px-3 py-1 rounded bg-[#1B365D] dark:bg-amber-600 text-white hover:bg-[#132744] dark:hover:bg-amber-500 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Maximize2 className="w-3 h-3" />
                         <span>Mode lecture zen</span>
@@ -2135,9 +2183,9 @@ export function StoryReaderModal({
                 )}
 
                 {/* Highlighting Guide & Saved Quotes Summary for this Story */}
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 px-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-600 dark:text-stone-400 px-1">
                   <span className="inline-flex items-center gap-1.5">
-                    <Highlighter className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                    <Highlighter className="w-3.5 h-3.5 text-amber-700 dark:text-amber-400 shrink-0" />
                     <span>
                       Sélectionnez un passage dans le récit pour le surligner et l’ajouter à vos citations favorites.
                     </span>
@@ -2146,7 +2194,7 @@ export function StoryReaderModal({
                     <button
                       type="button"
                       onClick={() => setShowStoryQuotesDrawer((prev) => !prev)}
-                      className="font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 tabular-nums"
+                      className="font-medium text-[#1B365D] dark:text-amber-300 hover:underline inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 tabular-nums"
                     >
                       <Quote className="w-3.5 h-3.5" />
                       <span>
@@ -2158,31 +2206,31 @@ export function StoryReaderModal({
                 </div>
 
                 {showStoryQuotesDrawer && currentStoryQuotes.length > 0 && (
-                  <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs uppercase tracking-widest text-stone-500">
+                      <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                         Vos citations de ce récit ({currentStoryQuotes.length})
                       </p>
                       <button
                         type="button"
                         onClick={() => setShowStoryQuotesDrawer(false)}
-                        className="text-xs text-stone-500 hover:text-stone-900"
+                        className="text-xs text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                       >
                         Masquer
                       </button>
                     </div>
-                    <ul className="divide-y divide-stone-100">
+                    <ul className="divide-y divide-stone-100 dark:divide-stone-800">
                       {currentStoryQuotes.map((q) => (
                         <li
                           key={q.quoteId}
                           className="py-2.5 first:pt-0 last:pb-0 flex items-start justify-between gap-3"
                         >
                           <div className="space-y-1 min-w-0">
-                            <p className="font-display text-sm text-stone-900 leading-relaxed">
+                            <p className="font-display text-sm text-stone-900 dark:text-stone-100 leading-relaxed">
                               « {q.quoteText} »
                             </p>
                             {isRoman && (
-                              <p className="text-[11px] text-stone-500">
+                              <p className="text-[11px] text-stone-500 dark:text-stone-400">
                                 Chapitre {q.chapterNumber}
                                 {q.chapterTitle ? ` · ${q.chapterTitle}` : ''}
                               </p>
@@ -2193,7 +2241,7 @@ export function StoryReaderModal({
                             disabled={quoteBusy}
                             onClick={() => void handleDeleteHighlight(q.quoteId)}
                             aria-label="Retirer cette citation"
-                            className="p-1.5 text-stone-400 hover:text-red-700 rounded transition-colors shrink-0"
+                            className="p-1.5 text-stone-400 hover:text-red-700 dark:hover:text-red-400 rounded transition-colors shrink-0"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -2206,20 +2254,20 @@ export function StoryReaderModal({
             )}
 
             {!zenMode && isAuthor && !formatCompliance.compliant && (
-              <div className="mb-6 bg-amber-50/90 border border-amber-300 rounded-lg p-4 sm:p-5 space-y-3">
-                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-amber-950">
-                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+              <div className="mb-6 bg-amber-50/90 dark:bg-amber-950/35 border border-amber-300 dark:border-amber-800/70 rounded-lg p-4 sm:p-5 space-y-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-amber-950 dark:text-amber-200">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
                   <span>
                     Régulation rétroactive : {formatCompliance.shortReason}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-amber-950 leading-relaxed">
+                <p className="text-xs sm:text-sm text-amber-950 dark:text-amber-100 leading-relaxed">
                   {story.visibility === 'public'
                     ? `Ce récit publié avant l’entrée en vigueur des nouveaux seuils est actuellement masqué des salons publics. ${formatCompliance.detailReason}`
                     : formatCompliance.detailReason}
                 </p>
                 {privatizeError && (
-                  <p role="alert" className="text-xs text-red-700">
+                  <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                     {privatizeError}
                   </p>
                 )}
@@ -2228,7 +2276,7 @@ export function StoryReaderModal({
                     <button
                       type="button"
                       onClick={() => onEditStory(story)}
-                      className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] text-white text-xs font-medium hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap"
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#1B365D] dark:bg-amber-600 text-white text-xs font-medium hover:bg-[#132744] dark:hover:bg-amber-500 inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                       <span>Compléter pour republier</span>
@@ -2255,7 +2303,7 @@ export function StoryReaderModal({
                           setPrivatizeBusy(false);
                         }
                       }}
-                      className="min-h-[36px] px-3.5 py-1.5 rounded-md border border-amber-300 bg-white text-amber-950 text-xs font-medium hover:border-amber-500 inline-flex items-center gap-1.5 disabled:opacity-60 whitespace-nowrap"
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-stone-900 text-amber-950 dark:text-amber-200 text-xs font-medium hover:border-amber-500 inline-flex items-center gap-1.5 disabled:opacity-60 whitespace-nowrap"
                     >
                       <Lock className="w-3.5 h-3.5" />
                       <span>
@@ -2268,42 +2316,42 @@ export function StoryReaderModal({
             )}
 
             {isBlockedByRetroactiveRule ? (
-              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 sm:p-8 space-y-4">
+              <div className="my-4 bg-white dark:bg-stone-900 border border-amber-300 dark:border-amber-800/70 rounded-lg p-6 sm:p-8 space-y-4">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
-                  <h2 className="font-display text-xl font-medium text-stone-900">
+                  <ShieldAlert className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0" />
+                  <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                     Publication suspendue par régulation rétroactive
                   </h2>
                 </div>
-                <p className="text-sm text-stone-700 leading-relaxed">
+                <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
                   Lisière exige désormais plus de 3 lignes pour les confessions et au moins 2 pages par chapitre de roman, y compris sur les récits publiés avant la mise à jour. Ce texte ne remplit pas encore ce seuil ({formatCompliance.shortReason}) et reste retiré des salons tant que son auteur ne l’a pas complété.
                 </p>
                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
                   <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                   >
                     Revenir aux récits
                   </button>
                 </div>
               </div>
             ) : ageBlockReason !== null ? (
-              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 sm:p-8 space-y-4">
+              <div className="my-4 bg-white dark:bg-stone-900 border border-amber-300 dark:border-amber-800/70 rounded-lg p-6 sm:p-8 space-y-4">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
-                  <h2 className="font-display text-xl font-medium text-stone-900">
+                  <ShieldAlert className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0" />
+                  <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                     Contenu protégé par limite d’âge
                   </h2>
                   <MatureContentBadge minAge={story.minAge} isMature={story.isMature} />
                 </div>
-                <p className="text-sm text-stone-700 leading-relaxed">{ageBlockReason}</p>
+                <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">{ageBlockReason}</p>
                 <div className="flex flex-wrap items-center gap-2.5 pt-1">
                   {!user ? (
                     <button
                       type="button"
                       onClick={() => void signInWithGoogle()}
-                      className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                      className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744]"
                     >
                       Se connecter avec Google
                     </button>
@@ -2315,7 +2363,7 @@ export function StoryReaderModal({
                           onClose();
                           onOpenAgeSettings();
                         }}
-                        className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                        className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744]"
                       >
                         Renseigner ou modifier mon âge
                       </button>
@@ -2324,26 +2372,26 @@ export function StoryReaderModal({
                   <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                   >
                     Fermer
                   </button>
                 </div>
               </div>
             ) : needsMatureGate ? (
-              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 sm:p-8 space-y-4">
+              <div className="my-4 bg-white dark:bg-stone-900 border border-amber-300 dark:border-amber-800/70 rounded-lg p-6 sm:p-8 space-y-4">
                 <div className="flex flex-wrap items-center gap-2.5">
-                  <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0" />
-                  <h2 className="font-display text-xl font-medium text-stone-900">
+                  <ShieldAlert className="w-5 h-5 text-amber-700 dark:text-amber-400 shrink-0" />
+                  <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100">
                     Avertissement · Contenu mature
                   </h2>
                   <MatureContentBadge minAge={story.minAge} isMature={story.isMature} />
                 </div>
-                <p className="text-sm text-stone-700 leading-relaxed">
+                <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
                   Même si ce récit est adapté à votre tranche d’âge, il aborde des thèmes sensibles ou matures. Prenez connaissance de cet avertissement avant de poursuivre la lecture.
                 </p>
                 {story.matureReason && (
-                  <p className="text-xs text-amber-950 bg-amber-50 border border-amber-200 rounded-md px-3.5 py-2.5">
+                  <p className="text-xs text-amber-950 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md px-3.5 py-2.5">
                     Précision : {story.matureReason}
                   </p>
                 )}
@@ -2351,14 +2399,14 @@ export function StoryReaderModal({
                   <button
                     type="button"
                     onClick={() => setMatureAcknowledged(true)}
-                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744]"
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744]"
                   >
                     J’ai compris — Afficher le récit
                   </button>
                   <button
                     type="button"
                     onClick={onClose}
-                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 bg-[#FBF9F5] border border-stone-300 rounded-md hover:border-stone-500"
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-stone-700 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-800 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                   >
                     Revenir aux récits
                   </button>
@@ -2367,8 +2415,8 @@ export function StoryReaderModal({
             ) : (
               <>
                 {!zenMode && storyIsMature && (
-                  <div className="mb-6 px-3.5 py-2.5 rounded-md border border-amber-200 bg-amber-50/75 text-xs text-amber-950 flex flex-wrap items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+                  <div className="mb-6 px-3.5 py-2.5 rounded-md border border-amber-200 dark:border-amber-800/70 bg-amber-50/75 dark:bg-amber-950/35 text-xs text-amber-950 dark:text-amber-200 flex flex-wrap items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
                     <span className="font-semibold">Contenu mature</span>
                     {story.matureReason && (
                       <span>· {story.matureReason}</span>
@@ -2378,8 +2426,8 @@ export function StoryReaderModal({
 
             {/* Chapter Navigation Rail for Serialized Novels */}
             {!zenMode && isRoman && (
-              <div className="mb-8 bg-white border border-stone-200 rounded-md p-4 space-y-3">
-                <div className="flex items-center justify-between text-xs text-stone-500">
+              <div className="mb-8 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
                   <span className="uppercase tracking-widest inline-flex items-center gap-1.5">
                     <BookOpen className="w-3.5 h-3.5" />
                     Table des chapitres
@@ -2395,8 +2443,8 @@ export function StoryReaderModal({
                     onClick={() => setActiveChapterIdx(0)}
                     className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded border transition-colors ${
                       activeChapterIdx === 0
-                        ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                        : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                        ? 'bg-[#1B365D] dark:bg-amber-600 text-white border-[#1B365D] dark:border-amber-600'
+                        : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                     }`}
                   >
                     Chapitre 1
@@ -2411,8 +2459,8 @@ export function StoryReaderModal({
                         onClick={() => setActiveChapterIdx(chapIdx)}
                         className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded border transition-colors ${
                           active
-                            ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                            : 'bg-[#FBF9F5] text-stone-700 border-stone-200 hover:border-stone-400'
+                            ? 'bg-[#1B365D] dark:bg-amber-600 text-white border-[#1B365D] dark:border-amber-600'
+                            : 'bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                         }`}
                       >
                         Ch. {chap.chapterNumber} · {chap.title}
@@ -2427,13 +2475,13 @@ export function StoryReaderModal({
             {!zenMode && isRoman && isAuthor && showChapterForm && (
               <form
                 onSubmit={handleAddChapter}
-                className="mb-8 bg-white border border-stone-300 rounded-md p-5 space-y-4"
+                className="mb-8 bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-md p-5 space-y-4"
               >
-                <h2 className="font-display text-lg font-medium text-stone-900">
+                <h2 className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
                   Publier le chapitre {totalChapters + 1}
                 </h2>
                 <div>
-                  <label htmlFor="chap-title" className="block text-xs font-medium text-stone-700 mb-1">
+                  <label htmlFor="chap-title" className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
                     Titre du chapitre
                   </label>
                   <input
@@ -2444,11 +2492,11 @@ export function StoryReaderModal({
                     value={chapterTitle}
                     onChange={(e) => setChapterTitle(e.target.value)}
                     placeholder="Ex. La gare du matin…"
-                    className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                    className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                   />
                 </div>
                 <div>
-                  <label htmlFor="chap-content" className="block text-xs font-medium text-stone-700 mb-1">
+                  <label htmlFor="chap-content" className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
                     Texte du chapitre
                   </label>
                   <textarea
@@ -2459,13 +2507,13 @@ export function StoryReaderModal({
                     value={chapterContent}
                     onChange={(e) => setChapterContent(e.target.value)}
                     placeholder="Poursuivez votre histoire (minimum 2 pages / 3 000 caractères)…"
-                    className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm leading-relaxed text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                    className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm leading-relaxed text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                   />
                   <div
                     className={`mt-1.5 px-3 py-1.5 rounded border text-[11px] flex flex-wrap items-center justify-between gap-2 ${
                       inlineChapterLengthEval.ok
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                        : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                        : 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200'
                     }`}
                   >
                     <span>
@@ -2481,7 +2529,7 @@ export function StoryReaderModal({
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="chap-note" className="block text-xs font-medium text-stone-700 mb-1">
+                  <label htmlFor="chap-note" className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1">
                     Mot de fin pour les lecteurs (facultatif)
                   </label>
                   <input
@@ -2491,15 +2539,15 @@ export function StoryReaderModal({
                     value={chapterNote}
                     onChange={(e) => setChapterNote(e.target.value)}
                     placeholder="Ex. Prochain chapitre dimanche prochain !"
-                    className="w-full px-3.5 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                    className="w-full px-3.5 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                   />
                 </div>
-                <label className="flex items-center gap-2 text-xs text-stone-700">
+                <label className="flex items-center gap-2 text-xs text-stone-700 dark:text-stone-300">
                   <input
                     type="checkbox"
                     checked={markCompleted}
                     onChange={(e) => setMarkCompleted(e.target.checked)}
-                    className="rounded border-stone-300"
+                    className="rounded border-stone-300 dark:border-stone-600"
                   />
                   <span>Marquer ce roman comme terminé après ce chapitre</span>
                 </label>
@@ -2512,8 +2560,8 @@ export function StoryReaderModal({
                       role="status"
                       className={`rounded-md border px-3 py-2 text-xs flex items-start gap-2 ${
                         chapterPlagiarismCheck.isSuspicious
-                          ? 'bg-red-50 border-red-200 text-red-900'
-                          : 'bg-amber-50 border-amber-200 text-amber-900'
+                          ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900 text-red-900 dark:text-red-200'
+                          : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-200'
                       }`}
                     >
                       <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -2525,12 +2573,12 @@ export function StoryReaderModal({
                     </div>
                   )}
 
-                <label className="flex items-start gap-2 text-xs text-stone-700 cursor-pointer">
+                <label className="flex items-start gap-2 text-xs text-stone-700 dark:text-stone-300 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={chapterPlagiarismAttested}
                     onChange={(e) => setChapterPlagiarismAttested(e.target.checked)}
-                    className="mt-0.5 rounded border-stone-300 text-[#1B365D]"
+                    className="mt-0.5 rounded border-stone-300 dark:border-stone-600 text-[#1B365D]"
                   />
                   <span>
                     Je certifie que ce chapitre est une création originale conforme à la politique anti-plagiat des romans de Lisière.
@@ -2538,7 +2586,7 @@ export function StoryReaderModal({
                 </label>
 
                 {chapterError && (
-                  <p role="alert" className="text-xs text-red-700">
+                  <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                     {chapterError}
                   </p>
                 )}
@@ -2547,14 +2595,14 @@ export function StoryReaderModal({
                   <button
                     type="button"
                     onClick={() => setShowChapterForm(false)}
-                    className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
+                    className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
                     disabled={chapterBusy}
-                    className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] disabled:opacity-60"
+                    className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-white bg-[#1B365D] dark:bg-[#2C4F82] rounded-md hover:bg-[#132744] dark:hover:bg-[#3A639E] disabled:opacity-60"
                   >
                     {chapterBusy ? 'Publication…' : `Publier le chapitre ${totalChapters + 1}`}
                   </button>
@@ -2565,19 +2613,25 @@ export function StoryReaderModal({
             {activeFollowupChapter && (
               <div
                 className={`mb-6 pb-4 border-b ${
-                  zenMode && zenTheme === 'night' ? 'border-stone-800' : 'border-stone-200'
+                  zenMode && zenTheme === 'night'
+                    ? 'border-stone-800'
+                    : 'border-stone-200 dark:border-stone-800'
                 }`}
               >
                 <p
                   className={`text-xs uppercase tracking-widest ${
-                    zenMode && zenTheme === 'night' ? 'text-amber-200/80' : 'text-[#1B365D]'
+                    zenMode && zenTheme === 'night'
+                      ? 'text-amber-200/80'
+                      : 'text-[#1B365D] dark:text-[#93B4E2]'
                   }`}
                 >
                   Chapitre {activeFollowupChapter.chapterNumber}
                 </p>
                 <h2
                   className={`font-display text-2xl font-medium mt-1 ${
-                    zenMode && zenTheme === 'night' ? 'text-[#F5F0E6]' : 'text-stone-900'
+                    zenMode && zenTheme === 'night'
+                      ? 'text-[#F5F0E6]'
+                      : 'text-stone-900 dark:text-stone-100'
                   }`}
                 >
                   {activeFollowupChapter.title}
@@ -2589,14 +2643,14 @@ export function StoryReaderModal({
             activeFollowupChapterEval &&
             !activeFollowupChapterEval.ok &&
             !isAuthor ? (
-              <div className="my-4 bg-white border border-amber-300 rounded-lg p-6 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-amber-950">
-                  <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+              <div className="my-4 bg-white dark:bg-stone-900 border border-amber-300 dark:border-amber-800/70 rounded-lg p-6 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-950 dark:text-amber-200">
+                  <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
                   <span>
                     Chapitre {activeFollowupChapter.chapterNumber} suspendu par régulation rétroactive
                   </span>
                 </div>
-                <p className="text-sm text-stone-700 leading-relaxed">
+                <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">
                   Ce chapitre antérieur à la mise à jour contient moins de 2 pages ({activeFollowupChapterEval.estimatedPages.toFixed(1).replace('.', ',')} p. / 2 p. minimum) et n’est plus affiché aux lecteurs.
                 </p>
               </div>
@@ -2606,7 +2660,7 @@ export function StoryReaderModal({
                   activeFollowupChapterEval &&
                   !activeFollowupChapterEval.ok &&
                   isAuthor && (
-                    <div className="mb-5 px-3.5 py-2.5 rounded-md border border-amber-300 bg-amber-50 text-xs text-amber-950">
+                    <div className="mb-5 px-3.5 py-2.5 rounded-md border border-amber-300 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-950/40 text-xs text-amber-950 dark:text-amber-200">
                       Attention (auteur) : ce chapitre {activeFollowupChapter.chapterNumber} fait moins de 2 pages ({activeFollowupChapterEval.estimatedPages.toFixed(1).replace('.', ',')} p.) et est masqué aux visiteurs sous l’effet de la régulation rétroactive.
                     </div>
                   )}
@@ -2617,7 +2671,7 @@ export function StoryReaderModal({
                   className={
                     zenMode
                       ? `space-y-6 select-text ${zenTypefaceClass} ${zenFontClass} ${zenBodyTextClass}`
-                      : 'space-y-5 select-text text-base sm:text-[17px] leading-[1.8] text-stone-800'
+                      : 'space-y-5 select-text text-base sm:text-[17px] leading-[1.8] text-stone-800 dark:text-stone-200'
                   }
                 >
                   {paragraphs.map((para, idx) => (
@@ -2634,7 +2688,7 @@ export function StoryReaderModal({
             )}
 
             {!zenMode && activeFollowupChapter?.authorNote && (
-              <div className="mt-8 p-4 bg-white border border-stone-200 rounded-md text-sm text-stone-700 italic">
+              <div className="mt-8 p-4 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md text-sm text-stone-700 dark:text-stone-300 italic">
                 {isAnonymousStory ? 'Note de l’auteur' : `Note de ${story.authorName}`} : «{' '}
                 {activeFollowupChapter.authorNote} »
               </div>
@@ -2645,13 +2699,15 @@ export function StoryReaderModal({
                 className={`mt-8 pt-4 border-t flex items-center justify-between gap-3 text-xs ${
                   zenMode && zenTheme === 'night'
                     ? 'border-stone-800 text-stone-400'
-                    : 'border-stone-200 text-stone-500'
+                    : 'border-stone-200 dark:border-stone-800 text-stone-500 dark:text-stone-400'
                 }`}
               >
                 <span className="inline-flex items-center gap-1.5 font-medium">
                   <Feather
                     className={`w-3.5 h-3.5 shrink-0 ${
-                      zenMode && zenTheme === 'night' ? 'text-amber-300/90' : 'text-[#9A3B29]'
+                      zenMode && zenTheme === 'night'
+                        ? 'text-amber-300/90'
+                        : 'text-[#9A3B29] dark:text-[#E59887]'
                     }`}
                   />
                   <span>Confession · Texte complet en un seul souffle</span>
@@ -2663,7 +2719,9 @@ export function StoryReaderModal({
             {isRoman && totalChapters > 1 && (
               <div
                 className={`mt-8 pt-5 border-t flex items-center justify-between gap-4 ${
-                  zenMode && zenTheme === 'night' ? 'border-stone-800' : 'border-stone-200'
+                  zenMode && zenTheme === 'night'
+                    ? 'border-stone-800'
+                    : 'border-stone-200 dark:border-stone-800'
                 }`}
               >
                 <button
@@ -2676,7 +2734,7 @@ export function StoryReaderModal({
                   className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border disabled:opacity-40 ${
                     zenMode && zenTheme === 'night'
                       ? 'bg-[#23211E] text-[#EAE4D9] border-stone-700 hover:border-stone-500'
-                      : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                      : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 border-stone-200 dark:border-stone-700 hover:border-stone-400 dark:hover:border-stone-500'
                   }`}
                 >
                   Chapitre précédent
@@ -2694,7 +2752,7 @@ export function StoryReaderModal({
                   className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md disabled:opacity-40 ${
                     zenMode && zenTheme === 'night'
                       ? 'bg-amber-200 text-stone-950 hover:bg-amber-100'
-                      : 'bg-[#1B365D] text-white hover:bg-[#132744]'
+                      : 'bg-[#1B365D] dark:bg-[#2C4F82] text-white hover:bg-[#132744] dark:hover:bg-[#3A639E]'
                   }`}
                 >
                   Chapitre suivant
@@ -2706,17 +2764,17 @@ export function StoryReaderModal({
               !isAnonymousStory &&
               authorProfile &&
               (authorProfile.bio || authorProfile.listeningNote) && (
-              <div className="mt-10 p-5 bg-white border border-stone-200 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="mt-10 p-5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-widest text-stone-500 mb-1.5">
+                  <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1.5">
                     À propos de {authorProfile.displayName}
                   </p>
                   {authorProfile.bio && (
-                    <p className="text-sm text-stone-700 leading-relaxed">{authorProfile.bio}</p>
+                    <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed">{authorProfile.bio}</p>
                   )}
                   {authorProfile.listeningNote && (
-                    <p className="text-sm text-stone-600 mt-2">
-                      <span className="font-medium text-stone-800">Disponibilité d’échange :</span>{' '}
+                    <p className="text-sm text-stone-600 dark:text-stone-400 mt-2">
+                      <span className="font-medium text-stone-800 dark:text-stone-200">Disponibilité d’échange :</span>{' '}
                       {authorProfile.listeningNote}
                     </p>
                   )}
@@ -2727,7 +2785,7 @@ export function StoryReaderModal({
                     onClose();
                     onOpenMemberWall(story.authorId);
                   }}
-                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] border border-[#CBD6E6] bg-[#F3F6FA] rounded-md hover:bg-[#E7EEF7] whitespace-nowrap shrink-0 self-start sm:self-center"
+                  className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] dark:text-amber-300 border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 rounded-md hover:bg-[#E7EEF7] dark:hover:bg-stone-700 whitespace-nowrap shrink-0 self-start sm:self-center"
                 >
                   Voir son mur
                 </button>
@@ -2736,7 +2794,7 @@ export function StoryReaderModal({
 
             {/* Social Action Bar */}
             {!zenMode && (
-              <div className="mt-10 pt-6 border-t border-stone-200 flex flex-wrap items-center justify-between gap-4">
+              <div className="mt-10 pt-6 border-t border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
@@ -2744,8 +2802,8 @@ export function StoryReaderModal({
                     disabled={resonateBusy || story.visibility !== 'public'}
                     className={`min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
                       hasResonated
-                        ? 'bg-[#1E3A8A] text-white border-[#1E3A8A]'
-                        : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
+                        ? 'bg-[#1E3A8A] dark:bg-amber-600 text-white border-[#1E3A8A] dark:border-amber-600'
+                        : 'bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border-stone-300 dark:border-stone-700 hover:border-stone-500'
                     }`}
                   >
                     <Heart className={`w-4 h-4 ${hasResonated ? 'fill-current' : ''}`} />
@@ -2759,8 +2817,8 @@ export function StoryReaderModal({
                     aria-pressed={isBookmarked}
                     className={`min-h-[40px] px-3.5 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
                       isBookmarked
-                        ? 'bg-[#F3F6FA] text-[#1B365D] border-[#1B365D]'
-                        : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
+                        ? 'bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 border-[#1B365D] dark:border-amber-400'
+                        : 'bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border-stone-300 dark:border-stone-700 hover:border-stone-500'
                     }`}
                   >
                     <Bookmark className={`w-4 h-4 ${isBookmarked ? 'fill-current' : ''}`} />
@@ -2773,8 +2831,8 @@ export function StoryReaderModal({
                     aria-pressed={isReposted}
                     className={`min-h-[40px] px-3.5 py-2 text-sm font-medium rounded-md border inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 ${
                       isReposted
-                        ? 'bg-[#F3F6FA] text-[#1B365D] border-[#1B365D]'
-                        : 'bg-white text-stone-800 border-stone-300 hover:border-stone-500'
+                        ? 'bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 border-[#1B365D] dark:border-amber-400'
+                        : 'bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border-stone-300 dark:border-stone-700 hover:border-stone-500'
                     }`}
                   >
                     <Repeat2 className="w-4 h-4" />
@@ -2784,8 +2842,11 @@ export function StoryReaderModal({
                   {canSharePublicLink && (
                     <button
                       type="button"
-                      onClick={() => setShowSharePanel(true)}
-                      className="min-h-[40px] px-3.5 py-2 text-sm font-medium rounded-md border border-stone-300 bg-white text-stone-800 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                      onClick={() => {
+                        if (onShareStory) onShareStory(story);
+                        else setShowSharePanel(true);
+                      }}
+                      className="min-h-[40px] px-3.5 py-2 text-sm font-medium rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 hover:border-[#1B365D] dark:hover:border-amber-400 hover:text-[#1B365D] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
                     >
                       <Share2 className="w-4 h-4" />
                       <span>Partager</span>
@@ -2800,7 +2861,7 @@ export function StoryReaderModal({
                           onClose();
                           onOpenExchange(existingExchange.exchangeId);
                         }}
-                        className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-[#1E3A8A] text-[#1E3A8A] bg-white hover:bg-[#1E3A8A]/5 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                        className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-[#1E3A8A] dark:border-amber-400 text-[#1E3A8A] dark:text-amber-300 bg-white dark:bg-stone-900 hover:bg-[#1E3A8A]/5 inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
                       >
                         <MessageCircle className="w-4 h-4" />
                         <span>Poursuivre en privé</span>
@@ -2815,7 +2876,7 @@ export function StoryReaderModal({
                           }
                           setShowBridgeBox((prev) => !prev);
                         }}
-                        className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-stone-300 text-stone-800 bg-white hover:border-[#1E3A8A] hover:text-[#1E3A8A] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
+                        className="min-h-[40px] px-4 py-2 text-sm font-medium rounded-md border border-stone-300 dark:border-stone-700 text-stone-800 dark:text-stone-200 bg-white dark:bg-stone-900 hover:border-[#1E3A8A] hover:text-[#1E3A8A] inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0"
                       >
                         <MessageCircle className="w-4 h-4" />
                         <span>Écrire en privé à l’auteur</span>
@@ -2840,7 +2901,7 @@ export function StoryReaderModal({
                           isAnonymousTarget: isAnonymousStory,
                         });
                       }}
-                      className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium rounded-md border border-stone-200 text-stone-600 bg-white hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                      className="min-h-[40px] px-3.5 py-2 text-xs sm:text-sm font-medium rounded-md border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 bg-white dark:bg-stone-900 hover:border-red-300 hover:text-red-800 inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                     >
                       <Flag className="w-3.5 h-3.5" />
                       <span>Signaler</span>
@@ -2848,7 +2909,7 @@ export function StoryReaderModal({
                   )}
                 </div>
 
-                <div className="flex items-center gap-4 text-xs text-stone-500 tabular-nums">
+                <div className="flex items-center gap-4 text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                   {story.visibility === 'public' && (
                     <span className="inline-flex items-center gap-1">
                       <Eye className="w-3.5 h-3.5" />
@@ -2864,10 +2925,10 @@ export function StoryReaderModal({
 
             {/* Novel Originality Charter & Reader Plagiarism Reporting */}
             {!zenMode && isRoman && story.visibility === 'public' && (
-              <div className="mt-5 p-3.5 bg-white border border-stone-200 rounded-md space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-stone-600">
-                  <span className="inline-flex items-center gap-1.5 text-stone-700">
-                    <ShieldCheck className="w-4 h-4 text-[#1B365D] shrink-0" />
+              <div className="mt-5 p-3.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-stone-600 dark:text-stone-400">
+                  <span className="inline-flex items-center gap-1.5 text-stone-700 dark:text-stone-300">
+                    <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-amber-300 shrink-0" />
                     <span>
                       {story.plagiarismAttested
                         ? 'Œuvre originale certifiée · Charte anti-plagiat des romans'
@@ -2886,7 +2947,7 @@ export function StoryReaderModal({
                         setReportError(null);
                         setShowReportForm((prev) => !prev);
                       }}
-                      className="text-xs font-medium text-stone-600 hover:text-red-800 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      className="text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-red-800 dark:hover:text-red-300 inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <Flag className="w-3.5 h-3.5" />
                       <span>
@@ -2901,7 +2962,7 @@ export function StoryReaderModal({
                 </div>
 
                 {reportSubmitted && !showReportForm && (
-                  <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded px-3 py-2">
+                  <p className="text-xs text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded px-3 py-2">
                     Merci. Votre signalement pour plagiat a bien été enregistré pour vérification.
                   </p>
                 )}
@@ -2909,16 +2970,16 @@ export function StoryReaderModal({
                 {showReportForm && !isAuthor && (
                   <form
                     onSubmit={handleSubmitPlagiarismReport}
-                    className="pt-3 border-t border-stone-200 space-y-3"
+                    className="pt-3 border-t border-stone-200 dark:border-stone-800 space-y-3"
                   >
-                    <p className="text-xs text-stone-700 font-medium">
+                    <p className="text-xs text-stone-700 dark:text-stone-300 font-medium">
                       Signaler une atteinte aux droits d’auteur sur ce roman
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label
                           htmlFor="plagiarism-reason"
-                          className="block text-[11px] uppercase tracking-widest text-stone-500 mb-1"
+                          className="block text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1"
                         >
                           Motif
                         </label>
@@ -2928,7 +2989,7 @@ export function StoryReaderModal({
                           onChange={(e) =>
                             setReportReason(e.target.value as PlagiarismReportReason)
                           }
-                          className="w-full min-h-[36px] px-2.5 py-1 bg-[#FBF9F5] border border-stone-200 rounded text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                          className="w-full min-h-[36px] px-2.5 py-1 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                         >
                           <option value="oeuvre-publiee">
                             Copie d’une œuvre publiée ailleurs
@@ -2943,7 +3004,7 @@ export function StoryReaderModal({
                       <div>
                         <label
                           htmlFor="plagiarism-ref"
-                          className="block text-[11px] uppercase tracking-widest text-stone-500 mb-1"
+                          className="block text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1"
                         >
                           Lien ou source originale (facultatif)
                         </label>
@@ -2954,7 +3015,7 @@ export function StoryReaderModal({
                           value={reportRefUrl}
                           onChange={(e) => setReportRefUrl(e.target.value)}
                           placeholder="Titre du livre, auteur ou URL…"
-                          className="w-full min-h-[36px] px-2.5 py-1 bg-[#FBF9F5] border border-stone-200 rounded text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                          className="w-full min-h-[36px] px-2.5 py-1 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                         />
                       </div>
                     </div>
@@ -2962,7 +3023,7 @@ export function StoryReaderModal({
                     <div>
                       <label
                         htmlFor="plagiarism-details"
-                        className="block text-[11px] uppercase tracking-widest text-stone-500 mb-1"
+                        className="block text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1"
                       >
                         Précisions (passages concernés, contexte)
                       </label>
@@ -2974,12 +3035,12 @@ export function StoryReaderModal({
                         value={reportDetails}
                         onChange={(e) => setReportDetails(e.target.value)}
                         placeholder="Indiquez quel passage ou ouvrage semble copié…"
-                        className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded text-xs text-stone-800 focus:outline-none focus:border-[#1B365D]"
+                        className="w-full px-3 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                       />
                     </div>
 
                     {reportError && (
-                      <p role="alert" className="text-xs text-red-700">
+                      <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                         {reportError}
                       </p>
                     )}
@@ -2988,7 +3049,7 @@ export function StoryReaderModal({
                       <button
                         type="button"
                         onClick={() => setShowReportForm(false)}
-                        className="min-h-[34px] px-3 py-1 text-xs text-stone-600 hover:text-stone-900"
+                        className="min-h-[34px] px-3 py-1 text-xs text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                       >
                         Annuler
                       </button>
@@ -3006,7 +3067,7 @@ export function StoryReaderModal({
             )}
 
             {!zenMode && resonateError && (
-              <p role="alert" className="mt-3 text-xs text-red-700">
+              <p role="alert" className="mt-3 text-xs text-red-700 dark:text-red-400">
                 {resonateError}
               </p>
             )}
@@ -3014,13 +3075,13 @@ export function StoryReaderModal({
             {!zenMode && showBridgeBox && !isAuthor && !isAnonymousStory && (
               <form
                 onSubmit={handleOpenBridge}
-                className="mt-6 bg-white border border-stone-200 rounded-md p-5 space-y-4"
+                className="mt-6 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-5 space-y-4"
               >
                 <div>
-                  <h3 className="font-display text-lg font-medium text-stone-900">
+                  <h3 className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
                     Écrire en tête-à-tête à {story.authorName}
                   </h3>
-                  <p className="text-xs text-stone-600 mt-1">
+                  <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
                     Votre premier message s’appuiera sur ce récit pour commencer une conversation calme et privée.
                   </p>
                 </div>
@@ -3030,10 +3091,10 @@ export function StoryReaderModal({
                   value={bridgeMessage}
                   onChange={(e) => setBridgeMessage(e.target.value)}
                   placeholder={`Bonjour ${story.authorName}, votre texte m’a particulièrement touché parce que…`}
-                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1E3A8A]"
+                  className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-amber-400"
                 />
                 {bridgeError && (
-                  <p role="alert" className="text-xs text-red-700">
+                  <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                     {bridgeError}
                   </p>
                 )}
@@ -3041,14 +3102,14 @@ export function StoryReaderModal({
                   <button
                     type="button"
                     onClick={() => setShowBridgeBox(false)}
-                    className="min-h-[40px] px-3 py-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
+                    className="min-h-[40px] px-3 py-1.5 text-xs font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
                   >
                     Annuler
                   </button>
                   <button
                     type="submit"
                     disabled={bridgeBusy}
-                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 whitespace-nowrap"
+                    className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 disabled:opacity-60 whitespace-nowrap"
                   >
                     {bridgeBusy ? 'Ouverture…' : 'Envoyer en privé'}
                   </button>
@@ -3059,27 +3120,65 @@ export function StoryReaderModal({
             {/* Comments Section */}
             {!zenMode && story.visibility === 'public' && (
               <section
-                className="mt-10 pt-8 border-t border-stone-200"
+                className="mt-10 pt-8 border-t border-stone-200 dark:border-stone-800"
                 aria-label="Commentaires des lecteurs"
               >
-                <h2 className="font-display text-2xl font-medium text-stone-900 mb-2">
-                  Commentaires
-                </h2>
-                <p className="text-sm text-stone-600 mb-6">
-                  Réactions et retours de lecture sous cette histoire.
-                </p>
+                <div className="flex flex-wrap items-start justify-between gap-3 mb-2">
+                  <div>
+                    <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100">
+                      Commentaires
+                    </h2>
+                    <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">
+                      Réactions et retours de lecture sous cette histoire.
+                    </p>
+                  </div>
+                  {isAuthor && user && (
+                    <button
+                      type="button"
+                      disabled={commentsToggleBusy}
+                      aria-pressed={effectiveCommentsDisabled}
+                      onClick={async () => {
+                        if (commentsToggleBusy) return;
+                        setCommentsToggleBusy(true);
+                        try {
+                          await updateProfileCommentsDisabled(user.uid, !effectiveCommentsDisabled);
+                          setAuthorCommentsDisabled(!effectiveCommentsDisabled);
+                        } catch {
+                          // Handled by listener
+                        } finally {
+                          setCommentsToggleBusy(false);
+                        }
+                      }}
+                      className={`min-h-[34px] px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 ${
+                        effectiveCommentsDisabled
+                          ? 'border-[#9A3B29]/45 bg-[#FDF3F1] dark:bg-amber-950/40 text-[#9A3B29] dark:text-amber-300'
+                          : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:border-[#1B365D]'
+                      }`}
+                    >
+                      <MessageSquareOff className="w-3.5 h-3.5" />
+                      <span>
+                        {effectiveCommentsDisabled
+                          ? 'Réactiver les commentaires'
+                          : 'Désactiver les commentaires sur mon profil'}
+                      </span>
+                    </button>
+                  )}
+                </div>
 
                 {visibleEchoes.length === 0 ? (
-                  <p className="text-sm text-stone-500 italic py-4">
-                    Aucun commentaire pour l’instant. Soyez la première personne à commenter cette histoire.
+                  <p className="text-sm text-stone-500 dark:text-stone-400 italic py-4">
+                    Aucun commentaire pour l’instant.
+                    {!effectiveCommentsDisabled
+                      ? ' Soyez la première personne à commenter cette histoire.'
+                      : ''}
                   </p>
                 ) : (
-                  <div className="divide-y divide-stone-200 mb-8">
+                  <div className="divide-y divide-stone-200 dark:divide-stone-800 mb-8">
                     {visibleEchoes.map((echo) => {
                       const commenterProfile = profilesByUserId.get(echo.authorId);
                       return (
                       <div key={echo.echoId} className="py-5">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 mb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500 dark:text-stone-400 mb-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
@@ -3087,7 +3186,7 @@ export function StoryReaderModal({
                                 onClose();
                                 onOpenMemberWall(echo.authorId);
                               }}
-                              className="font-semibold text-stone-900 hover:text-[#1B365D] hover:underline"
+                              className="font-semibold text-stone-900 dark:text-stone-100 hover:text-[#1B365D] dark:hover:text-amber-300 hover:underline"
                             >
                               {echo.authorName}
                             </button>
@@ -3137,7 +3236,7 @@ export function StoryReaderModal({
                             )}
                           </div>
                         </div>
-                        <p className="text-sm leading-relaxed text-stone-800 whitespace-pre-line">
+                        <p className="text-sm leading-relaxed text-stone-800 dark:text-stone-200 whitespace-pre-line">
                           {echo.content}
                         </p>
                       </div>
@@ -3146,61 +3245,95 @@ export function StoryReaderModal({
                   </div>
                 )}
 
-                <form
-                  onSubmit={handleEchoSubmit}
-                  className="bg-white border border-stone-200 rounded-md p-5 space-y-3.5"
-                >
-                  <label
-                    htmlFor="reader-comment-input"
-                    className="block text-xs uppercase tracking-widest text-stone-500"
-                  >
-                    Laisser un commentaire
-                  </label>
-
-                  {user ? (
-                    <>
-                      <textarea
-                        id="reader-comment-input"
-                        rows={3}
-                        maxLength={FIELD_LIMITS.echoContent.max}
-                        value={echoText}
-                        onChange={(e) => setEchoText(e.target.value)}
-                        placeholder="Écrivez votre commentaire sous cette histoire…"
-                        className="w-full px-3.5 py-2.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 focus:outline-none focus:border-[#1E3A8A]"
-                      />
-                      {echoError && (
-                        <p role="alert" className="text-xs text-red-700">
-                          {echoError}
+                {effectiveCommentsDisabled ? (
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <MessageSquareOff className="w-4 h-4 text-[#9A3B29] dark:text-amber-300 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">
+                          Commentaires désactivés par l’auteur
                         </p>
-                      )}
-                      <div className="flex items-center justify-between gap-4">
-                        <span className="text-xs text-stone-500">
-                          Visible par les lecteurs · Modéré par le bot anti-haine Lisière.
-                        </span>
-                        <button
-                          type="submit"
-                          disabled={echoBusy}
-                          className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 whitespace-nowrap shrink-0"
-                        >
-                          {echoBusy ? 'Vérification…' : 'Publier le commentaire'}
-                        </button>
+                        <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
+                          L’auteur de ce récit a choisi de désactiver les commentaires sur l’ensemble de ses écrits depuis son profil.
+                        </p>
                       </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-                      <p className="text-xs text-stone-600">
-                        Connectez-vous avec Google pour commenter ou écrire en privé à l’auteur.
-                      </p>
+                    </div>
+                    {isAuthor && user && (
                       <button
                         type="button"
-                        onClick={signInWithGoogle}
-                        className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] whitespace-nowrap shrink-0"
+                        disabled={commentsToggleBusy}
+                        onClick={async () => {
+                          setCommentsToggleBusy(true);
+                          try {
+                            await updateProfileCommentsDisabled(user.uid, false);
+                            setAuthorCommentsDisabled(false);
+                          } finally {
+                            setCommentsToggleBusy(false);
+                          }
+                        }}
+                        className="min-h-[36px] px-3 py-1.5 text-xs font-medium rounded-md border border-stone-300 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-stone-800 dark:text-stone-200 hover:border-[#1B365D] whitespace-nowrap shrink-0"
                       >
-                        Se connecter
+                        Réactiver
                       </button>
-                    </div>
-                  )}
-                </form>
+                    )}
+                  </div>
+                ) : (
+                  <form
+                    onSubmit={handleEchoSubmit}
+                    className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-5 space-y-3.5"
+                  >
+                    <label
+                      htmlFor="reader-comment-input"
+                      className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400"
+                    >
+                      Laisser un commentaire
+                    </label>
+
+                    {user ? (
+                      <>
+                        <textarea
+                          id="reader-comment-input"
+                          rows={3}
+                          maxLength={FIELD_LIMITS.echoContent.max}
+                          value={echoText}
+                          onChange={(e) => setEchoText(e.target.value)}
+                          placeholder="Écrivez votre commentaire sous cette histoire…"
+                          className="w-full px-3.5 py-2.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-amber-400"
+                        />
+                        {echoError && (
+                          <p role="alert" className="text-xs text-red-700 dark:text-red-400">
+                            {echoError}
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between gap-4">
+                          <span className="text-xs text-stone-500 dark:text-stone-400">
+                            Visible par les lecteurs · Modéré par le bot anti-haine Lisière.
+                          </span>
+                          <button
+                            type="submit"
+                            disabled={echoBusy}
+                            className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 disabled:opacity-60 whitespace-nowrap shrink-0"
+                          >
+                            {echoBusy ? 'Vérification…' : 'Publier le commentaire'}
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                        <p className="text-xs text-stone-600 dark:text-stone-400">
+                          Connectez-vous avec Google pour commenter ou écrire en privé à l’auteur.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={signInWithGoogle}
+                          className="min-h-[40px] px-4 py-2 text-xs font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] whitespace-nowrap shrink-0"
+                        >
+                          Se connecter
+                        </button>
+                      </div>
+                    )}
+                  </form>
+                )}
               </section>
             )}
               </>
@@ -3217,8 +3350,8 @@ export function StoryReaderModal({
                   role="status"
                   className={`mx-auto px-3.5 py-2 rounded-md border text-xs font-medium shadow-md flex items-center gap-2 ${
                     quoteFeedback.kind === 'error'
-                      ? 'bg-red-50 border-red-200 text-red-900'
-                      : 'bg-stone-900 border-stone-800 text-[#FBF9F5]'
+                      ? 'bg-red-50 dark:bg-red-950/90 border-red-200 dark:border-red-800/70 text-red-900 dark:text-red-200'
+                      : 'bg-stone-900 dark:bg-stone-800 border-stone-800 dark:border-stone-700 text-[#FBF9F5]'
                   }`}
                 >
                   {quoteFeedback.kind === 'success' && <Check className="w-3.5 h-3.5 text-amber-300 shrink-0" />}
@@ -3232,7 +3365,7 @@ export function StoryReaderModal({
                   className={`rounded-lg border shadow-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 ${
                     zenMode && zenTheme === 'night'
                       ? 'bg-[#26231F] border-amber-300/35 text-[#F5F0E6]'
-                      : 'bg-white border-stone-300 text-stone-900'
+                      : 'bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100'
                   }`}
                 >
                   <div className="min-w-0 flex-1">
@@ -3251,7 +3384,7 @@ export function StoryReaderModal({
                         type="button"
                         disabled={quoteBusy}
                         onClick={() => void handleDeleteHighlight(matchingPendingQuote.quoteId)}
-                        className="min-h-[36px] px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-800 border border-red-200 hover:bg-red-100 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[36px] px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800/70 hover:bg-red-100 dark:hover:bg-red-950/80 inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                         <span>Retirer le surlignage</span>
@@ -3261,7 +3394,7 @@ export function StoryReaderModal({
                         type="button"
                         disabled={quoteBusy}
                         onClick={() => void handleSaveHighlight()}
-                        className="min-h-[36px] px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#1B365D] text-white hover:bg-[#132744] disabled:opacity-60 inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[36px] px-3.5 py-1.5 rounded-md text-xs font-medium bg-[#1B365D] dark:bg-[#2C4F82] text-white hover:bg-[#132744] dark:hover:bg-[#3A639E] disabled:opacity-60 inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <Highlighter className="w-3.5 h-3.5 text-amber-300" />
                         <span>
@@ -3289,7 +3422,7 @@ export function StoryReaderModal({
                   className={`rounded-lg border shadow-xl px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 ${
                     zenMode && zenTheme === 'night'
                       ? 'bg-[#26231F] border-amber-300/35 text-[#F5F0E6]'
-                      : 'bg-white border-stone-300 text-stone-900'
+                      : 'bg-white dark:bg-stone-900 border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100'
                   }`}
                 >
                   <div className="min-w-0 flex-1">
@@ -3308,7 +3441,7 @@ export function StoryReaderModal({
                     >
                       {quoteCopiedId === activeQuotePopover.quoteId ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                           <span>Copié</span>
                         </>
                       ) : (
@@ -3322,7 +3455,7 @@ export function StoryReaderModal({
                       type="button"
                       disabled={quoteBusy}
                       onClick={() => void handleDeleteHighlight(activeQuotePopover.quoteId)}
-                      className="min-h-[34px] px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-800 border border-red-200 hover:bg-red-100 inline-flex items-center gap-1.5 whitespace-nowrap"
+                      className="min-h-[34px] px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800/70 hover:bg-red-100 dark:hover:bg-red-950/80 inline-flex items-center gap-1.5 whitespace-nowrap"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Retirer</span>
@@ -3344,7 +3477,7 @@ export function StoryReaderModal({
         </div>
         {showSharePanel && canSharePublicLink && (
           <div
-            className="absolute inset-0 z-40 bg-stone-900/45 flex items-center justify-center p-4"
+            className="absolute inset-0 z-40 bg-stone-900/45 dark:bg-black/65 flex items-center justify-center p-4"
             onClick={() => setShowSharePanel(false)}
           >
             <div
@@ -3352,20 +3485,20 @@ export function StoryReaderModal({
               aria-modal="true"
               aria-labelledby="share-story-dialog-title"
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-md rounded-lg border border-stone-300 bg-[#FBF9F5] p-5 sm:p-6 shadow-xl space-y-5 text-stone-900"
+              className="w-full max-w-md rounded-lg border border-stone-300 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-900 p-5 sm:p-6 shadow-xl space-y-5 text-stone-900 dark:text-stone-100"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1 min-w-0">
-                  <p className="text-[11px] uppercase tracking-widest text-stone-500">
+                  <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">
                     Lien direct & réseaux
                   </p>
                   <h2
                     id="share-story-dialog-title"
-                    className="font-display text-xl font-medium text-stone-900 leading-snug"
+                    className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 leading-snug"
                   >
                     Partager « {story.title} »
                   </h2>
-                  <p className="text-xs text-stone-500">
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
                     {isAnonymousStory
                       ? 'Auteur anonyme — le lien préserve strictement l’anonymat.'
                       : `Par ${story.authorName}`}
@@ -3375,7 +3508,7 @@ export function StoryReaderModal({
                   type="button"
                   onClick={() => setShowSharePanel(false)}
                   aria-label="Fermer la fenêtre de partage"
-                  className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md text-stone-500 hover:text-stone-900 hover:bg-stone-100 shrink-0"
+                  className="min-h-[34px] min-w-[34px] inline-flex items-center justify-center rounded-md text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -3384,7 +3517,7 @@ export function StoryReaderModal({
               <div className="space-y-2">
                 <label
                   htmlFor="direct-story-share-url"
-                  className="block text-xs font-medium text-stone-700"
+                  className="block text-xs font-medium text-stone-700 dark:text-stone-300"
                 >
                   Lien direct vers le récit
                 </label>
@@ -3395,12 +3528,12 @@ export function StoryReaderModal({
                     readOnly
                     value={directStoryUrl}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="flex-1 min-w-0 px-3 py-2 text-xs bg-white border border-stone-300 rounded-md text-stone-800 select-all"
+                    className="flex-1 min-w-0 px-3 py-2 text-xs bg-white dark:bg-stone-950 border border-stone-300 dark:border-stone-700 rounded-md text-stone-800 dark:text-stone-100 select-all"
                   />
                   <button
                     type="button"
                     onClick={() => void handleCopyDirectLink()}
-                    className="min-h-[38px] px-3.5 py-2 rounded-md bg-[#1B365D] text-white text-xs font-medium hover:bg-[#132744] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                    className="min-h-[38px] px-3.5 py-2 rounded-md bg-[#1B365D] dark:bg-amber-600 text-white text-xs font-medium hover:bg-[#132744] dark:hover:bg-amber-500 inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
                   >
                     {shareLinkCopied ? (
                       <>
@@ -3421,7 +3554,7 @@ export function StoryReaderModal({
                 <button
                   type="button"
                   onClick={() => void handleNativeShare()}
-                  className="w-full min-h-[40px] px-4 py-2 rounded-md border border-[#1B365D] bg-[#F3F6FA] text-[#1B365D] text-xs font-medium hover:bg-[#E7EEF7] inline-flex items-center justify-center gap-2"
+                  className="w-full min-h-[40px] px-4 py-2 rounded-md border border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300 text-xs font-medium hover:bg-[#E7EEF7] dark:hover:bg-stone-700 inline-flex items-center justify-center gap-2"
                 >
                   <Share2 className="w-4 h-4" />
                   <span>Partager via les applications de l’appareil…</span>
@@ -3429,13 +3562,13 @@ export function StoryReaderModal({
               )}
 
               <div className="space-y-2">
-                <p className="text-xs font-medium text-stone-700">Partager sur un réseau</p>
+                <p className="text-xs font-medium text-stone-700 dark:text-stone-300">Partager sur un réseau</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                   <a
                     href={`https://wa.me/?text=${encodeURIComponent(`${shareSummaryText} ${directStoryUrl}`)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
                   >
                     <span>WhatsApp</span>
                     <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
@@ -3444,7 +3577,7 @@ export function StoryReaderModal({
                     href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareSummaryText)}&url=${encodeURIComponent(directStoryUrl)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
                   >
                     <span>X / Twitter</span>
                     <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
@@ -3453,7 +3586,7 @@ export function StoryReaderModal({
                     href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(directStoryUrl)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
                   >
                     <span>Facebook</span>
                     <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
@@ -3462,14 +3595,14 @@ export function StoryReaderModal({
                     href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(directStoryUrl)}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
                   >
                     <span>LinkedIn</span>
                     <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
                   </a>
                   <a
                     href={`mailto:?subject=${encodeURIComponent(shareSummaryText)}&body=${encodeURIComponent(`${shareSummaryText}\n\nLire ce récit sur Lisière :\n${directStoryUrl}`)}`}
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 bg-white text-xs font-medium text-stone-800 hover:border-stone-400 inline-flex items-center justify-between gap-1.5 col-span-2 sm:col-span-1"
+                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5 col-span-2 sm:col-span-1"
                   >
                     <span>E-mail</span>
                     <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />

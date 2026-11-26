@@ -767,20 +767,20 @@ export function StoryComposerModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-0 sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 dark:bg-black/70 p-0 sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="composer-title"
     >
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-3xl h-[100dvh] sm:h-auto sm:max-h-[90vh] bg-[#FBF9F5] sm:border sm:border-stone-300 sm:rounded-lg flex flex-col overflow-hidden"
+        className="w-full max-w-3xl h-[100dvh] sm:h-auto sm:max-h-[90vh] bg-[#FBF9F5] dark:bg-stone-950 sm:border sm:border-stone-300 dark:sm:border-stone-800 sm:rounded-lg flex flex-col overflow-hidden"
       >
         {/* Sticky Modal Header */}
-        <div className="shrink-0 bg-white border-b border-stone-200 px-4 sm:px-6 pt-3.5 pb-3 space-y-3">
+        <div className="shrink-0 bg-white dark:bg-stone-900 border-b border-stone-200 dark:border-stone-800 px-4 sm:px-6 pt-3.5 pb-3 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-[11px] uppercase tracking-widest text-stone-500">
+              <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">
                 {editingStory
                   ? 'Modifier un texte'
                   : isAppendMode
@@ -789,7 +789,7 @@ export function StoryComposerModal({
               </p>
               <h2
                 id="composer-title"
-                className="font-display text-lg sm:text-xl font-medium text-stone-900 leading-snug truncate"
+                className="font-display text-lg sm:text-xl font-medium text-stone-900 dark:text-stone-100 leading-snug truncate"
               >
                 {editingStory
                   ? 'Relire et ajuster votre publication'
@@ -802,7 +802,7 @@ export function StoryComposerModal({
               type="button"
               onClick={onClose}
               aria-label="Fermer la table d’écriture"
-              className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors shrink-0"
+              className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center rounded-md text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
@@ -811,7 +811,7 @@ export function StoryComposerModal({
           {/* 3-Step Navigable Rail */}
           <nav
             aria-label="Étapes de publication"
-            className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 rounded-md"
+            className="grid grid-cols-3 gap-1.5 p-1 bg-stone-100 dark:bg-stone-800 rounded-md"
           >
             {stepsMeta.map((item) => {
               const isCurrent = step === item.id;
@@ -823,12 +823,12 @@ export function StoryComposerModal({
                   aria-current={isCurrent ? 'step' : undefined}
                   className={`min-h-[34px] px-2 py-1 rounded text-xs font-medium transition-colors inline-flex items-center justify-center gap-1.5 truncate ${
                     isCurrent
-                      ? 'bg-white text-stone-900 shadow-sm'
-                      : 'text-stone-600 hover:text-stone-900'
+                      ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                   }`}
                 >
                   {item.done && !isCurrent && (
-                    <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    <Check className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                   )}
                   <span className="truncate">{item.shortLabel}</span>
                 </button>
@@ -847,7 +847,7 @@ export function StoryComposerModal({
             <div className="space-y-5">
               {/* Format Selector */}
               <div className="space-y-2">
-                <span className="block text-xs uppercase tracking-widest text-stone-500">
+                <span className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                   Quel format souhaitez-vous écrire ?
                 </span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -870,17 +870,17 @@ export function StoryComposerModal({
                         }}
                         className={`text-left p-3.5 rounded-md border transition-colors ${
                           active
-                            ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
-                            : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                            ? 'bg-white dark:bg-stone-900 border-[#1B365D] dark:border-[#93B4E2] ring-1 ring-[#1B365D] dark:ring-[#93B4E2]'
+                            : 'bg-white/70 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-600'
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
                           <Icon
-                            className={`w-4 h-4 ${active ? 'text-[#1B365D]' : 'text-stone-500'}`}
+                            className={`w-4 h-4 ${active ? 'text-[#1B365D] dark:text-[#93B4E2]' : 'text-stone-500 dark:text-stone-400'}`}
                           />
-                          <span className="text-sm font-semibold text-stone-900">{meta.label}</span>
+                          <span className="text-sm font-semibold text-stone-900 dark:text-stone-100">{meta.label}</span>
                         </div>
-                        <p className="text-xs text-stone-600 leading-relaxed">{meta.description}</p>
+                        <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">{meta.description}</p>
                       </button>
                     );
                   })}
@@ -889,12 +889,12 @@ export function StoryComposerModal({
 
               {/* Existing Novels Toggle */}
               {!editingStory && storyFormat === 'roman' && myNovels.length > 0 && (
-                <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-stone-700">
+                    <span className="text-xs font-medium text-stone-700 dark:text-stone-300">
                       Vous avez déjà {myNovels.length} roman{myNovels.length > 1 ? 's' : ''} :
                     </span>
-                    <div className="grid grid-cols-2 gap-1 p-1 bg-stone-100 rounded-md">
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-stone-100 dark:bg-stone-800 rounded-md">
                       <button
                         type="button"
                         onClick={() => {
@@ -903,8 +903,8 @@ export function StoryComposerModal({
                         }}
                         className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded transition-colors inline-flex items-center justify-center gap-1.5 ${
                           romanMode === 'new'
-                            ? 'bg-white text-stone-900 shadow-sm'
-                            : 'text-stone-600 hover:text-stone-900'
+                            ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                            : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -924,8 +924,8 @@ export function StoryComposerModal({
                         }}
                         className={`min-h-[34px] px-3 py-1 text-xs font-medium rounded transition-colors inline-flex items-center justify-center gap-1.5 ${
                           romanMode === 'append'
-                            ? 'bg-white text-stone-900 shadow-sm'
-                            : 'text-stone-600 hover:text-stone-900'
+                            ? 'bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-sm'
+                            : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                         }`}
                       >
                         <BookOpen className="w-3.5 h-3.5" />
@@ -936,7 +936,7 @@ export function StoryComposerModal({
 
                   {romanMode === 'append' && (
                     <div className="space-y-2 pt-1">
-                      <span className="block text-xs text-stone-600">
+                      <span className="block text-xs text-stone-600 dark:text-stone-400">
                         Choisissez le roman à poursuivre :
                       </span>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -959,8 +959,8 @@ export function StoryComposerModal({
                               }}
                               className={`text-left p-2.5 rounded-md border flex items-center gap-3 transition-colors ${
                                 active
-                                  ? 'bg-[#F3F6FA] border-[#1B365D] ring-1 ring-[#1B365D]'
-                                  : 'bg-[#FBF9F5] border-stone-200 hover:border-stone-400'
+                                  ? 'bg-[#F3F6FA] dark:bg-[#1B365D]/25 border-[#1B365D] dark:border-[#93B4E2] ring-1 ring-[#1B365D] dark:ring-[#93B4E2]'
+                                  : 'bg-[#FBF9F5] dark:bg-stone-950 border-stone-200 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-600'
                               }`}
                             >
                               <NovelCoverArt
@@ -971,10 +971,10 @@ export function StoryComposerModal({
                                 showFallbackWhenMissing={true}
                               />
                               <div className="min-w-0 flex-1 space-y-0.5">
-                                <p className="font-display text-sm font-medium text-stone-900 truncate">
+                                <p className="font-display text-sm font-medium text-stone-900 dark:text-stone-100 truncate">
                                   {novel.title}
                                 </p>
-                                <p className="text-[11px] text-stone-600 truncate tabular-nums">
+                                <p className="text-[11px] text-stone-600 dark:text-stone-400 truncate tabular-nums">
                                   {novel.chapterCount ?? 1} chap. · {statusLabel}
                                   {genreLabel ? ` · ${genreLabel}` : ''}
                                 </p>
@@ -991,16 +991,16 @@ export function StoryComposerModal({
               {/* Destination Selector (for new story / editing) */}
               {!isAppendMode && (
                 <div className="space-y-3">
-                  <span className="block text-xs uppercase tracking-widest text-stone-500">
+                  <span className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                     Où publier cette histoire ?
                   </span>
 
                   {editingStory?.customSalonId ? (
-                    <div className="px-4 py-3 bg-white border border-stone-200 rounded-md text-xs text-stone-700 flex items-center gap-2">
+                    <div className="px-4 py-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md text-xs text-stone-700 dark:text-stone-300 flex items-center gap-2">
                       {editingStory.customSalonVisibility === 'private' ? (
-                        <Lock className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                        <Lock className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2] shrink-0" />
                       ) : (
-                        <Globe className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                        <Globe className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2] shrink-0" />
                       )}
                       <span>
                         Salon communautaire : <strong>{editingStory.customSalonName}</strong>
@@ -1014,7 +1014,7 @@ export function StoryComposerModal({
                       return (
                         <div
                           style={{ backgroundColor: pal.softBg, borderColor: pal.borderTint }}
-                          className="p-4 border rounded-md flex items-center justify-between gap-4"
+                          className="p-4 border rounded-md flex items-center justify-between gap-4 dark:brightness-95"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {selectedCustomSalon.avatarUrl && (
@@ -1044,7 +1044,7 @@ export function StoryComposerModal({
                                 </p>
                                 <MatureContentBadge minAge={selectedCustomSalon.minAge} compact />
                               </div>
-                              <p className="font-display text-lg font-medium text-stone-900 truncate">
+                              <p className="font-display text-lg font-medium text-stone-900 dark:text-stone-100 truncate">
                                 {selectedCustomSalon.name}
                               </p>
                             </div>
@@ -1052,7 +1052,7 @@ export function StoryComposerModal({
                           <button
                             type="button"
                             onClick={() => setShowDestinationPicker(true)}
-                            className="text-xs font-medium text-stone-700 hover:underline shrink-0"
+                            className="text-xs font-medium text-stone-700 dark:text-stone-300 hover:underline shrink-0"
                           >
                             Changer
                           </button>
@@ -1072,23 +1072,23 @@ export function StoryComposerModal({
                           }}
                           className={`text-left p-3.5 rounded-md border transition-colors ${
                             storyScope === 'salon' || Boolean(selectedCustomSalonId)
-                              ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
-                              : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                              ? 'bg-white dark:bg-stone-900 border-[#1B365D] dark:border-[#93B4E2] ring-1 ring-[#1B365D] dark:ring-[#93B4E2]'
+                              : 'bg-white/70 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-600'
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-0.5">
                             <Globe
                               className={`w-4 h-4 ${
                                 storyScope === 'salon' || Boolean(selectedCustomSalonId)
-                                  ? 'text-[#1B365D]'
-                                  : 'text-stone-500'
+                                  ? 'text-[#1B365D] dark:text-[#93B4E2]'
+                                  : 'text-stone-500 dark:text-stone-400'
                               }`}
                             />
-                            <span className="text-xs font-semibold text-stone-900">
+                            <span className="text-xs font-semibold text-stone-900 dark:text-stone-100">
                               Dans un salon thématique
                             </span>
                           </div>
-                          <p className="text-xs text-stone-600">
+                          <p className="text-xs text-stone-600 dark:text-stone-400">
                             Publier dans l’un des 6 salons Lisière ou un salon communautaire.
                           </p>
                         </button>
@@ -1104,33 +1104,33 @@ export function StoryComposerModal({
                           }}
                           className={`text-left p-3.5 rounded-md border transition-colors ${
                             storyScope === 'pelemele' && !selectedCustomSalonId
-                              ? 'bg-white border-[#1B365D] ring-1 ring-[#1B365D]'
-                              : 'bg-white/70 border-stone-200 hover:border-stone-400'
+                              ? 'bg-white dark:bg-stone-900 border-[#1B365D] dark:border-[#93B4E2] ring-1 ring-[#1B365D] dark:ring-[#93B4E2]'
+                              : 'bg-white/70 dark:bg-stone-900/60 border-stone-200 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-600'
                           }`}
                         >
                           <div className="flex items-center gap-2 mb-0.5">
                             <Compass
                               className={`w-4 h-4 ${
                                 storyScope === 'pelemele' && !selectedCustomSalonId
-                                  ? 'text-[#1B365D]'
-                                  : 'text-stone-500'
+                                  ? 'text-[#1B365D] dark:text-[#93B4E2]'
+                                  : 'text-stone-500 dark:text-stone-400'
                               }`}
                             />
-                            <span className="text-xs font-semibold text-stone-900">
+                            <span className="text-xs font-semibold text-stone-900 dark:text-stone-100">
                               Hors salon (Pêle-mêle)
                             </span>
                           </div>
-                          <p className="text-xs text-stone-600">
+                          <p className="text-xs text-stone-600 dark:text-stone-400">
                             Visible directement dans la bibliothèque ouverte pour tous.
                           </p>
                         </button>
                       </div>
 
                       {(storyScope === 'salon' || Boolean(selectedCustomSalonId)) && (
-                        <div className="space-y-3 bg-white border border-stone-200 rounded-md p-3.5">
+                        <div className="space-y-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-3.5">
                           {!selectedCustomSalonId && (
                             <div className="space-y-2">
-                              <span className="block text-xs font-medium text-stone-700">
+                              <span className="block text-xs font-medium text-stone-700 dark:text-stone-300">
                                 Choisissez le salon :
                               </span>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1155,7 +1155,7 @@ export function StoryComposerModal({
                                       className={`text-left px-3 py-2 rounded-md border transition-colors flex items-center justify-between gap-2 ${
                                         active
                                           ? ''
-                                          : 'bg-[#FBF9F5] text-stone-800 hover:bg-stone-50'
+                                          : 'bg-[#FBF9F5] dark:bg-stone-950 text-stone-800 dark:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800'
                                       }`}
                                     >
                                       <span className="text-xs font-semibold truncate">
@@ -1163,7 +1163,7 @@ export function StoryComposerModal({
                                       </span>
                                       <span
                                         className={`text-[11px] truncate ${
-                                          active ? 'text-white/80' : 'text-stone-500'
+                                          active ? 'text-white/80' : 'text-stone-500 dark:text-stone-400'
                                         }`}
                                       >
                                         {item.atmosphere}
@@ -1176,10 +1176,10 @@ export function StoryComposerModal({
                           )}
 
                           {!editingStory && selectableCustomSalons.length > 0 && (
-                            <div className="pt-2 border-t border-stone-100 space-y-1.5">
+                            <div className="pt-2 border-t border-stone-100 dark:border-stone-800 space-y-1.5">
                               <label
                                 htmlFor="custom-salon-select"
-                                className="block text-xs font-medium text-stone-700"
+                                className="block text-xs font-medium text-stone-700 dark:text-stone-300"
                               >
                                 Ou un salon de la communauté (optionnel)
                               </label>
@@ -1187,7 +1187,7 @@ export function StoryComposerModal({
                                 id="custom-salon-select"
                                 value={selectedCustomSalonId ?? ''}
                                 onChange={(e) => handleCustomSalonSelect(e.target.value)}
-                                className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                                className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                               >
                                 <option value="">
                                   — Utiliser le salon Lisière sélectionné ci-dessus —
@@ -1212,12 +1212,12 @@ export function StoryComposerModal({
               {/* Roman Genre, Cadence, Status & Cover Art */}
               {!isAppendMode && storyFormat === 'roman' && (
                 <div className="space-y-4">
-                  <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-3">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                       <div>
                         <label
                           htmlFor="roman-genre"
-                          className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                          className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1.5"
                         >
                           Type de roman *
                         </label>
@@ -1226,10 +1226,10 @@ export function StoryComposerModal({
                           required
                           value={novelGenre}
                           onChange={(e) => setNovelGenre(e.target.value as StrictNovelGenre | '')}
-                          className={`w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D] ${
+                          className={`w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2] ${
                             !isStrictNovelGenre(novelGenre)
-                              ? 'border-[#1B365D]/60'
-                              : 'border-stone-200'
+                              ? 'border-[#1B365D]/60 dark:border-[#93B4E2]/60'
+                              : 'border-stone-200 dark:border-stone-700'
                           }`}
                         >
                           <option value="">— Choisir un genre précis —</option>
@@ -1244,7 +1244,7 @@ export function StoryComposerModal({
                       <div>
                         <label
                           htmlFor="roman-cadence"
-                          className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                          className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1.5"
                         >
                           Rythme
                         </label>
@@ -1252,7 +1252,7 @@ export function StoryComposerModal({
                           id="roman-cadence"
                           value={releaseCadence}
                           onChange={(e) => setReleaseCadence(e.target.value as ReleaseCadence)}
-                          className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                          className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                         >
                           {(['hebdomadaire', 'bihebdomadaire', 'libre'] as ReleaseCadence[]).map(
                             (cad) => (
@@ -1267,7 +1267,7 @@ export function StoryComposerModal({
                       <div>
                         <label
                           htmlFor="roman-status"
-                          className="block text-xs uppercase tracking-widest text-stone-500 mb-1.5"
+                          className="block text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1.5"
                         >
                           Statut
                         </label>
@@ -1275,7 +1275,7 @@ export function StoryComposerModal({
                           id="roman-status"
                           value={seriesStatus}
                           onChange={(e) => setSeriesStatus(e.target.value as SeriesStatus)}
-                          className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                          className="w-full min-h-[38px] px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                         >
                           {(['en-cours', 'termine'] as SeriesStatus[]).map((st) => (
                             <option key={st} value={st}>
@@ -1286,16 +1286,16 @@ export function StoryComposerModal({
                       </div>
                     </div>
 
-                    <p className="text-xs text-stone-600 pt-1 border-t border-stone-100">
+                    <p className="text-xs text-stone-600 dark:text-stone-400 pt-1 border-t border-stone-100 dark:border-stone-800">
                       {isStrictNovelGenre(novelGenre) ? (
                         <>
-                          <span className="font-medium text-[#1B365D]">
+                          <span className="font-medium text-[#1B365D] dark:text-[#93B4E2]">
                             {NOVEL_GENRE_LABELS[novelGenre]} :
                           </span>{' '}
                           {NOVEL_GENRE_DESCRIPTIONS[novelGenre]}
                         </>
                       ) : (
-                        <span className="text-[#1B365D] font-medium">
+                        <span className="text-[#1B365D] dark:text-[#93B4E2] font-medium">
                           Catégorisation stricte : sélectionnez obligatoirement le type exact de ce roman pour le classer dans le bon rayon.
                         </span>
                       )}
@@ -1303,15 +1303,15 @@ export function StoryComposerModal({
                   </div>
 
                   {/* Collapsible Novel Cover Image Picker */}
-                  <div className="bg-white border border-stone-200 rounded-md overflow-hidden">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md overflow-hidden">
                     <button
                       type="button"
                       aria-expanded={showCoverPicker}
                       onClick={() => setShowCoverPicker((prev) => !prev)}
-                      className="w-full px-4 py-3 text-left flex items-center justify-between gap-3 hover:bg-[#FBF9F5] transition-colors"
+                      className="w-full px-4 py-3 text-left flex items-center justify-between gap-3 hover:bg-[#FBF9F5] dark:hover:bg-stone-800/60 transition-colors"
                     >
-                      <span className="text-xs font-medium text-stone-800 inline-flex items-center gap-2">
-                        <ImagePlus className="w-4 h-4 text-[#1B365D]" />
+                      <span className="text-xs font-medium text-stone-800 dark:text-stone-200 inline-flex items-center gap-2">
+                        <ImagePlus className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2]" />
                         <span>
                           {coverUrl
                             ? 'Couverture ajoutée (cliquer pour modifier)'
@@ -1319,14 +1319,14 @@ export function StoryComposerModal({
                         </span>
                       </span>
                       <ChevronDown
-                        className={`w-4 h-4 text-stone-500 transition-transform duration-200 ${
+                        className={`w-4 h-4 text-stone-500 dark:text-stone-400 transition-transform duration-200 ${
                           showCoverPicker ? 'rotate-180' : ''
                         }`}
                       />
                     </button>
 
                     {showCoverPicker && (
-                      <div className="px-4 pb-4 pt-2 border-t border-stone-100 flex flex-col sm:flex-row items-start gap-4">
+                      <div className="px-4 pb-4 pt-2 border-t border-stone-100 dark:border-stone-800 flex flex-col sm:flex-row items-start gap-4">
                         <NovelCoverArt
                           coverUrl={coverUrl}
                           title={title || 'Nouveau roman'}
@@ -1347,7 +1347,7 @@ export function StoryComposerModal({
                               type="button"
                               disabled={coverUploadBusy}
                               onClick={() => coverFileInputRef.current?.click()}
-                              className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] bg-[#F3F6FA] border border-[#CBD6E6] rounded-md hover:border-[#1B365D] disabled:opacity-60 inline-flex items-center gap-1.5 whitespace-nowrap"
+                              className="min-h-[36px] px-3.5 py-1.5 text-xs font-medium text-[#1B365D] dark:text-[#93B4E2] bg-[#F3F6FA] dark:bg-stone-800 border border-[#CBD6E6] dark:border-stone-700 rounded-md hover:border-[#1B365D] dark:hover:border-[#93B4E2] disabled:opacity-60 inline-flex items-center gap-1.5 whitespace-nowrap"
                             >
                               <ImagePlus className="w-3.5 h-3.5" />
                               <span>
@@ -1366,7 +1366,7 @@ export function StoryComposerModal({
                                   setCoverUrl('');
                                   setCoverError(null);
                                 }}
-                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
+                                className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1.5 whitespace-nowrap"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 <span>Retirer</span>
@@ -1386,11 +1386,11 @@ export function StoryComposerModal({
                                 ? 'Image importée depuis votre appareil'
                                 : 'Ou collez une URL d’image (https://…)'
                             }
-                            className="w-full px-3 py-1.5 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                            className="w-full px-3 py-1.5 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                           />
 
                           {coverError && (
-                            <p role="alert" className="text-xs text-red-700">
+                            <p role="alert" className="text-xs text-red-700 dark:text-red-400">
                               {coverError}
                             </p>
                           )}
@@ -1407,11 +1407,11 @@ export function StoryComposerModal({
           {step === 2 && (
             <div className="space-y-4">
               {/* Compact Context Banner */}
-              <div className="bg-white border border-stone-200 rounded-md px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-stone-700 min-w-0">
-                  <span className="text-stone-500">Destination : </span>
-                  <strong className="text-stone-900">{destinationSummaryLabel}</strong>
-                  <span className="text-stone-400 mx-1.5">·</span>
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-stone-700 dark:text-stone-300 min-w-0">
+                  <span className="text-stone-500 dark:text-stone-400">Destination : </span>
+                  <strong className="text-stone-900 dark:text-stone-100">{destinationSummaryLabel}</strong>
+                  <span className="text-stone-400 dark:text-stone-500 mx-1.5">·</span>
                   <span>
                     {storyFormat === 'roman'
                       ? isAppendMode
@@ -1425,7 +1425,7 @@ export function StoryComposerModal({
                 <button
                   type="button"
                   onClick={() => handleGoToStep(1)}
-                  className="text-xs font-medium text-[#1E3A8A] hover:underline whitespace-nowrap shrink-0"
+                  className="text-xs font-medium text-[#1E3A8A] dark:text-[#93B4E2] hover:underline whitespace-nowrap shrink-0"
                 >
                   Modifier le cadre
                 </button>
@@ -1433,19 +1433,19 @@ export function StoryComposerModal({
 
               {isAppendMode && selectedNovel ? (
                 <div className="space-y-4">
-                  <div className="bg-white border border-stone-200 rounded-md p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <p className="text-xs uppercase tracking-widest text-stone-500">
+                      <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                         Prochain chapitre
                       </p>
-                      <p className="font-display text-lg font-medium text-stone-900">
+                      <p className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
                         Chapitre {(selectedNovel.chapterCount ?? 1) + 1} · {selectedNovel.title}
                       </p>
                     </div>
                     <div className="sm:w-52">
                       <label
                         htmlFor="append-roman-status"
-                        className="block text-[11px] uppercase tracking-widest text-stone-500 mb-1"
+                        className="block text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-1"
                       >
                         Statut après publication
                       </label>
@@ -1453,7 +1453,7 @@ export function StoryComposerModal({
                         id="append-roman-status"
                         value={appendSeriesStatus}
                         onChange={(e) => setAppendSeriesStatus(e.target.value as SeriesStatus)}
-                        className="w-full min-h-[36px] px-3 py-1 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-900 focus:outline-none focus:border-[#1B365D]"
+                        className="w-full min-h-[36px] px-3 py-1 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-900 dark:text-stone-100 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                       >
                         {(['en-cours', 'termine'] as SeriesStatus[]).map((st) => (
                           <option key={st} value={st}>
@@ -1466,10 +1466,10 @@ export function StoryComposerModal({
 
                   <div>
                     <div className="flex items-baseline justify-between mb-1.5">
-                      <label htmlFor="append-chap-title" className="text-sm font-medium text-stone-800">
+                      <label htmlFor="append-chap-title" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                         Titre du chapitre {(selectedNovel.chapterCount ?? 1) + 1}
                       </label>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {chapterTitle.length}/{FIELD_LIMITS.chapterTitle.max}
                       </span>
                     </div>
@@ -1480,16 +1480,16 @@ export function StoryComposerModal({
                       value={chapterTitle}
                       onChange={(e) => setChapterTitle(e.target.value)}
                       placeholder="Ex. La gare du matin…"
-                      className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-md font-display text-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                      className="w-full px-4 py-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md font-display text-lg text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                     />
                   </div>
 
                   <div>
                     <div className="flex items-baseline justify-between mb-1.5">
-                      <label htmlFor="append-chap-content" className="text-sm font-medium text-stone-800">
+                      <label htmlFor="append-chap-content" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                         Texte du chapitre
                       </label>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {chapterContent.length}/{FIELD_LIMITS.chapterContent.max} · {readingMinutes} min
                       </span>
                     </div>
@@ -1500,13 +1500,13 @@ export function StoryComposerModal({
                       value={chapterContent}
                       onChange={(e) => setChapterContent(e.target.value)}
                       placeholder="Poursuivez le fil de votre roman (minimum 2 pages / 3 000 caractères)…"
-                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-md text-base leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                      className="w-full px-4 py-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-base leading-relaxed text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                     />
                     <div
                       className={`mt-2 px-3 py-2 rounded-md border text-xs flex flex-wrap items-center justify-between gap-2 ${
                         novelLengthEval.ok
-                          ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                          : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                          ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/70 text-emerald-900 dark:text-emerald-200'
+                          : 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-200'
                       }`}
                     >
                       <span className="font-medium">
@@ -1524,10 +1524,10 @@ export function StoryComposerModal({
 
                   <div>
                     <div className="flex items-baseline justify-between mb-1.5">
-                      <label htmlFor="append-chap-note" className="text-sm font-medium text-stone-800">
+                      <label htmlFor="append-chap-note" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                         Mot de fin pour les lecteurs (facultatif)
                       </label>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {chapterNote.length}/{FIELD_LIMITS.chapterNote.max}
                       </span>
                     </div>
@@ -1538,7 +1538,7 @@ export function StoryComposerModal({
                       value={chapterNote}
                       onChange={(e) => setChapterNote(e.target.value)}
                       placeholder="Ex. Rendez-vous la semaine prochaine pour la suite."
-                      className="w-full px-4 py-2 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                      className="w-full px-4 py-2 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                     />
                   </div>
                 </div>
@@ -1546,10 +1546,10 @@ export function StoryComposerModal({
                 <div className="space-y-4">
                   <div>
                     <div className="flex items-baseline justify-between mb-1.5">
-                      <label htmlFor="story-title" className="text-sm font-medium text-stone-800">
+                      <label htmlFor="story-title" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                         {storyFormat === 'roman' ? 'Titre du roman' : 'Titre de la confession'}
                       </label>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {title.length}/{FIELD_LIMITS.title.max}
                       </span>
                     </div>
@@ -1564,18 +1564,18 @@ export function StoryComposerModal({
                           ? 'Ex. Les Lettres de novembre…'
                           : 'Un titre simple et sincère…'
                       }
-                      className="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-md font-display text-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+                      className="w-full px-4 py-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md font-display text-lg text-stone-900 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#93B4E2]"
                     />
                   </div>
 
                   <div>
                     <div className="flex items-baseline justify-between mb-1.5">
-                      <label htmlFor="story-content" className="text-sm font-medium text-stone-800">
+                      <label htmlFor="story-content" className="text-sm font-medium text-stone-800 dark:text-stone-200">
                         {storyFormat === 'roman'
                           ? 'Chapitre 1 — Ouverture du roman'
                           : 'Votre texte'}
                       </label>
-                      <span className="text-xs text-stone-500 tabular-nums">
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                         {content.length}/{FIELD_LIMITS.content.max} · {readingMinutes} min
                       </span>
                     </div>
@@ -1590,14 +1590,14 @@ export function StoryComposerModal({
                           ? 'Écrivez le premier chapitre de votre roman (minimum 2 pages / 3 000 caractères)…'
                           : 'Écrivez librement votre histoire, votre souvenir ou votre question (plus de 3 lignes)…'
                       }
-                      className="w-full px-4 py-3 bg-white border border-stone-200 rounded-md text-base leading-relaxed text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A]"
+                      className="w-full px-4 py-3 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-base leading-relaxed text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#93B4E2]"
                     />
                     {storyFormat === 'roman' ? (
                       <div
                         className={`mt-2 px-3 py-2 rounded-md border text-xs flex flex-wrap items-center justify-between gap-2 ${
                           novelLengthEval.ok
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                            : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/70 text-emerald-900 dark:text-emerald-200'
+                            : 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-200'
                         }`}
                       >
                         <span className="font-medium">
@@ -1615,8 +1615,8 @@ export function StoryComposerModal({
                       <div
                         className={`mt-2 px-3 py-2 rounded-md border text-xs flex flex-wrap items-center justify-between gap-2 ${
                           confessionLengthEval.ok
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                            : 'bg-amber-50/70 border-amber-200 text-amber-900'
+                            ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/70 text-emerald-900 dark:text-emerald-200'
+                            : 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-200'
                         }`}
                       >
                         <span className="font-medium">
@@ -1633,16 +1633,16 @@ export function StoryComposerModal({
                   </div>
 
                   {/* Collapsible Optional Prompt & Excerpt Drawer */}
-                  <div className="bg-white border border-stone-200 rounded-md overflow-hidden">
+                  <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md overflow-hidden">
                     <div className="px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
                       <button
                         type="button"
                         aria-expanded={showWritingExtras}
                         onClick={() => setShowWritingExtras((prev) => !prev)}
-                        className="text-xs font-medium text-stone-700 hover:text-stone-900 inline-flex items-center gap-1.5"
+                        className="text-xs font-medium text-stone-700 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 inline-flex items-center gap-1.5"
                       >
                         <ChevronDown
-                          className={`w-4 h-4 text-stone-500 transition-transform duration-200 ${
+                          className={`w-4 h-4 text-stone-500 dark:text-stone-400 transition-transform duration-200 ${
                             showWritingExtras ? 'rotate-180' : ''
                           }`}
                         />
@@ -1653,7 +1653,7 @@ export function StoryComposerModal({
                         <button
                           type="button"
                           onClick={handleInsertStarter}
-                          className="text-xs font-medium text-[#1E3A8A] hover:underline whitespace-nowrap"
+                          className="text-xs font-medium text-[#1E3A8A] dark:text-[#93B4E2] hover:underline whitespace-nowrap"
                         >
                           + Phrase d’élan
                         </button>
@@ -1661,11 +1661,11 @@ export function StoryComposerModal({
                     </div>
 
                     {showWritingExtras && (
-                      <div className="px-4 pb-4 pt-3 border-t border-stone-100 space-y-3.5">
+                      <div className="px-4 pb-4 pt-3 border-t border-stone-100 dark:border-stone-800 space-y-3.5">
                         <div>
                           <label
                             htmlFor="story-prompt"
-                            className="block text-xs font-medium text-stone-700 mb-1"
+                            className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
                           >
                             Question d’amorce
                           </label>
@@ -1676,18 +1676,18 @@ export function StoryComposerModal({
                             value={promptQuestion}
                             onChange={(e) => setPromptQuestion(e.target.value)}
                             placeholder="Quelle question accompagne ce texte ?"
-                            className="w-full text-sm leading-relaxed text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md px-3 py-2 focus:outline-none focus:border-[#1E3A8A] placeholder:text-stone-400 resize-none"
+                            className="w-full text-sm leading-relaxed text-stone-800 dark:text-stone-100 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md px-3 py-2 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#93B4E2] placeholder:text-stone-400 dark:placeholder:text-stone-500 resize-none"
                           />
                         </div>
 
                         <div>
                           <div className="flex items-baseline justify-between mb-1">
-                            <label htmlFor="story-excerpt" className="text-xs font-medium text-stone-700">
+                            <label htmlFor="story-excerpt" className="text-xs font-medium text-stone-700 dark:text-stone-300">
                               {storyFormat === 'roman'
                                 ? 'Synopsis court'
                                 : 'Accroche dans le salon'}
                             </label>
-                            <span className="text-[11px] text-stone-500 tabular-nums">
+                            <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
                               {excerpt.length}/{FIELD_LIMITS.excerpt.max}
                             </span>
                           </div>
@@ -1698,7 +1698,7 @@ export function StoryComposerModal({
                             value={excerpt}
                             onChange={(e) => setExcerpt(e.target.value)}
                             placeholder="Laissé vide, les premières lignes seront utilisées."
-                            className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1E3A8A] resize-none"
+                            className="w-full px-3 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1E3A8A] dark:focus:border-[#93B4E2] resize-none"
                           />
                         </div>
                       </div>
@@ -1713,38 +1713,38 @@ export function StoryComposerModal({
           {step === 3 && (
             <div className="space-y-5">
               {/* Ready-to-publish recap card */}
-              <div className="bg-white border border-stone-200 rounded-md p-4 space-y-2">
-                <p className="text-[11px] uppercase tracking-widest text-stone-500">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-2">
+                <p className="text-[11px] uppercase tracking-widest text-stone-500 dark:text-stone-400">
                   Récapitulatif avant envoi
                 </p>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="font-display text-lg font-medium text-stone-900">
+                  <h3 className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
                     {activeTitleValue.trim() || 'Sans titre'}
                   </h3>
-                  <span className="text-xs text-stone-500 tabular-nums">
+                  <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                     {readingMinutes} min de lecture
                   </span>
                 </div>
-                <p className="text-xs text-stone-600">
-                  Publication dans : <strong>{destinationSummaryLabel}</strong>
+                <p className="text-xs text-stone-600 dark:text-stone-400">
+                  Publication dans : <strong className="text-stone-900 dark:text-stone-100">{destinationSummaryLabel}</strong>
                 </p>
               </div>
 
               {/* Anonymity Toggle */}
               {!isAppendMode && (
-                <div className="bg-white border border-stone-200 rounded-md p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2">
                       {isAnonymous ? (
-                        <EyeOff className="w-4 h-4 text-[#1B365D] shrink-0" />
+                        <EyeOff className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2] shrink-0" />
                       ) : (
-                        <UserIcon className="w-4 h-4 text-stone-500 shrink-0" />
+                        <UserIcon className="w-4 h-4 text-stone-500 dark:text-stone-400 shrink-0" />
                       )}
-                      <span className="text-sm font-medium text-stone-900">
+                      <span className="text-sm font-medium text-stone-900 dark:text-stone-100">
                         Publication anonyme ({storyFormat === 'roman' ? 'roman' : 'confession'})
                       </span>
                     </div>
-                    <p className="text-xs text-stone-600 leading-relaxed">
+                    <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
                       {isAnonymous
                         ? `Votre nom (${authorName}) est masqué sur la fiche et dans le salon : le récit s’affiche sous « Auteur anonyme ». Vous pourrez le revendiquer à tout moment depuis Mon carnet ou la lecture.`
                         : `Votre nom (${authorName}) sera affiché avec un lien vers votre mur personnel.`}
@@ -1759,8 +1759,8 @@ export function StoryComposerModal({
                     onClick={() => setIsAnonymous((prev) => !prev)}
                     className={`min-h-[40px] px-4 py-2 rounded-md border text-xs font-medium inline-flex items-center gap-2 transition-colors whitespace-nowrap shrink-0 self-start sm:self-center ${
                       isAnonymous
-                        ? 'bg-[#1B365D] text-white border-[#1B365D] hover:bg-[#132744]'
-                        : 'bg-[#FBF9F5] text-stone-800 border-stone-300 hover:border-stone-500'
+                        ? 'bg-[#1B365D] dark:bg-[#3B629B] text-white border-[#1B365D] dark:border-[#3B629B] hover:bg-[#132744] dark:hover:bg-[#2F5082]'
+                        : 'bg-[#FBF9F5] dark:bg-stone-950 text-stone-800 dark:text-stone-200 border-stone-300 dark:border-stone-700 hover:border-stone-500'
                     }`}
                   >
                     <EyeOff className="w-3.5 h-3.5" />
@@ -1771,18 +1771,18 @@ export function StoryComposerModal({
 
               {/* Age Classification & Mandatory Mature Warning */}
               {!isAppendMode && (
-                <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
-                      <span className="text-xs uppercase tracking-widest text-stone-600 font-semibold">
+                      <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
+                      <span className="text-xs uppercase tracking-widest text-stone-600 dark:text-stone-400 font-semibold">
                         Âge conseillé &amp; contenu mature
                       </span>
                     </div>
                     <MatureContentBadge minAge={minAge} isMature={isMature} />
                   </div>
 
-                  <p className="text-xs text-stone-600 leading-relaxed">
+                  <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
                     Permet de ne proposer ce récit qu’aux lecteurs ayant renseigné un âge compatible. Même lorsque l’âge correspond, un avertissement « Contenu mature » s’affiche avant la lecture si vous le signalez.
                   </p>
 
@@ -1801,12 +1801,12 @@ export function StoryComposerModal({
                           }}
                           className={`px-3 py-2 rounded-md border text-left transition-colors ${
                             active
-                              ? 'bg-[#F3F6FA] border-[#1B365D] ring-1 ring-[#1B365D]'
-                              : 'bg-[#FBF9F5] border-stone-200 hover:border-stone-400'
+                              ? 'bg-[#F3F6FA] dark:bg-[#1B365D]/30 border-[#1B365D] dark:border-[#93B4E2] ring-1 ring-[#1B365D] dark:ring-[#93B4E2]'
+                              : 'bg-[#FBF9F5] dark:bg-stone-950 border-stone-200 dark:border-stone-800 hover:border-stone-400 dark:hover:border-stone-600'
                           }`}
                         >
-                          <p className="text-xs font-semibold text-stone-900">{opt.shortLabel}</p>
-                          <p className="text-[11px] text-stone-500 line-clamp-2 mt-0.5">
+                          <p className="text-xs font-semibold text-stone-900 dark:text-stone-100">{opt.shortLabel}</p>
+                          <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-2 mt-0.5">
                             {opt.description}
                           </p>
                         </button>
@@ -1814,13 +1814,13 @@ export function StoryComposerModal({
                     })}
                   </div>
 
-                  <label className="flex items-start gap-2.5 text-xs text-stone-800 cursor-pointer pt-1">
+                  <label className="flex items-start gap-2.5 text-xs text-stone-800 dark:text-stone-200 cursor-pointer pt-1">
                     <input
                       type="checkbox"
                       checked={isMature || minAge >= 16}
                       disabled={minAge >= 16}
                       onChange={(e) => setIsMature(e.target.checked)}
-                      className="mt-0.5 rounded border-stone-300 text-[#1B365D] focus:ring-[#1B365D]"
+                      className="mt-0.5 rounded border-stone-300 dark:border-stone-600 text-[#1B365D] focus:ring-[#1B365D]"
                     />
                     <span className="leading-relaxed">
                       Afficher un avertissement <strong>« Contenu mature »</strong> avant l’ouverture du texte (thèmes sensibles, deuil, violence psychologique, sexualité ou langage cru).
@@ -1831,7 +1831,7 @@ export function StoryComposerModal({
                     <div>
                       <label
                         htmlFor="story-mature-reason"
-                        className="block text-xs font-medium text-stone-700 mb-1"
+                        className="block text-xs font-medium text-stone-700 dark:text-stone-300 mb-1"
                       >
                         Précision pour l’avertissement (facultatif)
                       </label>
@@ -1842,7 +1842,7 @@ export function StoryComposerModal({
                         value={matureReason}
                         onChange={(e) => setMatureReason(e.target.value)}
                         placeholder="Ex. Aborde la perte d’un proche, la solitude profonde ou des thèmes adultes…"
-                        className="w-full px-3 py-2 bg-[#FBF9F5] border border-stone-200 rounded-md text-xs text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                        className="w-full px-3 py-2 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 placeholder:text-stone-400 dark:placeholder:text-stone-500 focus:outline-none focus:border-[#1B365D] dark:focus:border-[#93B4E2]"
                       />
                     </div>
                   )}
@@ -1850,20 +1850,20 @@ export function StoryComposerModal({
               )}
 
               {/* Anti-Hate Charter & Automated Regulation Bot */}
-              <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-3">
                 <div className="flex items-start gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-[#1B365D] mt-0.5 shrink-0" />
+                  <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2] mt-0.5 shrink-0" />
                   <div className="space-y-1">
-                    <p className="text-xs uppercase tracking-widest text-[#1B365D] font-semibold">
+                    <p className="text-xs uppercase tracking-widest text-[#1B365D] dark:text-[#93B4E2] font-semibold">
                       Charte anti-haine &amp; bot de régulation Lisière
                     </p>
-                    <p className="text-xs text-stone-600 leading-relaxed">
+                    <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
                       Avant publication, votre texte est vérifié automatiquement par notre bot de régulation afin d’éviter tout propos haineux, offensant ou absurde :
                     </p>
                   </div>
                 </div>
 
-                <ul className="space-y-1 pl-6 text-xs text-stone-700 list-disc">
+                <ul className="space-y-1 pl-6 text-xs text-stone-700 dark:text-stone-300 list-disc">
                   {CONTENT_CHARTER_RULES.map((rule) => (
                     <li key={rule} className="leading-relaxed">
                       {rule}
@@ -1871,12 +1871,12 @@ export function StoryComposerModal({
                   ))}
                 </ul>
 
-                <label className="flex items-start gap-2.5 text-xs text-stone-800 cursor-pointer pt-1">
+                <label className="flex items-start gap-2.5 text-xs text-stone-800 dark:text-stone-200 cursor-pointer pt-1">
                   <input
                     type="checkbox"
                     checked={charterAttested}
                     onChange={(e) => setCharterAttested(e.target.checked)}
-                    className="mt-0.5 rounded border-stone-300 text-[#1B365D] focus:ring-[#1B365D]"
+                    className="mt-0.5 rounded border-stone-300 dark:border-stone-600 text-[#1B365D] focus:ring-[#1B365D]"
                   />
                   <span className="leading-relaxed">
                     Je m’engage à respecter la charte de Lisière : aucun propos haineux, discriminatoire ou offensant, et une écriture sincère et construite.
@@ -1886,14 +1886,14 @@ export function StoryComposerModal({
 
               {/* Anti-Plagiarism Policy (Romans Only) */}
               {storyFormat === 'roman' && (
-                <div className="bg-white border border-stone-200 rounded-md p-4 space-y-3">
+                <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-3">
                   <div className="flex items-start gap-2.5">
-                    <ShieldCheck className="w-4 h-4 text-[#1B365D] mt-0.5 shrink-0" />
+                    <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-[#93B4E2] mt-0.5 shrink-0" />
                     <div className="space-y-1">
-                      <p className="text-xs uppercase tracking-widest text-[#1B365D] font-semibold">
+                      <p className="text-xs uppercase tracking-widest text-[#1B365D] dark:text-[#93B4E2] font-semibold">
                         Politique anti-plagiat des romans
                       </p>
-                      <p className="text-xs text-stone-600 leading-relaxed">
+                      <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed">
                         Tout roman publié sur Lisière doit être une création originale dont vous détenez les droits. Toute copie d’une œuvre existante ou d’un autre auteur entraîne le retrait du texte.
                       </p>
                     </div>
@@ -1906,8 +1906,8 @@ export function StoryComposerModal({
                         role="status"
                         className={`rounded-md border px-3.5 py-2.5 text-xs flex items-start gap-2 ${
                           plagiarismCheck.isSuspicious
-                            ? 'bg-red-50 border-red-200 text-red-900'
-                            : 'bg-amber-50 border-amber-200 text-amber-900'
+                            ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-900/60 text-red-900 dark:text-red-200'
+                            : 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/70 text-amber-900 dark:text-amber-200'
                         }`}
                       >
                         <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -1919,12 +1919,12 @@ export function StoryComposerModal({
                       </div>
                     )}
 
-                  <label className="flex items-start gap-2.5 text-xs text-stone-800 cursor-pointer pt-1">
+                  <label className="flex items-start gap-2.5 text-xs text-stone-800 dark:text-stone-200 cursor-pointer pt-1">
                     <input
                       type="checkbox"
                       checked={plagiarismAttested}
                       onChange={(e) => setPlagiarismAttested(e.target.checked)}
-                      className="mt-0.5 rounded border-stone-300 text-[#1B365D] focus:ring-[#1B365D]"
+                      className="mt-0.5 rounded border-stone-300 dark:border-stone-600 text-[#1B365D] focus:ring-[#1B365D]"
                     />
                     <span className="leading-relaxed">
                       Je certifie sur l’honneur que {isAppendMode ? 'ce chapitre' : 'ce roman'} est une œuvre originale écrite par mes soins et respecte la charte anti-plagiat de Lisière.
@@ -1934,17 +1934,17 @@ export function StoryComposerModal({
               )}
 
               {/* Visibility */}
-              <div className="bg-white border border-stone-200 rounded-md p-4 space-y-2.5">
-                <p className="text-xs uppercase tracking-widest text-stone-500">
+              <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md p-4 space-y-2.5">
+                <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
                   Visibilité de la publication
                 </p>
                 {isAppendMode ? (
-                  <p className="text-xs text-stone-600">
-                    Ce chapitre sera ajouté immédiatement à <strong>{selectedNovel?.title}</strong>.
+                  <p className="text-xs text-stone-600 dark:text-stone-400">
+                    Ce chapitre sera ajouté immédiatement à <strong className="text-stone-900 dark:text-stone-100">{selectedNovel?.title}</strong>.
                   </p>
                 ) : isPrivateCustomSalon ? (
-                  <div className="inline-flex items-center gap-2 px-3 py-2 bg-stone-100 rounded-md text-xs text-stone-700">
-                    <Lock className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                  <div className="inline-flex items-center gap-2 px-3 py-2 bg-stone-100 dark:bg-stone-800 rounded-md text-xs text-stone-700 dark:text-stone-300">
+                    <Lock className="w-3.5 h-3.5 text-[#1B365D] dark:text-[#93B4E2] shrink-0" />
                     <span>
                       Salon privé : visible uniquement par les membres admis de ce salon.
                     </span>
@@ -1956,8 +1956,8 @@ export function StoryComposerModal({
                       onClick={() => setVisibility('public')}
                       className={`min-h-[42px] px-3.5 py-2 text-xs font-medium rounded-md border text-left transition-colors ${
                         visibility === 'public'
-                          ? 'bg-[#F3F6FA] border-[#1B365D] text-[#1B365D] ring-1 ring-[#1B365D]'
-                          : 'bg-[#FBF9F5] border-stone-200 text-stone-700 hover:border-stone-400'
+                          ? 'bg-[#F3F6FA] dark:bg-[#1B365D]/30 border-[#1B365D] dark:border-[#93B4E2] text-[#1B365D] dark:text-[#93B4E2] ring-1 ring-[#1B365D] dark:ring-[#93B4E2]'
+                          : 'bg-[#FBF9F5] dark:bg-stone-950 border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-stone-400 dark:hover:border-stone-600'
                       }`}
                     >
                       Partager dans le salon (public)
@@ -1967,8 +1967,8 @@ export function StoryComposerModal({
                       onClick={() => setVisibility('private')}
                       className={`min-h-[42px] px-3.5 py-2 text-xs font-medium rounded-md border text-left transition-colors ${
                         visibility === 'private'
-                          ? 'bg-[#F3F6FA] border-[#1B365D] text-[#1B365D] ring-1 ring-[#1B365D]'
-                          : 'bg-[#FBF9F5] border-stone-200 text-stone-700 hover:border-stone-400'
+                          ? 'bg-[#F3F6FA] dark:bg-[#1B365D]/30 border-[#1B365D] dark:border-[#93B4E2] text-[#1B365D] dark:text-[#93B4E2] ring-1 ring-[#1B365D] dark:ring-[#93B4E2]'
+                          : 'bg-[#FBF9F5] dark:bg-stone-950 border-stone-200 dark:border-stone-800 text-stone-700 dark:text-stone-300 hover:border-stone-400 dark:hover:border-stone-600'
                       }`}
                     >
                       Enregistrer en brouillon privé
@@ -1982,7 +1982,7 @@ export function StoryComposerModal({
           {error && (
             <p
               role="alert"
-              className="text-sm text-red-800 bg-red-50 border border-red-200 rounded-md px-4 py-2.5"
+              className="text-sm text-red-800 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-md px-4 py-2.5"
             >
               {error}
             </p>
@@ -1990,12 +1990,12 @@ export function StoryComposerModal({
         </div>
 
         {/* Sticky Bottom Footer Navigation */}
-        <div className="shrink-0 bg-white border-t border-stone-200 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <div className="shrink-0 bg-white dark:bg-stone-900 border-t border-stone-200 dark:border-stone-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
           {step === 1 ? (
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[40px] px-3.5 py-2 text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors whitespace-nowrap"
+              className="min-h-[40px] px-3.5 py-2 text-sm font-medium text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 transition-colors whitespace-nowrap"
             >
               Annuler
             </button>
@@ -2003,7 +2003,7 @@ export function StoryComposerModal({
             <button
               type="button"
               onClick={() => handleGoToStep((step - 1) as ComposerStep)}
-              className="min-h-[40px] px-3.5 py-2 text-sm font-medium text-stone-700 bg-stone-100 rounded-md hover:bg-stone-200 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"
+              className="min-h-[40px] px-3.5 py-2 text-sm font-medium text-stone-700 dark:text-stone-200 bg-stone-100 dark:bg-stone-800 rounded-md hover:bg-stone-200 dark:hover:bg-stone-700 transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Précédent</span>
@@ -2015,7 +2015,7 @@ export function StoryComposerModal({
               <button
                 type="button"
                 onClick={handleNextStep}
-                className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"
+                className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] dark:bg-[#3B629B] rounded-md hover:bg-[#172D6B] dark:hover:bg-[#2F5082] transition-colors inline-flex items-center gap-1.5 whitespace-nowrap"
               >
                 <span>{step === 1 ? 'Passer à l’écriture' : 'Options & publication'}</span>
                 <ArrowRight className="w-4 h-4" />
@@ -2024,7 +2024,7 @@ export function StoryComposerModal({
               <button
                 type="submit"
                 disabled={submitting}
-                className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] disabled:opacity-60 transition-colors whitespace-nowrap"
+                className="min-h-[40px] px-5 py-2 text-sm font-medium text-white bg-[#1E3A8A] dark:bg-[#3B629B] rounded-md hover:bg-[#172D6B] dark:hover:bg-[#2F5082] disabled:opacity-60 transition-colors whitespace-nowrap"
               >
                 {submitting
                   ? botCheckBusy

@@ -51,6 +51,7 @@ interface MembersDirectoryViewProps {
   onSelectMember: (userId: string | null) => void;
   onReadStory: (story: Story) => void;
   onOpenStoryById?: (storyId: string) => void;
+  onShareStory?: (story: Story) => void;
   onOpenExchange: (exchangeId: string) => void;
   onStartDirectChat: (member: PublicProfile) => void;
   onOpenReport?: (draft: ReportDraft) => void;
@@ -71,6 +72,7 @@ export function MembersDirectoryView({
   onSelectMember,
   onReadStory,
   onOpenStoryById,
+  onShareStory,
   onOpenExchange,
   onStartDirectChat,
   onOpenReport,
@@ -223,6 +225,7 @@ export function MembersDirectoryView({
         }
         onReadStory={onReadStory}
         onOpenStoryById={onOpenStoryById}
+        onShareStory={onShareStory}
         onOpenExchange={onOpenExchange}
         onOpenReport={onOpenReport}
       />
@@ -232,20 +235,20 @@ export function MembersDirectoryView({
   if (!user) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-16">
-        <div className="bg-white border border-stone-200 rounded-lg p-8 sm:p-10">
-          <p className="text-xs uppercase tracking-widest text-stone-500 mb-3">
+        <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-8 sm:p-10">
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400 mb-3">
             Profils · Murs & affinités
           </p>
-          <h1 className="font-display text-3xl font-medium text-stone-900 mb-3">
+          <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100 mb-3">
             Découvrir les profils par leurs musiques, photos et lectures
           </h1>
-          <p className="text-base text-stone-600 leading-relaxed mb-6">
+          <p className="text-base text-stone-600 dark:text-stone-400 leading-relaxed mb-6">
             Chaque membre dispose d’une page de profil dédiée où partager ses photos, sa musique préférée, ses romans et ses histoires repartagées. Connectez-vous pour visiter les profils ou composer le vôtre.
           </p>
           <button
             type="button"
             onClick={signInWithGoogle}
-            className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1B365D] rounded-md hover:bg-[#132744] transition-colors whitespace-nowrap"
+            className="min-h-[44px] px-5 py-2.5 text-sm font-medium text-white bg-[#1B365D] dark:bg-amber-600 rounded-md hover:bg-[#132744] dark:hover:bg-amber-500 transition-colors whitespace-nowrap"
           >
             Se connecter avec Google
           </button>
@@ -257,19 +260,19 @@ export function MembersDirectoryView({
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 sm:py-10 space-y-8">
       {/* Dedicated Profiles Page Header + Clean Navigation Tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 pb-6 border-b border-stone-200">
+      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 pb-6 border-b border-stone-200 dark:border-stone-800">
         <div className="space-y-2 max-w-2xl">
-          <p className="text-xs uppercase tracking-widest text-stone-500">
+          <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
             Espace Profils · Communauté & mur personnel
           </p>
-          <h1 className="font-display text-3xl sm:text-4xl font-medium text-stone-900">
+          <h1 className="font-display text-3xl sm:text-4xl font-medium text-stone-900 dark:text-stone-100">
             {subTab === 'my-profile'
               ? 'Mon profil'
               : subTab === 'edit-profile'
                 ? 'Paramètres du profil'
                 : 'Profils de la communauté'}
           </h1>
-          <p className="text-sm text-stone-600 leading-relaxed">
+          <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
             {subTab === 'my-profile'
               ? 'Votre page personnelle avec vos photos, votre musique, vos récits et vos repartages.'
               : subTab === 'edit-profile'
@@ -281,7 +284,7 @@ export function MembersDirectoryView({
         <div
           role="tablist"
           aria-label="Navigation de l’espace profils"
-          className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 rounded-lg w-fit shrink-0"
+          className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 border border-transparent dark:border-stone-800 rounded-lg w-fit shrink-0"
         >
           {(
             [
@@ -301,8 +304,8 @@ export function MembersDirectoryView({
                 onClick={() => setSubTab(tab.id)}
                 className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   active
-                    ? 'bg-white text-stone-900 shadow-sm'
-                    : 'text-stone-600 hover:text-stone-900'
+                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
+                    : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
                 }`}
               >
                 <Icon className="w-3.5 h-3.5" />
@@ -318,7 +321,7 @@ export function MembersDirectoryView({
         <div className="space-y-6">
           <div className="space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <p className="text-xs text-stone-500 tabular-nums">
+              <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                 {filteredProfiles.length} profil{filteredProfiles.length > 1 ? 's' : ''} public
                 {filteredProfiles.length > 1 ? 's' : ''}
               </p>
@@ -330,7 +333,7 @@ export function MembersDirectoryView({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Chercher un nom, badge, musique, livre…"
                   aria-label="Rechercher un profil"
-                  className="w-full min-h-[40px] pl-9 pr-3 py-1.5 bg-white border border-stone-200 rounded-md text-sm text-stone-800 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D]"
+                  className="w-full min-h-[40px] pl-9 pr-3 py-1.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md text-sm text-stone-800 dark:text-stone-100 placeholder:text-stone-400 focus:outline-none focus:border-[#1B365D] dark:focus:border-amber-400"
                 />
               </div>
             </div>
@@ -342,8 +345,8 @@ export function MembersDirectoryView({
                   onClick={() => setBadgeFilter('all')}
                   className={`min-h-[30px] px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
                     badgeFilter === 'all'
-                      ? 'bg-[#1B365D] text-white border-[#1B365D]'
-                      : 'bg-white text-stone-700 border-stone-200 hover:border-stone-400'
+                      ? 'bg-[#1B365D] dark:bg-amber-600 text-white border-[#1B365D] dark:border-amber-600'
+                      : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400'
                   }`}
                 >
                   Tous les membres
@@ -358,8 +361,8 @@ export function MembersDirectoryView({
                       aria-pressed={active}
                       className={`min-h-[30px] px-2 py-1 rounded-md border transition-colors inline-flex items-center gap-1 ${
                         active
-                          ? 'border-[#1B365D] bg-[#F3F6FA] ring-1 ring-[#1B365D]/30'
-                          : 'border-stone-200 bg-white hover:border-stone-400'
+                          ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 ring-1 ring-[#1B365D]/30 dark:ring-amber-400/30'
+                          : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-stone-400'
                       }`}
                     >
                       <ProfileBadgeChip badgeId={def.id} compact />
@@ -371,13 +374,13 @@ export function MembersDirectoryView({
           </div>
 
           {!profilesLoaded ? (
-            <div className="py-12 text-center text-sm text-stone-500">
+            <div className="py-12 text-center text-sm text-stone-500 dark:text-stone-400">
               Chargement des profils de la communauté…
             </div>
           ) : filteredProfiles.length === 0 ? (
-            <div className="bg-white border border-stone-200 rounded-lg p-10 text-center space-y-3">
+            <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-10 text-center space-y-3">
               <Users className="w-8 h-8 text-stone-400 mx-auto" />
-              <p className="font-display text-xl text-stone-900">
+              <p className="font-display text-xl text-stone-900 dark:text-stone-100">
                 Aucun profil ne correspond à cette recherche
               </p>
               {(searchQuery || badgeFilter !== 'all') && (
@@ -387,7 +390,7 @@ export function MembersDirectoryView({
                     setSearchQuery('');
                     setBadgeFilter('all');
                   }}
-                  className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 border border-stone-300 rounded-md hover:border-stone-500"
+                  className="min-h-[38px] px-4 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 border border-stone-300 dark:border-stone-700 rounded-md hover:border-stone-500"
                 >
                   Afficher tous les profils
                 </button>
@@ -401,7 +404,7 @@ export function MembersDirectoryView({
                 return (
                   <article
                     key={member.userId}
-                    className="bg-white border border-stone-200 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                    className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 flex flex-col justify-between space-y-5"
                   >
                     <div className="space-y-4">
                       <div className="flex items-start justify-between gap-3">
@@ -423,7 +426,7 @@ export function MembersDirectoryView({
                           )}
                           <div className="min-w-0 space-y-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <h2 className="font-display text-xl font-medium text-stone-900 truncate">
+                              <h2 className="font-display text-xl font-medium text-stone-900 dark:text-stone-100 truncate">
                                 {member.displayName}
                               </h2>
                               <RoleBadgesRow
@@ -437,7 +440,7 @@ export function MembersDirectoryView({
                                 compact
                               />
                             </div>
-                            <p className="text-xs text-stone-500 tabular-nums">
+                            <p className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
                               {isMe ? 'Votre profil' : 'Profil public'} · {storiesCount} récit
                               {storiesCount > 1 ? 's' : ''}
                             </p>
@@ -446,20 +449,20 @@ export function MembersDirectoryView({
                       </div>
 
                       {member.bio ? (
-                        <p className="text-sm text-stone-600 leading-relaxed line-clamp-3">
+                        <p className="text-sm text-stone-600 dark:text-stone-300 leading-relaxed line-clamp-3">
                           {member.bio}
                         </p>
                       ) : (
-                        <p className="text-sm text-stone-400 italic">
+                        <p className="text-sm text-stone-400 dark:text-stone-500 italic">
                           Présentation en cours d’écriture.
                         </p>
                       )}
 
                       {(member.favoriteTrackTitle || member.favoriteNovel) && (
-                        <div className="space-y-1.5 pt-2 border-t border-stone-100 text-xs text-stone-700">
+                        <div className="space-y-1.5 pt-2 border-t border-stone-100 dark:border-stone-800 text-xs text-stone-700 dark:text-stone-300">
                           {member.favoriteTrackTitle && (
                             <p className="flex items-center gap-1.5 truncate">
-                              <Music2 className="w-3.5 h-3.5 text-[#1B365D] shrink-0" />
+                              <Music2 className="w-3.5 h-3.5 text-[#1B365D] dark:text-amber-300 shrink-0" />
                               <span className="truncate">
                                 {member.favoriteTrackTitle}
                                 {member.favoriteTrackArtist
@@ -470,7 +473,7 @@ export function MembersDirectoryView({
                           )}
                           {member.favoriteNovel && (
                             <p className="flex items-center gap-1.5 truncate">
-                              <BookOpen className="w-3.5 h-3.5 text-[#8C4D0E] shrink-0" />
+                              <BookOpen className="w-3.5 h-3.5 text-[#8C4D0E] dark:text-amber-400 shrink-0" />
                               <span className="truncate">{member.favoriteNovel}</span>
                             </p>
                           )}
@@ -478,13 +481,13 @@ export function MembersDirectoryView({
                       )}
                     </div>
 
-                    <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-3">
+                    <div className="pt-4 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-3">
                       <button
                         type="button"
                         onClick={() =>
                           isMe ? setSubTab('my-profile') : onSelectMember(member.userId)
                         }
-                        className="min-h-[38px] text-xs font-medium text-[#1B365D] hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+                        className="min-h-[38px] text-xs font-medium text-[#1B365D] dark:text-amber-300 hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
                       >
                         <span>{isMe ? 'Ouvrir mon profil' : 'Voir le profil'}</span>
                         <ArrowRight className="w-3.5 h-3.5" />
@@ -504,8 +507,8 @@ export function MembersDirectoryView({
                             }
                             className={`min-h-[36px] px-2.5 py-1.5 text-xs font-medium rounded-md border inline-flex items-center gap-1 whitespace-nowrap transition-colors ${
                               favoriteAuthorIdSet.has(member.userId)
-                                ? 'border-[#1B365D] bg-[#F3F6FA] text-[#1B365D]'
-                                : 'border-stone-200 bg-[#FBF9F5] text-stone-700 hover:border-[#1B365D] hover:text-[#1B365D]'
+                                ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                                : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 text-stone-700 dark:text-stone-300 hover:border-[#1B365D] hover:text-[#1B365D]'
                             } disabled:opacity-50`}
                           >
                             <Star
@@ -521,7 +524,7 @@ export function MembersDirectoryView({
                           <button
                             type="button"
                             onClick={() => onStartDirectChat(member)}
-                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 bg-[#FBF9F5] border border-stone-200 rounded-md hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                            className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-stone-800 dark:text-stone-200 bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md hover:border-[#1B365D] dark:hover:border-amber-400 hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <MessageCircle className="w-3.5 h-3.5" />
                             <span>Écrire</span>
@@ -548,6 +551,7 @@ export function MembersDirectoryView({
           onEditProfile={() => setSubTab('edit-profile')}
           onReadStory={onReadStory}
           onOpenStoryById={onOpenStoryById}
+          onShareStory={onShareStory}
           onOpenExchange={onOpenExchange}
           embedded
         />
