@@ -36,6 +36,11 @@ import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
 import { MatureContentBadge } from './components/MatureContentBadge';
 import { MembersDirectoryView } from './components/MembersDirectoryView';
+import {
+  MobileAppModal,
+  OfflineIndicator,
+  PWAInstallButton,
+} from './components/MobileAppModal';
 import { ModerationCenterView } from './components/ModerationCenterView';
 import { NovelCoverArt } from './components/NovelCoverArt';
 import { PeleMeleStoriesView } from './components/PeleMeleStoriesView';
@@ -286,6 +291,7 @@ function SalonApp() {
     'directory'
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showMobileAppModal, setShowMobileAppModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return window.localStorage.getItem('lisiere_sidebar_collapsed') === 'true';
@@ -975,9 +981,9 @@ function SalonApp() {
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF9F5] text-stone-900">
       {/* Clean Single-Row Sticky Header (sidebar handles all destination & salon navigation) */}
-      <header className="sticky top-0 z-40 h-[65px] border-b border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-xs">
-        <div className="h-full px-4 sm:px-6 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
+      <header className="sticky top-0 z-40 min-h-[65px] pt-[env(safe-area-inset-top)] border-b border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-xs">
+        <div className="h-[64px] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
             <button
               type="button"
               onClick={() => setMobileMenuOpen((prev) => !prev)}
@@ -1004,11 +1010,16 @@ function SalonApp() {
               aria-label="Lisière — Retour aux salons"
               className="text-stone-900 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
             >
-              <LisiereLogo className="h-8 w-auto" />
+              <LisiereLogo className="h-7 sm:h-8 w-auto" />
             </button>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <PWAInstallButton
+              variant="header"
+              onOpenMobileGuide={() => setShowMobileAppModal(true)}
+            />
+
             {user ? (
               <button
                 type="button"
@@ -1016,10 +1027,12 @@ function SalonApp() {
                   setMobileMenuOpen(false);
                   void openComposer();
                 }}
-                className="min-h-[38px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+                aria-label="Écrire un récit"
+                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
               >
                 <Feather className="w-3.5 h-3.5" />
-                <span>Écrire un récit</span>
+                <span className="sm:hidden">Écrire</span>
+                <span className="hidden sm:inline">Écrire un récit</span>
               </button>
             ) : (
               <button
@@ -1028,7 +1041,7 @@ function SalonApp() {
                   setMobileMenuOpen(false);
                   void signInWithGoogle();
                 }}
-                className="min-h-[38px] px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
+                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] rounded-md hover:bg-[#172D6B] transition-colors whitespace-nowrap shrink-0"
               >
                 Se connecter
               </button>
@@ -1059,6 +1072,7 @@ function SalonApp() {
           onEnterSalon={(id) => enterSalon(id)}
           onEnterCustomSalon={(id) => enterCustomSalon(id)}
           onCreateCustomSalon={() => void openCustomSalonModal(null)}
+          onOpenMobileAppGuide={() => setShowMobileAppModal(true)}
         />
 
         <div className="flex-1 min-w-0 flex flex-col">
@@ -2457,12 +2471,12 @@ function SalonApp() {
       </main>
 
       <footer className="border-t border-stone-200 bg-[#FBF9F5] mt-12">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-7 pb-[calc(5.5rem+env(safe-area-inset-bottom))] lg:pb-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs text-stone-500">
           <div className="space-y-1">
             <p>Lisière — Espace de récits personnels et de passerelles humaines</p>
             <p className="text-stone-700 font-medium">Créé par Kris Ivan N’dri</p>
           </div>
-          <div className="flex flex-wrap items-center gap-5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
             <button
               type="button"
               onClick={() => enterSalon(null)}
@@ -2498,11 +2512,100 @@ function SalonApp() {
             >
               Confidentialité
             </button>
+            <PWAInstallButton
+              variant="footer"
+              onOpenMobileGuide={() => setShowMobileAppModal(true)}
+            />
           </div>
         </div>
       </footer>
         </div>
       </div>
+
+      {/* Dedicated Mobile Bottom Tab Bar */}
+      <nav
+        aria-label="Navigation rapide mobile"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-stone-200 bg-[#FBF9F5]/95 backdrop-blur-sm pb-[env(safe-area-inset-bottom)]"
+      >
+        <div className="grid grid-cols-5 h-14">
+          <button
+            type="button"
+            onClick={() => enterSalon(null)}
+            aria-current={highlightedTab === 'recits' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+              highlightedTab === 'recits'
+                ? 'text-[#1B365D] font-semibold'
+                : 'text-stone-500 hover:text-stone-900'
+            }`}
+          >
+            <Home className="w-4 h-4" />
+            <span>Salons</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigateTo('pour-vous')}
+            aria-current={highlightedTab === 'pour-vous' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+              highlightedTab === 'pour-vous'
+                ? 'text-[#1B365D] font-semibold'
+                : 'text-stone-500 hover:text-stone-900'
+            }`}
+          >
+            <Star className="w-4 h-4" />
+            <span>Pour vous</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigateTo('pelemele')}
+            aria-current={highlightedTab === 'pelemele' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+              highlightedTab === 'pelemele'
+                ? 'text-[#1B365D] font-semibold'
+                : 'text-stone-500 hover:text-stone-900'
+            }`}
+          >
+            <Compass className="w-4 h-4" />
+            <span>Pêle-mêle</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setProfilesSubTab('directory');
+              navigateTo('membres', null, null);
+            }}
+            aria-current={highlightedTab === 'membres' ? 'page' : undefined}
+            className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+              highlightedTab === 'membres'
+                ? 'text-[#1B365D] font-semibold'
+                : 'text-stone-500 hover:text-stone-900'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Profils</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigateTo('carnet')}
+            aria-current={highlightedTab === 'carnet' ? 'page' : undefined}
+            className={`relative flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
+              highlightedTab === 'carnet'
+                ? 'text-[#1B365D] font-semibold'
+                : 'text-stone-500 hover:text-stone-900'
+            }`}
+          >
+            <span className="relative">
+              <BookOpen className="w-4 h-4" />
+              {unacknowledgedWarnings.length > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-0.5 -right-1 w-2 h-2 rounded-full bg-red-600"
+                />
+              )}
+            </span>
+            <span>Carnet</span>
+          </button>
+        </div>
+      </nav>
 
       {/* Reader Modal */}
       <StoryReaderModal
@@ -2656,6 +2759,13 @@ function SalonApp() {
           )
         }
       />
+
+      <MobileAppModal
+        open={showMobileAppModal}
+        onClose={() => setShowMobileAppModal(false)}
+      />
+
+      <OfflineIndicator />
     </div>
   );
 }

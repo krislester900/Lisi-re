@@ -1295,15 +1295,15 @@ export function StoryReaderModal({
           <>
             {/* Minimal Zen Control Strip: hides distracting chrome, exposes only Aa, Music & Exit */}
             <header
-              className={`border-b px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3 backdrop-blur-sm shrink-0 ${zenControlBarClass}`}
+              className={`border-b px-3 sm:px-6 pt-[max(0.625rem,env(safe-area-inset-top))] pb-2.5 flex items-center justify-between gap-2 backdrop-blur-sm shrink-0 ${zenControlBarClass}`}
             >
-              <div className="min-w-0 flex items-center gap-2">
-                <span className="text-[11px] uppercase tracking-widest opacity-65 whitespace-nowrap">
+              <div className="min-w-0 flex-1 flex items-center gap-1.5 sm:gap-2 overflow-hidden">
+                <span className="hidden sm:inline text-[11px] uppercase tracking-widest opacity-65 whitespace-nowrap shrink-0">
                   Mode lecture zen
                 </span>
-                <span className="opacity-35" aria-hidden="true">·</span>
+                <span className="hidden sm:inline opacity-35 shrink-0" aria-hidden="true">·</span>
                 <span
-                  className={`inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap ${
+                  className={`min-w-0 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider ${
                     zenTheme === 'night'
                       ? 'text-amber-200/90'
                       : isRoman
@@ -1316,23 +1316,30 @@ export function StoryReaderModal({
                   ) : (
                     <Feather className="w-3 h-3 shrink-0" />
                   )}
-                  <span>{isRoman ? 'Roman à chapitres' : 'Confession'}</span>
+                  {isRoman ? (
+                    <>
+                      <span className="sm:hidden truncate">Roman</span>
+                      <span className="hidden sm:inline whitespace-nowrap">Roman à chapitres</span>
+                    </>
+                  ) : (
+                    <span className="truncate">Confession</span>
+                  )}
                 </span>
                 {isRoman && totalChapters > 1 && (
                   <>
-                    <span className="opacity-35" aria-hidden="true">·</span>
-                    <span className="text-[11px] opacity-75 tabular-nums whitespace-nowrap">
+                    <span className="opacity-35 shrink-0" aria-hidden="true">·</span>
+                    <span className="text-[11px] opacity-75 tabular-nums whitespace-nowrap shrink-0">
                       Ch. {activeChapterIdx + 1}/{totalChapters}
                     </span>
                   </>
                 )}
                 {currentStoryQuotes.length > 0 && (
                   <>
-                    <span className="opacity-35 hidden sm:inline" aria-hidden="true">·</span>
+                    <span className="opacity-35 hidden sm:inline shrink-0" aria-hidden="true">·</span>
                     <button
                       type="button"
                       onClick={() => setShowStoryQuotesDrawer((prev) => !prev)}
-                      className="hidden sm:inline-flex items-center gap-1 text-[11px] opacity-85 hover:opacity-100 underline underline-offset-2 whitespace-nowrap tabular-nums"
+                      className="hidden sm:inline-flex items-center gap-1 text-[11px] opacity-85 hover:opacity-100 underline underline-offset-2 whitespace-nowrap tabular-nums shrink-0"
                     >
                       <Highlighter className="w-3 h-3" />
                       <span>
@@ -1343,7 +1350,7 @@ export function StoryReaderModal({
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -1352,7 +1359,7 @@ export function StoryReaderModal({
                   }}
                   aria-label="Régler la typographie et l’ambiance"
                   aria-expanded={showZenAppearance}
-                  className={`min-h-[34px] px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
+                  className={`min-h-[34px] px-2 sm:px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                     showZenAppearance
                       ? zenTheme === 'night'
                         ? 'border-amber-200 bg-amber-200 text-stone-950'
@@ -1372,7 +1379,7 @@ export function StoryReaderModal({
                         ? 'Mettre la musique en pause'
                         : 'Reprendre la musique'
                     }
-                    className={`min-h-[34px] px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap ${
+                    className={`min-h-[34px] px-2 sm:px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                       zenTheme === 'night'
                         ? 'border-amber-200/40 bg-amber-200/15 text-amber-100'
                         : 'border-[#1B365D]/30 bg-[#1B365D]/10 text-[#1B365D]'
@@ -1403,7 +1410,7 @@ export function StoryReaderModal({
                         ? 'Afficher la vidéo'
                         : 'Mettre en arrière-plan'
                     }
-                    className="min-h-[34px] px-2.5 py-1 rounded-md border border-current/25 hover:border-current/50 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                    className="min-h-[34px] px-2 sm:px-2.5 py-1 rounded-md border border-current/25 hover:border-current/50 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                   >
                     {audioController.embedBackground ? (
                       <>
@@ -1427,7 +1434,7 @@ export function StoryReaderModal({
                   }}
                   aria-label="Musique de lecture"
                   aria-expanded={showMusicPanel}
-                  className={`min-h-[34px] px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                  className={`min-h-[34px] px-2 sm:px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                     showMusicPanel || audioController.isPlaying
                       ? 'border-[#1B365D] bg-[#1B365D] text-white'
                       : 'border-current/25 hover:border-current/50'
@@ -1438,7 +1445,7 @@ export function StoryReaderModal({
                   ) : (
                     <Music2 className="w-3.5 h-3.5" />
                   )}
-                  <span>Musique</span>
+                  <span className="hidden min-[350px]:inline">Musique</span>
                 </button>
 
                 <button
@@ -1449,7 +1456,7 @@ export function StoryReaderModal({
                   }}
                   aria-label="Quitter le mode lecture zen"
                   aria-pressed={true}
-                  className="min-h-[34px] px-3 py-1 rounded-md border border-current/25 hover:border-current/50 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                  className="min-h-[34px] px-2.5 sm:px-3 py-1 rounded-md border border-current/25 hover:border-current/50 text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
                 >
                   <Minimize2 className="w-3.5 h-3.5" />
                   <span>Quitter</span>
@@ -1461,7 +1468,7 @@ export function StoryReaderModal({
               <div
                 role="region"
                 aria-label="Réglages typographiques et ambiance"
-                className={`fixed top-14 right-4 sm:top-16 sm:right-6 z-20 w-[min(92vw,300px)] rounded-lg border shadow-xl p-4 space-y-4 ${zenPopoverClass}`}
+                className={`fixed top-[calc(3.5rem+env(safe-area-inset-top))] right-3 sm:top-[calc(4rem+env(safe-area-inset-top))] sm:right-6 z-20 w-[min(92vw,300px)] rounded-lg border shadow-xl p-4 space-y-4 ${zenPopoverClass}`}
               >
                 <div className="space-y-1.5">
                   <p className="text-[11px] uppercase tracking-widest opacity-65">
@@ -1561,7 +1568,7 @@ export function StoryReaderModal({
             )}
 
             {showMusicPanel && (
-              <div className="fixed top-14 right-4 sm:top-16 sm:right-6 z-20 w-[min(92vw,420px)] max-h-[75vh] overflow-y-auto">
+              <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top))] right-3 sm:top-[calc(4rem+env(safe-area-inset-top))] sm:right-6 z-20 w-[min(92vw,420px)] max-h-[75vh] overflow-y-auto">
                 <ReadingMusicPanel
                   controller={audioController}
                   authorName={publicAuthorLabel}
@@ -1574,9 +1581,9 @@ export function StoryReaderModal({
           </>
         ) : (
           <>
-            <div className="px-4 sm:px-6 py-3 sm:py-3.5 border-b border-stone-200 bg-white space-y-2 shrink-0">
+            <div className="px-4 sm:px-6 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:py-3.5 border-b border-stone-200 bg-white space-y-2 shrink-0">
               <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 overflow-hidden">
                   {hasOriginSalon ? (
                     <button
                       type="button"

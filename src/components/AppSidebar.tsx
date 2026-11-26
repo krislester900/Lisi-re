@@ -12,12 +12,14 @@ import {
   PanelLeftOpen,
   Plus,
   ShieldAlert,
+  Smartphone,
   Star,
   Users,
   X,
 } from 'lucide-react';
 import { ACCENT_TONE_PALETTES, STORY_THEMES } from '../lib/themes';
 import { CustomSalon, StoryThemeId } from '../types/story';
+import { PWAInstallButton } from './MobileAppModal';
 import { SalonEmblem } from './SalonEmblem';
 
 export type SidebarNavTab =
@@ -49,6 +51,7 @@ interface AppSidebarProps {
   onEnterSalon: (salonId: StoryThemeId | null) => void;
   onEnterCustomSalon: (customSalonId: string) => void;
   onCreateCustomSalon: () => void;
+  onOpenMobileAppGuide?: () => void;
 }
 
 export function AppSidebar({
@@ -69,6 +72,7 @@ export function AppSidebar({
   onEnterSalon,
   onEnterCustomSalon,
   onCreateCustomSalon,
+  onOpenMobileAppGuide,
 }: AppSidebarProps) {
   const [brokenAvatarIds, setBrokenAvatarIds] = useState<Record<string, boolean>>({});
   const navItems: Array<{
@@ -350,6 +354,35 @@ export function AppSidebar({
             </div>
           )}
         </div>
+
+        {/* Mobile Version & PWA Install Link */}
+        {onOpenMobileAppGuide && (
+          <div
+            className={`p-2.5 border-t border-stone-200/80 shrink-0 bg-[#F7F4EE] ${
+              isMobileDrawer ? 'pb-[max(0.75rem,env(safe-area-inset-bottom))]' : ''
+            }`}
+          >
+            {isCompact ? (
+              <button
+                type="button"
+                onClick={onOpenMobileAppGuide}
+                title="Version mobile & installation"
+                aria-label="Version mobile et installation"
+                className="w-full min-h-[36px] inline-flex items-center justify-center rounded-md border border-[#CBD6E6] bg-white text-[#1B365D] hover:border-[#1B365D] transition-colors"
+              >
+                <Smartphone className="w-4 h-4" />
+              </button>
+            ) : (
+              <PWAInstallButton
+                variant="sidebar"
+                onOpenMobileGuide={() => {
+                  onOpenMobileAppGuide();
+                  if (isMobileDrawer) onCloseMobile();
+                }}
+              />
+            )}
+          </div>
+        )}
       </div>
     );
   };
