@@ -67,14 +67,18 @@ jobs:
 
       - name: Configurer Java 21 (Temurin) pour Android
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Configurer Android SDK
+      - name: Accepter les licences Android SDK préinstallées
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
-        uses: android-actions/setup-android@v3
+        run: |
+          SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          if [ -x "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          fi
 
       - name: Installer Capacitor Android & synchroniser dist/
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
