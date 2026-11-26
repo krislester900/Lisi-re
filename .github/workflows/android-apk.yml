@@ -91,11 +91,11 @@ jobs:
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
           if [ -f public/pwa-512x512.png ]; then
-            for dir in android/app/src/main/res/mipmap-*; do
+            for dir in android/app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}; do
               [ -d "$dir" ] || continue
-              cp -f public/pwa-512x512.png "$dir/ic_launcher.png" 2>/dev/null || true
-              cp -f public/pwa-512x512.png "$dir/ic_launcher_round.png" 2>/dev/null || true
-              cp -f public/pwa-512x512.png "$dir/ic_launcher_foreground.png" 2>/dev/null || true
+              cp -f public/pwa-512x512.png "$dir/ic_launcher.png"
+              cp -f public/pwa-512x512.png "$dir/ic_launcher_round.png"
+              cp -f public/pwa-512x512.png "$dir/ic_launcher_foreground.png"
             done
           fi
 
