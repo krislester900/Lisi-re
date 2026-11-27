@@ -75,37 +75,91 @@ jobs:
       - name: Accepter les licences Android SDK préinstallées
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
-          SDKMANAGER="${ANDROID_HOME:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          SDK_DIR="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK_DIR" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> "$GITHUB_ENV"
+          SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
           if [ -x "$SDKMANAGER" ]; then
             yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           fi
 
-      - name: Installer Capacitor Android & synchroniser dist/
+      - name: Installer Capacitor 8 Android & synchroniser dist/
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
-          bun add @capacitor/core@^7 @capacitor/cli@^7 @capacitor/android@^7
+          bun add -D @capacitor/cli@^8 @capacitor/android@^8
           ./node_modules/.bin/cap add android
           ./node_modules/.bin/cap sync android
 
-      - name: Cache Gradle
+      - name: Configurer Firebase Android (Google Sign-In & strings.xml / google-services.json)
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          node -e '
+            const fs = require("fs");
+
+            // 1. Activer les dépendances Google Sign-In dans @capacitor-firebase/authentication
+            const varsPath = "android/variables.gradle";
+            let vars = fs.readFileSync(varsPath, "utf8");
+            if (!vars.includes("rgcfaIncludeGoogle")) {
+              vars = vars.replace("ext {", "ext {\n    rgcfaIncludeGoogle = true");
+              fs.writeFileSync(varsPath, vars, "utf8");
+            }
+
+            // 2. Déployer google-services.json si fourni dans les secrets GitHub,
+            //    sinon injecter les identifiants Firebase depuis firebase-applet-config.json
+            const b64 = process.env.GOOGLE_SERVICES_JSON_BASE64 || "";
+            if (b64.trim()) {
+              fs.writeFileSync("android/app/google-services.json", Buffer.from(b64.trim(), "base64"));
+              console.log("google-services.json injecté depuis le secret GitHub.");
+            } else if (fs.existsSync("firebase-applet-config.json")) {
+              const cfg = JSON.parse(fs.readFileSync("firebase-applet-config.json", "utf8"));
+              const stringsPath = "android/app/src/main/res/values/strings.xml";
+              let xml = fs.readFileSync(stringsPath, "utf8");
+              const entries = [
+                ["default_web_client_id", cfg.oAuthClientId || ""],
+                ["google_app_id", cfg.appId || ""],
+                ["google_api_key", cfg.apiKey || ""],
+                ["gcm_defaultSenderId", cfg.messagingSenderId || ""],
+                ["project_id", cfg.projectId || ""],
+                ["google_storage_bucket", cfg.storageBucket || ""]
+              ].filter(([, v]) => v);
+              const additions = entries
+                .filter(([k]) => !xml.includes(`name="${k}"`))
+                .map(([k, v]) => `    <string name="${k}" translatable="false">${v}</string>`)
+                .join("\n");
+              if (additions) {
+                xml = xml.replace("</resources>", `${additions}\n</resources>`);
+                fs.writeFileSync(stringsPath, xml, "utf8");
+              }
+              console.log("Identifiants Firebase injectés dans strings.xml.");
+            }
+          '
+
+      - name: Cache Gradle & Keystore debug (SHA-1 stable)
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
-          restore-keys: gradle-${{ runner.os }}-
+            ~/.android/debug.keystore
+          key: gradle-v8-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
+          restore-keys: |
+            gradle-v8-${{ runner.os }}-
 
-      - name: Ajouter un miroir Maven de secours
+      - name: Ajouter un miroir Maven de secours & mémoire Gradle
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
           sed -i "s#mavenCentral()#maven { url 'https://maven-central.storage-download.googleapis.com/maven2/' }\n        mavenCentral()#g" android/build.gradle
-          grep -n "maven" android/build.gradle
+          if [ -f android/gradle.properties ]; then
+            sed -i 's/-Xmx[0-9]*m/-Xmx3072m/g' android/gradle.properties || true
+          fi
 
-      - name: Appliquer l'icône Lisière sur les ressources Android
+      - name: Appliquer l'icône Lisière (sans doublon dans mipmap-anydpi-v26)
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
+          rm -f android/app/src/main/res/mipmap-anydpi-v26/*.png
           if [ -f public/pwa-512x512.png ]; then
             for dir in android/app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}; do
               [ -d "$dir" ] || continue
@@ -118,21 +172,43 @@ jobs:
       - name: Compiler l'APK et l'AAB Android avec Gradle
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
+          GRADLE_ARGS=(assembleDebug bundleDebug --no-daemon)
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > app/release.keystore
+            GRADLE_ARGS=(
+              assembleRelease
+              bundleRelease
+              --no-daemon
+              "-Pandroid.injected.signing.store.file=$(pwd)/app/release.keystore"
+              "-Pandroid.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD"
+              "-Pandroid.injected.signing.key.alias=$ANDROID_KEY_ALIAS"
+              "-Pandroid.injected.signing.key.password=$ANDROID_KEY_PASSWORD"
+            )
+          fi
           for i in 1 2 3; do
-            ./gradlew assembleDebug bundleDebug --no-daemon && exit 0
+            ./gradlew "${GRADLE_ARGS[@]}" && exit 0
             echo "Tentative $i échouée, nouvelle tentative dans 30 s..."
             sleep 30
           done
           exit 1
 
-      - name: Préparer Lisiere-mobile.apk et Lisiere-mobile.aab
+      - name: Préparer Lisiere-mobile.apk, Lisiere-mobile.aab et afficher l'empreinte SHA-1
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
-          cp android/app/build/outputs/apk/debug/app-debug.apk release-assets/Lisiere-mobile.apk
-          cp android/app/build/outputs/bundle/debug/app-debug.aab release-assets/Lisiere-mobile.aab
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          AAB_PATH=$(find android/app/build/outputs/bundle -name "*.aab" | head -n 1)
+          cp "$APK_PATH" release-assets/Lisiere-mobile.apk
+          cp "$AAB_PATH" release-assets/Lisiere-mobile.aab
           ls -lh release-assets/
+          echo "=== Empreintes de signature de l'APK (pour Firebase Console SHA-1 / SHA-256) ==="
+          keytool -printcert -jarfile release-assets/Lisiere-mobile.apk | grep -E "SHA1:|SHA256:" | tee release-assets/apk-fingerprints.txt || true
 
       - name: Publier les artifacts APK et AAB dans GitHub Actions
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
@@ -150,7 +226,7 @@ jobs:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('main-build-{0}', github.run_number) }}
           name: Lisière Build (${{ github.ref_name }} · #${{ github.run_number }})
           draft: ${{ !startsWith(github.ref, 'refs/tags/') }}
-          make_latest: ${{ startsWith(github.ref, 'refs/tags/') }}
+          make_latest: ${{ startsWith(github.ref, 'refs/tags/') && 'true' || 'false' }}
           body: |
             Build automatique généré par GitHub Actions (`${{ github.sha }}`).
 

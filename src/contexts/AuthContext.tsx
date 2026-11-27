@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
+import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithCredential,
+  signInWithPopup,
+  signOut,
+  User,
+} from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import {
   ensureUserProfiles,
@@ -106,18 +115,78 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = async () => {
     setAuthError(null);
     try {
+      if (Capacitor.isNativePlatform()) {
+        let nativeResult;
+        try {
+          nativeResult = await FirebaseAuthentication.signInWithGoogle({
+            useCredentialManager: true,
+          });
+        } catch (cmErr) {
+          const cmMessage = cmErr instanceof Error ? cmErr.message : String(cmErr);
+          const isCanceled =
+            cmMessage.toLowerCase().includes('cancel') ||
+            cmMessage.toLowerCase().includes('dismiss');
+          if (isCanceled) {
+            throw cmErr;
+          }
+          nativeResult = await FirebaseAuthentication.signInWithGoogle({
+            useCredentialManager: false,
+          });
+        }
+
+        const idToken = nativeResult.credential?.idToken;
+        if (!idToken) {
+          throw new Error('Aucun jeton Google (idToken) renvoyé par Android.');
+        }
+        const credential = GoogleAuthProvider.credential(idToken);
+        await signInWithCredential(auth, credential);
+        return;
+      }
+
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
-      const message =
-        err instanceof Error && err.message.includes('popup-closed-by-user')
-          ? 'La fenêtre de connexion a été fermée avant la fin.'
-          : 'Impossible de finaliser la connexion Google pour le moment.';
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const lower = rawMessage.toLowerCase();
+
+      let message = 'Impossible de finaliser la connexion Google pour le moment.';
+      if (
+        lower.includes('popup-closed-by-user') ||
+        lower.includes('cancel') ||
+        lower.includes('dismiss')
+      ) {
+        message = 'La fenêtre de connexion a été fermée avant la fin.';
+      } else if (lower.includes('popup-blocked')) {
+        message =
+          'La fenêtre de connexion a été bloquée par le navigateur. Autorisez les popups pour Lisière.';
+      } else if (lower.includes('unauthorized-domain')) {
+        message =
+          'Ce domaine n’est pas autorisé dans Firebase Authentication (Domaines autorisés).';
+      } else if (
+        Capacitor.isNativePlatform() &&
+        (lower.includes('developer_error') ||
+          lower.includes('10:') ||
+          lower.includes('12500') ||
+          lower.includes('default_web_client_id') ||
+          lower.includes('no credentials available'))
+      ) {
+        message =
+          'Connexion Google Android non configurée : ajoutez l’application app.lisiere.recits et son empreinte SHA-1 dans Firebase Console (ou utilisez la version PWA dans Chrome).';
+      } else if (rawMessage) {
+        message = `Connexion Google impossible (${rawMessage}).`;
+      }
       setAuthError(message);
     }
   };
 
   const logOut = async () => {
     setAuthError(null);
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await FirebaseAuthentication.signOut();
+      } catch {
+        // Ignore native signOut failure and still clear web session
+      }
+    }
     await signOut(auth);
   };
 
