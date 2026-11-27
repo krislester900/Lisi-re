@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Check,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Download,
   ExternalLink,
@@ -9,6 +11,7 @@ import {
   Loader2,
   Settings2,
   Share2,
+  ShieldCheck,
   Smartphone,
   Trash2,
   WifiOff,
@@ -19,6 +22,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { isModerationAdminEmail } from '../lib/moderationLabels';
+import { AuthDiagnosticsPanel } from './AuthDiagnosticsPanel';
 import {
   clearMobileDistributionConfig,
   formatFriendlyFirestoreError,
@@ -139,9 +143,14 @@ export function PWAInstallButton({
 interface MobileAppModalProps {
   open: boolean;
   onClose: () => void;
+  initialShowDiagnostics?: boolean;
 }
 
-export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
+export function MobileAppModal({
+  open,
+  onClose,
+  initialShowDiagnostics = false,
+}: MobileAppModalProps) {
   const { user, profile, authReady } = useAuth();
   const { isInstallable, isInstalled, isIOS, isAndroid, isInIframe, install } = usePWAInstall();
   const [copied, setCopied] = useState(false);
@@ -150,6 +159,7 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
   const [firestoreConfig, setFirestoreConfig] = useState<MobileDistributionConfig | null>(null);
   const [repoInput, setRepoInput] = useState('');
   const [showAdminConfig, setShowAdminConfig] = useState(false);
+  const [showDiagnostics, setShowDiagnostics] = useState(Boolean(initialShowDiagnostics));
   const [savingRepo, setSavingRepo] = useState(false);
   const [repoFeedback, setRepoFeedback] = useState<{
     type: 'success' | 'error';
@@ -184,6 +194,12 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
       setRepoInput(activeRepoUrl);
     }
   }, [open, activeRepoUrl, repoInput]);
+
+  useEffect(() => {
+    if (open) {
+      setShowDiagnostics(Boolean(initialShowDiagnostics));
+    }
+  }, [open, initialShowDiagnostics]);
 
   if (!open) return null;
 
@@ -604,6 +620,30 @@ export function MobileAppModal({ open, onClose }: MobileAppModalProps) {
                 <li>Sélectionnez <strong>Ajouter à l’écran d’accueil</strong>.</li>
               </ol>
             </div>
+          </div>
+
+          {/* Collapsible Firebase Auth & PWA OAuth Diagnostics */}
+          <div className="pt-1 border-t border-stone-200 dark:border-stone-800 space-y-3">
+            <button
+              type="button"
+              onClick={() => setShowDiagnostics((prev) => !prev)}
+              aria-expanded={showDiagnostics}
+              className="w-full min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 hover:border-[#1B365D] dark:hover:border-amber-400 text-xs font-medium text-stone-700 dark:text-stone-300 flex items-center justify-between gap-2 transition-colors"
+            >
+              <span className="inline-flex items-center gap-2 min-w-0">
+                <ShieldCheck className="w-4 h-4 text-[#1B365D] dark:text-amber-300 shrink-0" />
+                <span className="truncate">
+                  Diagnostic connexion Google &amp; redirection OAuth (PWA)
+                </span>
+              </span>
+              {showDiagnostics ? (
+                <ChevronUp className="w-4 h-4 shrink-0 text-stone-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 shrink-0 text-stone-400" />
+              )}
+            </button>
+
+            {showDiagnostics && <AuthDiagnosticsPanel />}
           </div>
         </div>
       </div>

@@ -2,13 +2,21 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 import { Capacitor } from '@capacitor/core';
 import { FirebaseAuthentication } from '@capacitor-firebase/authentication';
 import {
+  getRedirectResult,
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithCredential,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   User,
 } from 'firebase/auth';
+import {
+  clearOAuthRedirectPending,
+  getAuthEnvironmentSnapshot,
+  logAuthDiagnostic,
+  markOAuthRedirectPending,
+} from '../lib/authDiagnostics';
 import { auth, googleProvider } from '../lib/firebase';
 import {
   ensureUserProfiles,
@@ -31,6 +39,7 @@ interface AuthContextValue {
   authReady: boolean;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
+  signInWithGoogleRedirect: () => Promise<void>;
   logOut: () => Promise<void>;
   clearAuthError: () => void;
 }
@@ -48,6 +57,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
+    const env = getAuthEnvironmentSnapshot();
+    logAuthDiagnostic('init', 'info', 'Initialisation du flux Firebase Auth', {
+      runtimeMode: env.runtimeMode,
+      platform: env.platform,
+      isStandalonePWA: env.isStandalonePWA,
+      serviceWorkerControlled: env.serviceWorkerControlled,
+      origin: env.origin,
+    });
+    logAuthDiagnostic(
+      'config',
+      env.authDomainMatches ? 'ok' : 'warn',
+      env.hasOAuthClientIdInConfig
+        ? 'oAuthClientId présent dans firebase-applet-config.json (utilisé sur Android natif ; ignoré par initializeApp côté Web SDK)'
+        : 'oAuthClientId absent de firebase-applet-config.json',
+      {
+        authDomain: env.authDomain,
+        sdkAuthDomain: env.sdkAuthDomain,
+        authDomainMatches: env.authDomainMatches,
+        hasOAuthClientIdInConfig: env.hasOAuthClientIdInConfig,
+        webSdkConsumesOAuthClientIdDirectly: env.webSdkConsumesOAuthClientIdDirectly,
+      }
+    );
+
+    if (!env.isNative) {
+      void getRedirectResult(auth)
+        .then((result) => {
+          if (result?.user) {
+            clearOAuthRedirectPending();
+            logAuthDiagnostic(
+              'redirect-check',
+              'ok',
+              'Retour de redirection OAuth réussi (getRedirectResult)',
+              {
+                uid: result.user.uid,
+                providerId: result.providerId ?? 'google.com',
+                emailVerified: result.user.emailVerified,
+              }
+            );
+          } else if (env.redirectPending) {
+            clearOAuthRedirectPending();
+            logAuthDiagnostic(
+              'redirect-check',
+              'warn',
+              'Une redirection OAuth était en attente mais getRedirectResult a renvoyé null (sessionStorage/tiers bloqué ou redirection annulée).',
+              {
+                runtimeMode: env.runtimeMode,
+                isStandalonePWA: env.isStandalonePWA,
+                redirectInitiatedAt: env.redirectInitiatedAt,
+              }
+            );
+          } else {
+            logAuthDiagnostic('redirect-check', 'info', 'Aucune redirection OAuth en attente au démarrage.', {
+              runtimeMode: env.runtimeMode,
+            });
+          }
+        })
+        .catch((err) => {
+          clearOAuthRedirectPending();
+          const msg = err instanceof Error ? err.message : String(err);
+          logAuthDiagnostic('redirect-check', 'error', `Échec getRedirectResult : ${msg}`, {
+            runtimeMode: env.runtimeMode,
+            isStandalonePWA: env.isStandalonePWA,
+          });
+        });
+    }
+
     let unsubProfile: (() => void) | null = null;
     let unsubPrivate: (() => void) | null = null;
     let unsubFavoriteAuthors: (() => void) | null = null;
@@ -70,6 +145,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPrivateInfo(null);
       setPrivateInfoLoaded(false);
       setFavoriteAuthors([]);
+
+      logAuthDiagnostic(
+        'auth-state',
+        currentUser ? 'ok' : 'info',
+        currentUser ? 'Session Firebase active détectée' : 'Aucun utilisateur Firebase connecté',
+        {
+          uid: currentUser?.uid ?? null,
+          emailVerified: currentUser?.emailVerified ?? null,
+        }
+      );
 
       if (currentUser) {
         try {
@@ -112,10 +197,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const signInWithGoogleRedirect = async () => {
+    setAuthError(null);
+    const env = getAuthEnvironmentSnapshot();
+    logAuthDiagnostic('signin-redirect', 'info', 'Démarrage de signInWithRedirect (OAuth Google)', {
+      runtimeMode: env.runtimeMode,
+      isStandalonePWA: env.isStandalonePWA,
+      authDomain: env.authDomain,
+    });
+    try {
+      markOAuthRedirectPending();
+      await signInWithRedirect(auth, googleProvider);
+    } catch (err) {
+      clearOAuthRedirectPending();
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      logAuthDiagnostic('signin-error', 'error', `Échec signInWithRedirect : ${rawMessage}`, {
+        runtimeMode: env.runtimeMode,
+      });
+      setAuthError(`Connexion par redirection impossible (${rawMessage}).`);
+    }
+  };
+
   const signInWithGoogle = async () => {
     setAuthError(null);
+    const env = getAuthEnvironmentSnapshot();
+    logAuthDiagnostic('signin-start', 'info', 'Tentative de connexion Google lancée', {
+      runtimeMode: env.runtimeMode,
+      isNative: env.isNative,
+      isStandalonePWA: env.isStandalonePWA,
+      isInIframe: env.isInIframe,
+    });
+
     try {
       if (Capacitor.isNativePlatform()) {
+        logAuthDiagnostic('signin-native', 'info', 'Appel natif FirebaseAuthentication.signInWithGoogle');
         let nativeResult;
         try {
           nativeResult = await FirebaseAuthentication.signInWithGoogle({
@@ -129,6 +244,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (isCanceled) {
             throw cmErr;
           }
+          logAuthDiagnostic(
+            'signin-native',
+            'warn',
+            `Credential Manager indisponible (${cmMessage}), repli sur GoogleSignInClient`
+          );
           nativeResult = await FirebaseAuthentication.signInWithGoogle({
             useCredentialManager: false,
           });
@@ -140,13 +260,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         const credential = GoogleAuthProvider.credential(idToken);
         await signInWithCredential(auth, credential);
+        logAuthDiagnostic('signin-success', 'ok', 'Connexion Google native Android finalisée');
         return;
       }
 
-      await signInWithPopup(auth, googleProvider);
+      logAuthDiagnostic('signin-popup', 'info', 'Appel signInWithPopup(auth, googleProvider)', {
+        authDomain: env.authDomain,
+        isStandalonePWA: env.isStandalonePWA,
+      });
+      const result = await signInWithPopup(auth, googleProvider);
+      logAuthDiagnostic('signin-success', 'ok', 'Connexion Google via popup réussie', {
+        uid: result.user.uid,
+        emailVerified: result.user.emailVerified,
+      });
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const lower = rawMessage.toLowerCase();
+
+      if (
+        !Capacitor.isNativePlatform() &&
+        env.isStandalonePWA &&
+        (lower.includes('popup-blocked') ||
+          lower.includes('operation-not-supported-in-this-environment'))
+      ) {
+        logAuthDiagnostic(
+          'signin-popup',
+          'warn',
+          `Popup bloquée en PWA installée (${rawMessage}), bascule vers signInWithRedirect`
+        );
+        await signInWithGoogleRedirect();
+        return;
+      }
+
+      logAuthDiagnostic('signin-error', 'error', `Erreur connexion Google : ${rawMessage}`, {
+        runtimeMode: env.runtimeMode,
+        isStandalonePWA: env.isStandalonePWA,
+      });
 
       let message = 'Impossible de finaliser la connexion Google pour le moment.';
       if (
@@ -157,7 +306,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         message = 'La fenêtre de connexion a été fermée avant la fin.';
       } else if (lower.includes('popup-blocked')) {
         message =
-          'La fenêtre de connexion a été bloquée par le navigateur. Autorisez les popups pour Lisière.';
+          'La fenêtre de connexion a été bloquée par le navigateur. Autorisez les popups ou utilisez la redirection OAuth dans le diagnostic.';
       } else if (lower.includes('unauthorized-domain')) {
         message =
           'Ce domaine n’est pas autorisé dans Firebase Authentication (Domaines autorisés).';
@@ -180,6 +329,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logOut = async () => {
     setAuthError(null);
+    clearOAuthRedirectPending();
+    logAuthDiagnostic('signout', 'info', 'Déconnexion utilisateur');
     if (Capacitor.isNativePlatform()) {
       try {
         await FirebaseAuthentication.signOut();
@@ -232,6 +383,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authReady,
         authError,
         signInWithGoogle,
+        signInWithGoogleRedirect,
         logOut,
         clearAuthError,
       }}

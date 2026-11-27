@@ -296,6 +296,7 @@ function SalonApp() {
   );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showMobileAppModal, setShowMobileAppModal] = useState(false);
+  const [openMobileModalWithDiagnostics, setOpenMobileModalWithDiagnostics] = useState(false);
   const [themeMode, setThemeMode] = useState<'light' | 'dark'>(() => {
     try {
       const saved = window.localStorage.getItem('lisiere_theme');
@@ -1127,17 +1128,29 @@ function SalonApp() {
         <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4">
           <div
             role="alert"
-            className="flex items-center justify-between gap-4 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 text-red-900 dark:text-red-200 px-4 py-3 rounded-md text-sm"
+            className="flex items-center justify-between gap-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900/60 text-red-900 dark:text-red-200 px-4 py-3 rounded-md text-sm"
           >
             <span>{authError}</span>
-            <button
-              type="button"
-              onClick={clearAuthError}
-              aria-label="Fermer l’alerte"
-              className="text-red-700 dark:text-red-300 hover:text-red-900 p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenMobileModalWithDiagnostics(true);
+                  setShowMobileAppModal(true);
+                }}
+                className="px-2.5 py-1 rounded border border-red-300 dark:border-red-800 bg-white/80 dark:bg-stone-900/80 text-xs font-medium text-red-800 dark:text-red-200 hover:bg-white dark:hover:bg-stone-900"
+              >
+                Diagnostiquer
+              </button>
+              <button
+                type="button"
+                onClick={clearAuthError}
+                aria-label="Fermer l’alerte"
+                className="text-red-700 dark:text-red-300 hover:text-red-900 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2862,7 +2875,11 @@ function SalonApp() {
 
       <MobileAppModal
         open={showMobileAppModal}
-        onClose={() => setShowMobileAppModal(false)}
+        initialShowDiagnostics={openMobileModalWithDiagnostics}
+        onClose={() => {
+          setShowMobileAppModal(false);
+          setOpenMobileModalWithDiagnostics(false);
+        }}
       />
 
       <OfflineIndicator />
