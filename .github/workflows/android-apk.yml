@@ -106,12 +106,15 @@ jobs:
               fs.writeFileSync(varsPath, vars, "utf8");
             }
 
-            // 2. Déployer google-services.json si fourni dans les secrets GitHub,
-            //    sinon injecter les identifiants Firebase depuis firebase-applet-config.json
+            // 2. Déployer google-services.json si fourni dans les secrets GitHub
+            //    ou présent à la racine du dépôt, sinon injecter depuis firebase-applet-config.json
             const b64 = process.env.GOOGLE_SERVICES_JSON_BASE64 || "";
             if (b64.trim()) {
               fs.writeFileSync("android/app/google-services.json", Buffer.from(b64.trim(), "base64"));
               console.log("google-services.json injecté depuis le secret GitHub.");
+            } else if (fs.existsSync("google-services.json")) {
+              fs.copyFileSync("google-services.json", "android/app/google-services.json");
+              console.log("google-services.json copié depuis la racine du dépôt vers android/app/google-services.json.");
             } else if (fs.existsSync("firebase-applet-config.json")) {
               const cfg = JSON.parse(fs.readFileSync("firebase-applet-config.json", "utf8"));
               const stringsPath = "android/app/src/main/res/values/strings.xml";
@@ -136,17 +139,65 @@ jobs:
             }
           '
 
-      - name: Cache Gradle & Keystore debug (SHA-1 stable)
+      - name: Cache Gradle
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         uses: actions/cache@v4
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            ~/.android/debug.keystore
           key: gradle-v8-${{ runner.os }}-${{ hashFiles('package.json', 'bun.lock') }}
           restore-keys: |
             gradle-v8-${{ runner.os }}-
+
+      - name: Restaurer le keystore debug (SHA-1 stable)
+        id: debug-keystore-cache
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-lisiere-v1
+          restore-keys: |
+            gradle-v8-${{ runner.os }}-
+
+      - name: Préparer la clé de signature debug (fixe)
+        id: debug-keystore-setup
+        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        env:
+          ANDROID_DEBUG_KEYSTORE_BASE64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p ~/.android
+          if [ -n "$ANDROID_DEBUG_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_DEBUG_KEYSTORE_BASE64" | base64 -d > ~/.android/debug.keystore
+            echo "source=secret" >> "$GITHUB_OUTPUT"
+            echo "Clé debug restaurée depuis le secret ANDROID_DEBUG_KEYSTORE_BASE64."
+          elif [ -f android-signing/debug.keystore ]; then
+            cp -f android-signing/debug.keystore ~/.android/debug.keystore
+            echo "source=repo" >> "$GITHUB_OUTPUT"
+            echo "Clé debug copiée depuis android-signing/debug.keystore."
+          elif [ -f ~/.android/debug.keystore ]; then
+            echo "source=cache" >> "$GITHUB_OUTPUT"
+            echo "Clé debug existante conservée depuis le cache GitHub Actions."
+          else
+            keytool -genkeypair -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+            echo "source=generated" >> "$GITHUB_OUTPUT"
+            echo "Nouvelle clé debug générée (sera sauvegardée immédiatement en cache)."
+          fi
+
+      - name: Sauvegarder le keystore debug en cache (SHA-1 persistante)
+        if: ${{ ((github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true) && steps.debug-keystore-cache.outputs.cache-hit != 'true' && (steps.debug-keystore-setup.outputs.source == 'cache' || steps.debug-keystore-setup.outputs.source == 'generated') }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-lisiere-v1
 
       - name: Ajouter un miroir Maven de secours & mémoire Gradle
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
