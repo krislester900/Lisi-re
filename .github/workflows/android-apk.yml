@@ -202,13 +202,29 @@ jobs:
       - name: Préparer Lisiere-mobile.apk, Lisiere-mobile.aab et afficher l'empreinte SHA-1
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
-          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" ! -name "*-unsigned.apk" | head -n 1)
+          if [ -z "$APK_PATH" ]; then
+            APK_PATH=$(find android/app/build/outputs/apk -name "*.apk" | head -n 1)
+          fi
           AAB_PATH=$(find android/app/build/outputs/bundle -name "*.aab" | head -n 1)
           cp "$APK_PATH" release-assets/Lisiere-mobile.apk
           cp "$AAB_PATH" release-assets/Lisiere-mobile.aab
+
+          {
+            echo "=== Empreintes de signature de l'APK (pour Firebase Console SHA-1 / SHA-256) ==="
+            APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name "apksigner" 2>/dev/null | sort -V | tail -n 1)
+            if [ -n "$APKSIGNER" ] && [ -x "$APKSIGNER" ]; then
+              "$APKSIGNER" verify --print-certs release-assets/Lisiere-mobile.apk 2>&1 || true
+            fi
+            keytool -printcert -jarfile release-assets/Lisiere-mobile.apk 2>&1 | grep -E "SHA1:|SHA256:|SHA-1|SHA-256" || true
+            if [ -f "$HOME/.android/debug.keystore" ]; then
+              echo "--- Debug Keystore (~/.android/debug.keystore) ---"
+              keytool -list -v -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android 2>&1 | grep -E "SHA1:|SHA256:" || true
+            fi
+          } | tee release-assets/apk-fingerprints.txt
+
+          find release-assets -type f -empty -delete
           ls -lh release-assets/
-          echo "=== Empreintes de signature de l'APK (pour Firebase Console SHA-1 / SHA-256) ==="
-          keytool -printcert -jarfile release-assets/Lisiere-mobile.apk | grep -E "SHA1:|SHA256:" | tee release-assets/apk-fingerprints.txt || true
 
       - name: Publier les artifacts APK et AAB dans GitHub Actions
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
@@ -218,6 +234,7 @@ jobs:
           path: |
             release-assets/Lisiere-mobile.apk
             release-assets/Lisiere-mobile.aab
+            release-assets/apk-fingerprints.txt
           retention-days: 90
 
       - name: Créer/mettre à jour le brouillon de Release GitHub avec dist/, APK et AAB
@@ -234,5 +251,6 @@ jobs:
             - `lisiere-dist.zip` : build web PWA compilé (`dist/`)
             - `Lisiere-mobile.apk` : paquet Android installable directement (si activé)
             - `Lisiere-mobile.aab` : Android App Bundle pour Google Play (si activé)
+            - `apk-fingerprints.txt` : empreintes SHA-1 / SHA-256 pour Firebase Console (si activé)
           files: release-assets/*
           generate_release_notes: true
