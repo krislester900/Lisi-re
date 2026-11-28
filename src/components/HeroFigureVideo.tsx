@@ -7,8 +7,8 @@ interface HeroFigureVideoProps {
 }
 
 /**
- * Hero Figure 1 continuous looping video with automatic audio.
- * - No controls, no pause/play UI, no user options.
+ * Hero Figure continuous looping video with automatic audio.
+ * - No controls, no pause/play UI, no volume overlay, no user options.
  * - Plays continuously in a loop as soon as loaded/visible.
  * - Unmutes automatically when visible (or on first gesture if browser blocks unmuted autoplay).
  * - Immediately mutes audio once the user scrolls past the video or hides the tab.
@@ -49,14 +49,11 @@ export function HeroFigureVideo({
       typeof document !== 'undefined' &&
       !document.hidden;
 
-    // Keep the video playing continuously in loop without pause controls
     const ensurePlay = () => {
       if (!video.paused) return;
       const playPromise = video.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch(() => {
-          // If unmuted autoplay is blocked before first user interaction,
-          // fall back to muted loop so animation never freezes.
           video.muted = true;
           void video.play().catch(() => {});
         });
@@ -79,8 +76,6 @@ export function HeroFigureVideo({
         void video.play().catch(() => {});
       });
     } else {
-      // Some browsers pause an already-playing video synchronously or in a microtask
-      // when .muted = false is set without user activation.
       queueMicrotask(() => {
         if (video.paused && !video.muted) {
           video.muted = true;
@@ -147,8 +142,6 @@ export function HeroFigureVideo({
     const video = videoRef.current;
     const handleCanPlay = () => syncPlaybackAndAudio();
     const handleBrowserForcedPause = () => {
-      // If the browser paused the video when attempting unmuted playback without activation,
-      // immediately fall back to muted loop so the animation never pauses.
       if (video && !video.muted && !document.hidden) {
         video.muted = true;
         void video.play().catch(() => {});

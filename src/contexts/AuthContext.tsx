@@ -318,8 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lower.includes('default_web_client_id') ||
           lower.includes('no credentials available'))
       ) {
-        message =
-          'Connexion Google Android non configurée : ajoutez l’application app.lisiere.recits et son empreinte SHA-1 dans Firebase Console (ou utilisez la version PWA dans Chrome).';
+        message = `Connexion Google Android non configurée (${rawMessage}). Vérifiez que l’APK installé correspond au dernier build avec google-services.json et que son SHA-1 est bien enregistré dans Firebase Console.`;
       } else if (rawMessage) {
         message = `Connexion Google impossible (${rawMessage}).`;
       }

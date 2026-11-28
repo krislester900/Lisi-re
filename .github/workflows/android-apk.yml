@@ -137,6 +137,21 @@ jobs:
               }
               console.log("Identifiants Firebase injectés dans strings.xml.");
             }
+            // 3. Vérifier que le plugin google-services est présent dans Gradle si google-services.json existe
+            if (fs.existsSync("android/app/google-services.json")) {
+              const gs = JSON.parse(fs.readFileSync("android/app/google-services.json", "utf8"));
+              const pkgs = (gs.client || []).map((c) => c.client_info?.android_client_info?.package_name).filter(Boolean);
+              console.log("google-services.json packages:", pkgs.join(", "));
+              const appGradlePath = "android/app/build.gradle";
+              if (fs.existsSync(appGradlePath)) {
+                let appGradle = fs.readFileSync(appGradlePath, "utf8");
+                if (!appGradle.includes("com.google.gms.google-services")) {
+                  appGradle += "\napply plugin: 'com.google.gms.google-services'\n";
+                  fs.writeFileSync(appGradlePath, appGradle, "utf8");
+                  console.log("Plugin com.google.gms.google-services ajouté à android/app/build.gradle.");
+                }
+              }
+            }
           '
 
       - name: Cache Gradle
@@ -284,6 +299,49 @@ jobs:
               echo "--- Debug Keystore (~/.android/debug.keystore) ---"
               keytool -list -v -keystore "$HOME/.android/debug.keystore" -alias androiddebugkey -storepass android -keypass android 2>&1 | grep -E "SHA1:|SHA256:" || true
             fi
+            echo "--- Vérification google-services.json & default_web_client_id ---"
+            node -e '
+              const fs = require("fs");
+              const { execSync } = require("child_process");
+              const gsPath = "android/app/google-services.json";
+              let apkSha1 = "";
+              try {
+                const out = execSync("keytool -printcert -jarfile release-assets/Lisiere-mobile.apk", { encoding: "utf8" });
+                const m = out.match(/SHA1:\s*([0-9A-Fa-f:]+)/);
+                if (m) apkSha1 = m[1].replace(/:/g, "").toLowerCase();
+              } catch {}
+              if (!apkSha1) {
+                try {
+                  const apksigner = execSync("find \"${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools\" -name apksigner | sort -V | tail -n 1", { encoding: "utf8" }).trim();
+                  if (apksigner) {
+                    const out = execSync(`"${apksigner}" verify --print-certs release-assets/Lisiere-mobile.apk`, { encoding: "utf8" });
+                    const m = out.match(/SHA-1 digest:\s*([0-9a-fA-F]+)/);
+                    if (m) apkSha1 = m[1].toLowerCase();
+                  }
+                } catch {}
+              }
+              if (fs.existsSync(gsPath)) {
+                const gs = JSON.parse(fs.readFileSync(gsPath, "utf8"));
+                const hashes = [];
+                for (const c of gs.client || []) {
+                  for (const o of c.oauth_client || []) {
+                    if (o.android_info?.certificate_hash) {
+                      hashes.push(o.android_info.certificate_hash.toLowerCase());
+                    }
+                  }
+                }
+                console.log("APK SHA-1 (hex):", apkSha1 || "inconnu");
+                console.log("google-services.json certificate_hash:", hashes.join(", ") || "aucun");
+                if (apkSha1 && hashes.includes(apkSha1)) {
+                  console.log("STATUT: OK — Empreinte SHA-1 de l APK conforme a google-services.json.");
+                } else if (apkSha1) {
+                  const colonSha1 = apkSha1.toUpperCase().match(/.{2}/g).join(":");
+                  console.log(`STATUT: ATTENTION — Empreinte APK (${colonSha1}) absente de google-services.json. Ajoutez ${colonSha1} dans Firebase Console.`);
+                }
+              } else {
+                console.log("google-services.json absent (mode strings.xml).");
+              }
+            '
           } | tee release-assets/apk-fingerprints.txt
 
           find release-assets -type f -empty -delete
