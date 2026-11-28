@@ -34,6 +34,7 @@ import { CustomSalonRoomView } from './components/CustomSalonRoomView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ExchangesView } from './components/ExchangesView';
 import { ForYouView } from './components/ForYouView';
+import { HeroFigureVideo } from './components/HeroFigureVideo';
 import { JournalSubTab, JournalView } from './components/JournalView';
 import { LaunchIntro } from './components/LaunchIntro';
 import { LisiereLogo } from './components/LisiereLogo';
@@ -270,7 +271,7 @@ function buildLocationPath(
   return '/';
 }
 
-function SalonApp() {
+function SalonApp({ introActive }: { introActive: boolean }) {
   const {
     user,
     profile,
@@ -1552,27 +1553,22 @@ function SalonApp() {
                 </div>
               </div>
 
-              <figure className="lg:col-span-5 flex flex-col">
+              <div className="lg:col-span-5 flex flex-col justify-center">
                 {!heroImgFailed ? (
-                  <img
-                    src="/src/assets/images/hero_salon_letters_1794978652782.jpg"
-                    alt="Carnet ouvert sur une table en bois baignée de lumière matinale avec une tasse de thé"
-                    referrerPolicy="no-referrer"
+                  <HeroFigureVideo
+                    src="/assets/aistudio/47ff0bb4744e64c0c8407a4e6b76b085_df63053c.mp4"
+                    introActive={introActive}
                     onError={() => setHeroImgFailed(true)}
-                    className="w-full h-72 lg:h-full object-cover rounded-sm border border-stone-200 dark:border-stone-800"
                   />
                 ) : (
-                  <div className="w-full h-72 lg:h-full rounded-sm border border-stone-200 dark:border-stone-800 bg-[#F4F0E8] dark:bg-stone-900 flex flex-col items-center justify-center p-8 text-center">
+                  <div className="w-full aspect-[702/360] rounded-md border border-stone-200/80 dark:border-stone-700/70 bg-[#F4F0E8] dark:bg-stone-900 shadow-[0_18px_42px_-12px_rgba(28,25,23,0.20),0_6px_16px_-6px_rgba(28,25,23,0.10)] dark:shadow-[0_20px_48px_-12px_rgba(0,0,0,0.65)] flex flex-col items-center justify-center p-8 text-center">
                     <BookOpen className="w-8 h-8 text-stone-500 dark:text-stone-400 mb-3" />
                     <p className="font-display text-lg text-stone-800 dark:text-stone-200">
                       La table calme de la page écrite
                     </p>
                   </div>
                 )}
-                <figcaption className="text-xs font-serif italic text-stone-500 dark:text-stone-400 mt-2">
-                  Fig. 1 — Prendre le temps d’écrire pour aller à la rencontre des autres
-                </figcaption>
-              </figure>
+              </div>
             </section>
 
             {/* Predefined Salons Tour Gallery */}
@@ -2894,7 +2890,7 @@ export default function App() {
     <ErrorBoundary>
       <AuthProvider>
         {showIntro && <LaunchIntro onComplete={() => setShowIntro(false)} />}
-        <SalonApp />
+        <SalonApp introActive={showIntro} />
       </AuthProvider>
     </ErrorBoundary>
   );
