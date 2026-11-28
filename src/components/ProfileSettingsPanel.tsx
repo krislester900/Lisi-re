@@ -16,6 +16,7 @@ import {
   updatePublicProfile,
   updateUserAgeProfile,
 } from '../lib/storyService';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import { FIELD_LIMITS, StoryRepost } from '../types/story';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 import { RoleBadgesRow } from './RoleBadge';
@@ -183,8 +184,10 @@ export function ProfileSettingsPanel({
     }
   };
 
+  const safeAvatarUrl = sanitizeMediaUrl(avatarUrl);
+
   return (
-    <section className="max-w-3xl bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-6 sm:p-8">
+    <section className="max-w-3xl bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-lg p-4 sm:p-8">
       <h2 className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 mb-1">
         Paramètres du profil & musique préférée
       </h2>
@@ -214,9 +217,9 @@ export function ProfileSettingsPanel({
       <form onSubmit={handleSaveProfile} className="space-y-5">
         {/* Profile Photo Uploader */}
         <div className="p-4 bg-[#FBF9F5] dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
-          {avatarUrl && !avatarPreviewFailed ? (
+          {safeAvatarUrl && !avatarPreviewFailed ? (
             <img
-              src={avatarUrl}
+              src={safeAvatarUrl}
               alt={displayName || 'Votre photo de profil'}
               referrerPolicy="no-referrer"
               onError={() => setAvatarPreviewFailed(true)}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BookOpen } from 'lucide-react';
 import { NovelGenre } from '../types/story';
 import { NOVEL_GENRE_LABELS } from '../lib/themes';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 
 interface NovelCoverArtProps {
   coverUrl?: string;
@@ -35,7 +36,7 @@ export function NovelCoverArt({
     setImgFailed(false);
   }, [coverUrl]);
 
-  const cleanUrl = coverUrl?.trim() || '';
+  const cleanUrl = sanitizeMediaUrl(coverUrl);
   if (!cleanUrl && !showFallbackWhenMissing) {
     return null;
   }

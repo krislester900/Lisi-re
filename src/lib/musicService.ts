@@ -154,7 +154,11 @@ export async function fetchMusicProvidersStatus(): Promise<MusicProvidersStatus>
 }
 
 export async function fetchSpotifyAuthUrl(): Promise<{ url: string; callbackUrl: string }> {
-  const resp = await fetch('/api/spotify/auth-url', { credentials: 'include' });
+  const originParam =
+    typeof window !== 'undefined' && window.location?.origin
+      ? `?origin=${encodeURIComponent(window.location.origin)}`
+      : '';
+  const resp = await fetch(`/api/spotify/auth-url${originParam}`, { credentials: 'include' });
   const data = await parseJsonSafe<{
     url?: string;
     error?: string;

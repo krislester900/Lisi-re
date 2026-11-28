@@ -20,6 +20,11 @@ import {
   ReadingTrack,
   searchMusicCatalog,
 } from '../lib/musicService';
+import {
+  isTrustedAppOrigin,
+  sanitizeHttpUrl,
+  sanitizeMediaUrl,
+} from '../lib/urlSecurity';
 
 export interface PickedWallMusic {
   title: string;
@@ -110,12 +115,7 @@ export function MusicCatalogPicker({
 
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (
-        origin !== window.location.origin &&
-        !origin.endsWith('.run.app') &&
-        !origin.includes('localhost')
-      ) {
+      if (!isTrustedAppOrigin(event.origin)) {
         return;
       }
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === 'spotify') {
@@ -188,7 +188,11 @@ export function MusicCatalogPicker({
     setAuthNotice(null);
     try {
       const { url } = await fetchSpotifyAuthUrl();
-      const popup = window.open(url, 'spotify_oauth_popup', 'width=540,height=720');
+      const safeAuthUrl = sanitizeHttpUrl(url);
+      if (!safeAuthUrl || !safeAuthUrl.startsWith('https://accounts.spotify.com/')) {
+        throw new Error('URL d’autorisation Spotify invalide.');
+      }
+      const popup = window.open(safeAuthUrl, 'spotify_oauth_popup', 'width=540,height=720');
       if (!popup) {
         setAuthNotice(
           'Votre navigateur a bloqué la fenêtre Spotify. Autorisez les pop-ups pour connecter votre compte.'
@@ -484,10 +488,11 @@ export function MusicCatalogPicker({
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      {track.coverUrl ? (
+                      {sanitizeMediaUrl(track.coverUrl) ? (
                         <img
-                          src={track.coverUrl}
+                          src={sanitizeMediaUrl(track.coverUrl)}
                           alt=""
+                          referrerPolicy="no-referrer"
                           className="w-9 h-9 rounded object-cover border border-stone-200 dark:border-stone-700 shrink-0"
                         />
                       ) : (

@@ -34,6 +34,7 @@ import {
   runAutomatedContentBotGuard,
   updateStory,
 } from '../lib/storyService';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import {
   ACCENT_TONE_PALETTES,
   estimateReadingMinutes,
@@ -1017,9 +1018,9 @@ export function StoryComposerModal({
                           className="p-4 border rounded-md flex items-center justify-between gap-4 dark:brightness-95"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            {selectedCustomSalon.avatarUrl && (
+                            {sanitizeMediaUrl(selectedCustomSalon.avatarUrl) && (
                               <img
-                                src={selectedCustomSalon.avatarUrl}
+                                src={sanitizeMediaUrl(selectedCustomSalon.avatarUrl)}
                                 alt={selectedCustomSalon.name}
                                 className="w-10 h-10 rounded-md object-cover border border-stone-200 shrink-0"
                               />

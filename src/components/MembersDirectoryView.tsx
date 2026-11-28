@@ -24,6 +24,7 @@ import {
 import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { toggleFavoriteAuthor } from '../lib/storyService';
 import { STORY_THEMES, THEME_MAP } from '../lib/themes';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import {
   EngagementBadgeId,
   Exchange,
@@ -298,7 +299,7 @@ export function MembersDirectoryView({
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-8 sm:py-10 space-y-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8">
       {/* Focused Header: My Profile (from top-right corner) vs Other Profiles (from sidebar) */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-stone-200 dark:border-stone-800">
         <div className="space-y-1.5 max-w-2xl">
@@ -392,11 +393,11 @@ export function MembersDirectoryView({
             </div>
 
             {availableBadgeFilters.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 sm:flex-wrap sm:overflow-visible">
                 <button
                   type="button"
                   onClick={() => setBadgeFilter('all')}
-                  className={`min-h-[30px] px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+                  className={`min-h-[32px] px-2.5 py-1 rounded-md border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
                     badgeFilter === 'all'
                       ? 'bg-[#1B365D] dark:bg-amber-600 text-white border-[#1B365D] dark:border-amber-600'
                       : 'bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400'
@@ -412,7 +413,7 @@ export function MembersDirectoryView({
                       type="button"
                       onClick={() => setBadgeFilter(active ? 'all' : item.id)}
                       aria-pressed={active}
-                      className={`min-h-[30px] px-2 py-1 rounded-md border transition-colors inline-flex items-center gap-1 ${
+                      className={`min-h-[32px] px-2 py-1 rounded-md border transition-colors inline-flex items-center gap-1 shrink-0 ${
                         active
                           ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 ring-1 ring-[#1B365D]/30 dark:ring-amber-400/30'
                           : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-stone-400'
@@ -461,17 +462,18 @@ export function MembersDirectoryView({
               {filteredProfiles.map((member) => {
                 const isMe = member.userId === user.uid;
                 const storiesCount = storyCountByAuthor[member.userId] || 0;
+                const safeAvatarUrl = sanitizeMediaUrl(member.avatarUrl);
                 return (
                   <article
                     key={member.userId}
-                    className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-6 flex flex-col justify-between space-y-5"
+                    className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-lg p-4 sm:p-6 flex flex-col justify-between space-y-4 sm:space-y-5"
                   >
                     <div className="space-y-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          {member.avatarUrl && !failedAvatars[member.userId] ? (
+                          {safeAvatarUrl && !failedAvatars[member.userId] ? (
                             <img
-                              src={member.avatarUrl}
+                              src={safeAvatarUrl}
                               alt={member.displayName}
                               referrerPolicy="no-referrer"
                               onError={() =>

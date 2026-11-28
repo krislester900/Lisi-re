@@ -33,6 +33,7 @@ import {
   isContentAllowedForAge,
   isStoryCompliantForPublicFeed,
 } from '../lib/contentRegulation';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { stripSharedStoryUrlFromText } from '../lib/storyShare';
 import {
@@ -553,9 +554,9 @@ export function CustomSalonRoomView({
       >
         <div className="space-y-3">
           <div className="flex items-center gap-4">
-            {salon.avatarUrl && !avatarFailed ? (
+            {sanitizeMediaUrl(salon.avatarUrl) && !avatarFailed ? (
               <img
-                src={salon.avatarUrl}
+                src={sanitizeMediaUrl(salon.avatarUrl)}
                 alt={`Photo du salon ${salon.name}`}
                 onError={() => setAvatarFailed(true)}
                 className="w-16 h-16 sm:w-20 sm:h-20 rounded-md object-cover border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 shrink-0"

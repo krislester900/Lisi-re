@@ -3,6 +3,8 @@
  * plus music link parsing (Spotify, YouTube, SoundCloud, Deezer, direct audio).
  */
 
+import { sanitizeHttpUrl } from './urlSecurity';
+
 const MAX_WALL_DATA_URL_CHARS = 150000;
 const MAX_AVATAR_DATA_URL_CHARS = 45000;
 
@@ -166,11 +168,15 @@ export interface ParsedMusicSource {
 function normalizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) return '';
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (/^(www\.|open\.spotify\.com|youtu\.be|youtube\.com|music\.youtube\.com|soundcloud\.com|deezer\.com)/i.test(trimmed)) {
-    return `https://${trimmed}`;
+  if (trimmed.startsWith('/api/music/')) {
+    return trimmed;
   }
-  return trimmed;
+  const candidate = /^(www\.|open\.spotify\.com|youtu\.be|youtube\.com|music\.youtube\.com|soundcloud\.com|deezer\.com)/i.test(
+    trimmed
+  )
+    ? `https://${trimmed}`
+    : trimmed;
+  return sanitizeHttpUrl(candidate, { allowRelativeApiOrAssets: true });
 }
 
 export function parseMusicSource(rawUrl: string): ParsedMusicSource {

@@ -230,11 +230,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       if (Capacitor.isNativePlatform()) {
-        logAuthDiagnostic('signin-native', 'info', 'Appel natif FirebaseAuthentication.signInWithGoogle');
+        logAuthDiagnostic('signin-native', 'info', 'Appel natif FirebaseAuthentication.signInWithGoogle', {
+          packageName: env.androidPackageName,
+          expectedSha1: env.expectedAndroidSha1,
+        });
         let nativeResult;
         try {
           nativeResult = await FirebaseAuthentication.signInWithGoogle({
             useCredentialManager: true,
+            scopes: [],
           });
         } catch (cmErr) {
           const cmMessage = cmErr instanceof Error ? cmErr.message : String(cmErr);
@@ -251,6 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           );
           nativeResult = await FirebaseAuthentication.signInWithGoogle({
             useCredentialManager: false,
+            scopes: [],
           });
         }
 
@@ -277,16 +282,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const lower = rawMessage.toLowerCase();
 
-      if (
+      const canFallbackToRedirect =
         !Capacitor.isNativePlatform() &&
-        env.isStandalonePWA &&
+        !env.isInIframe &&
+        (env.isStandalonePWA || /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent));
+
+      if (
+        canFallbackToRedirect &&
         (lower.includes('popup-blocked') ||
           lower.includes('operation-not-supported-in-this-environment'))
       ) {
         logAuthDiagnostic(
           'signin-popup',
           'warn',
-          `Popup bloquée en PWA installée (${rawMessage}), bascule vers signInWithRedirect`
+          `Popup bloquée sur appareil mobile/PWA (${rawMessage}), bascule vers signInWithRedirect`
         );
         await signInWithGoogleRedirect();
         return;
@@ -318,7 +327,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           lower.includes('default_web_client_id') ||
           lower.includes('no credentials available'))
       ) {
-        message = `Connexion Google Android non configurée (${rawMessage}). Vérifiez que l’APK installé correspond au dernier build avec google-services.json et que son SHA-1 est bien enregistré dans Firebase Console.`;
+        message = `Erreur Google Android (${rawMessage}) : l’empreinte SHA-1 de signature de cet APK ne correspond pas encore à celle enregistrée pour ${env.androidPackageName} dans Firebase Console, ou le APK provient d’un ancien cache de signature. Vérifiez le fichier apk-fingerprints.txt du build GitHub.`;
       } else if (rawMessage) {
         message = `Connexion Google impossible (${rawMessage}).`;
       }

@@ -1,11 +1,20 @@
 import {
   analyzeModerationCaseWithGemini,
+  applySecurityHeadersToFetchResponse,
   buildRobotsTxt,
   buildSitemapXml,
   ContentGuardKind,
   guardContentWithGemini,
+  isSafePublicHttpsUrl,
   normalizeGoogleSiteVerificationToken,
   normalizeGoogleVerificationFile,
+  resolveTrustedOAuthTargetOrigin,
+  safeFetchWithValidatedRedirects,
+  SPOTIFY_DEVICE_ID_REGEX,
+  SPOTIFY_URI_REGEX,
+  VALID_MODERATION_CATEGORIES,
+  VALID_MODERATION_TARGET_TYPES,
+  VALID_MUSIC_SEARCH_SOURCES,
   verifyFirebaseIdToken,
 } from './api-helpers.ts';
 
@@ -230,13 +239,16 @@ function buildAudiusCandidateUrls(
   stream?: { url?: string | null; mirrors?: string[] } | null
 ): string[] {
   const candidates: string[] = [];
-  if (stream?.url) {
+  if (stream?.url && isSafePublicHttpsUrl(stream.url)) {
     candidates.push(stream.url);
     try {
       const parsed = new URL(stream.url);
       const suffix = `${parsed.pathname}${parsed.search}`;
       for (const mirror of stream.mirrors ?? []) {
-        candidates.push(`${mirror.replace(/\/+$/, '')}${suffix}`);
+        const candidate = `${mirror.replace(/\/+$/, '')}${suffix}`;
+        if (isSafePublicHttpsUrl(candidate)) {
+          candidates.push(candidate);
+        }
       }
     } catch {
       // ignore invalid mirror
@@ -257,9 +269,12 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
       const hostsJson = (await hostsResp.json()) as { data?: string[] };
       if (Array.isArray(hostsJson.data)) {
         for (const host of hostsJson.data.slice(0, 2)) {
-          endpoints.push(
-            `${host.replace(/\/+$/, '')}/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=Lisiere`
-          );
+          const cleanHost = typeof host === 'string' ? host.replace(/\/+$/, '') : '';
+          if (cleanHost && isSafePublicHttpsUrl(cleanHost)) {
+            endpoints.push(
+              `${cleanHost}/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=Lisiere`
+            );
+          }
         }
       }
     }
@@ -504,450 +519,506 @@ async function fetchYouTubeTracks(query: string, apiKey?: string): Promise<Norma
   return tracks;
 }
 
-export default {
-  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
-    const url = new URL(request.url);
-    const { pathname } = url;
+async function handleWorkerRequest(request: Request, env: WorkerEnv): Promise<Response> {
+  const url = new URL(request.url);
+  const { pathname } = url;
 
-    if (pathname === '/robots.txt' && request.method === 'GET') {
-      const origin = getRequestOrigin(request, env);
-      return new Response(buildRobotsTxt(origin), {
-        status: 200,
-        headers: {
-          'Content-Type': 'text/plain; charset=utf-8',
-          'Cache-Control': 'public, max-age=3600',
-        },
-      });
-    }
+  if (pathname === '/robots.txt' && request.method === 'GET') {
+    const origin = getRequestOrigin(request, env);
+    return new Response(buildRobotsTxt(origin), {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  }
 
-    if (pathname === '/sitemap.xml' && request.method === 'GET') {
-      const origin = getRequestOrigin(request, env);
-      return new Response(buildSitemapXml(origin), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/xml; charset=utf-8',
-          'Cache-Control': 'public, max-age=3600',
-        },
-      });
-    }
+  if (pathname === '/sitemap.xml' && request.method === 'GET') {
+    const origin = getRequestOrigin(request, env);
+    return new Response(buildSitemapXml(origin), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=3600',
+      },
+    });
+  }
 
-    const expectedVerificationFile = normalizeGoogleVerificationFile(
-      env.GOOGLE_SITE_VERIFICATION_FILE
-    );
-    if (
-      expectedVerificationFile &&
-      pathname === `/${expectedVerificationFile}` &&
-      request.method === 'GET'
-    ) {
-      return new Response(`google-site-verification: ${expectedVerificationFile}\n`, {
-        status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      });
-    }
+  const expectedVerificationFile = normalizeGoogleVerificationFile(
+    env.GOOGLE_SITE_VERIFICATION_FILE
+  );
+  if (
+    expectedVerificationFile &&
+    pathname === `/${expectedVerificationFile}` &&
+    request.method === 'GET'
+  ) {
+    return new Response(`google-site-verification: ${expectedVerificationFile}\n`, {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  }
 
-    if (pathname === '/api/moderation/analyze' && request.method === 'POST') {
-      const authHeader = request.headers.get('authorization') || '';
-      const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-      if (!bearerToken) {
-        return jsonResponse(
-          { error: 'Authentification requise pour lancer l’analyse IA.' },
-          401
-        );
-      }
-      const caller = await verifyFirebaseIdToken(bearerToken);
-      if (!caller) {
-        return jsonResponse({ error: 'Session expirée ou jeton Firebase invalide.' }, 401);
-      }
-
-      let body: Record<string, unknown> = {};
-      try {
-        body = (await request.json()) as Record<string, unknown>;
-      } catch {
-        return jsonResponse({ error: 'Requête JSON invalide.' }, 400);
-      }
-
-      try {
-        const analysis = await analyzeModerationCaseWithGemini({
-          apiKey: env.GEMINI_API_KEY || '',
-          targetType: typeof body.targetType === 'string' ? body.targetType : 'story',
-          category: typeof body.category === 'string' ? body.category : 'autre',
-          targetUserName:
-            typeof body.targetUserName === 'string' ? body.targetUserName : 'Membre',
-          targetExcerpt: typeof body.targetExcerpt === 'string' ? body.targetExcerpt : '',
-          description: typeof body.description === 'string' ? body.description : '',
-        });
-        return jsonResponse({ analysis });
-      } catch (err) {
-        const e = err as Error & { statusCode?: number };
-        const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
-        return jsonResponse(
-          { error: e.message || 'Impossible de contacter le service de modération IA.' },
-          status
-        );
-      }
-    }
-
-    if (pathname === '/api/moderation/guard' && request.method === 'POST') {
-      const authHeader = request.headers.get('authorization') || '';
-      const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-      if (!bearerToken) {
-        return jsonResponse(
-          { error: 'Authentification requise pour la vérification du contenu.' },
-          401
-        );
-      }
-      const caller = await verifyFirebaseIdToken(bearerToken);
-      if (!caller) {
-        return jsonResponse({ error: 'Session expirée ou jeton Firebase invalide.' }, 401);
-      }
-
-      let body: Record<string, unknown> = {};
-      try {
-        body = (await request.json()) as Record<string, unknown>;
-      } catch {
-        return jsonResponse({ error: 'Requête JSON invalide.' }, 400);
-      }
-
-      try {
-        const verdict = await guardContentWithGemini({
-          apiKey: env.GEMINI_API_KEY || '',
-          kind:
-            typeof body.kind === 'string'
-              ? (body.kind as ContentGuardKind)
-              : 'story',
-          title: typeof body.title === 'string' ? body.title : '',
-          text: typeof body.text === 'string' ? body.text : '',
-          declaredMinAge:
-            typeof body.declaredMinAge === 'number' ? body.declaredMinAge : 0,
-          declaredMature: Boolean(body.declaredMature),
-        });
-        return jsonResponse({ verdict });
-      } catch (err) {
-        const e = err as Error & { statusCode?: number };
-        const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
-        return jsonResponse(
-          { error: e.message || 'Le bot de régulation IA est momentanément indisponible.' },
-          status
-        );
-      }
-    }
-
-    if (pathname === '/api/music/providers') {
-      const headers = new Headers();
-      const creds = getSpotifyCredentials(env);
-      const session = creds ? await ensureFreshSpotifySession(request, env, headers) : null;
-      const callbackUrl = `${getRequestOrigin(request, env)}/auth/spotify/callback`;
+  if (pathname === '/api/moderation/analyze' && request.method === 'POST') {
+    const authHeader = request.headers.get('authorization') || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!bearerToken) {
       return jsonResponse(
-        {
-          spotify: {
-            configured: Boolean(creds),
-            connected: Boolean(session),
-            user: session?.user ?? null,
-            callbackUrl,
-          },
-        },
-        200,
-        headers
+        { error: 'Authentification requise pour lancer l’analyse IA.' },
+        401
+      );
+    }
+    const caller = await verifyFirebaseIdToken(bearerToken);
+    if (!caller) {
+      return jsonResponse({ error: 'Session expirée ou jeton Firebase invalide.' }, 401);
+    }
+    if (!caller.emailVerified) {
+      return jsonResponse(
+        { error: 'Veuillez vérifier votre adresse e-mail avant de lancer l’analyse IA.' },
+        403
       );
     }
 
-    if (pathname === '/api/music/search') {
-      const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
-      const source = url.searchParams.get('source') || 'audius';
-      if (!q) return jsonResponse({ tracks: [] });
-      try {
-        if (source === 'deezer') return jsonResponse({ tracks: await fetchDeezerTracks(q) });
-        if (source === 'youtube') {
-          return jsonResponse({ tracks: await fetchYouTubeTracks(q, env.YOUTUBE_API_KEY) });
-        }
-        return jsonResponse({ tracks: await fetchAudiusTracks(q) });
-      } catch (err) {
-        return jsonResponse(
-          { error: err instanceof Error ? err.message : 'Erreur lors de la recherche musicale.' },
-          502
-        );
-      }
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: 'Requête JSON invalide.' }, 400);
     }
 
-    if (pathname.startsWith('/api/music/audius/stream/')) {
-      const rawId = pathname.slice('/api/music/audius/stream/'.length).trim();
-      const trackId = decodeURIComponent(rawId);
-      if (!trackId || !/^[a-zA-Z0-9_-]+$/.test(trackId)) {
-        return jsonResponse({ error: 'Identifiant de piste invalide.' }, 400);
-      }
+    const targetType =
+      typeof body.targetType === 'string' && body.targetType ? body.targetType : 'story';
+    const category =
+      typeof body.category === 'string' && body.category ? body.category : 'autre';
+    if (!VALID_MODERATION_TARGET_TYPES.has(targetType)) {
+      return jsonResponse({ error: 'Type de cible de modération invalide.' }, 400);
+    }
+    if (!VALID_MODERATION_CATEGORIES.has(category)) {
+      return jsonResponse({ error: 'Catégorie de signalement invalide.' }, 400);
+    }
 
-      let candidates: string[] = [];
-      try {
-        const metaResp = await fetch(
-          `https://api.audius.co/v1/tracks/${encodeURIComponent(trackId)}?app_name=Lisiere`,
-          { signal: AbortSignal.timeout(3500) }
-        );
-        if (metaResp.ok) {
-          const metaJson = (await metaResp.json()) as {
-            data?: {
-              is_delete?: boolean;
-              is_available?: boolean;
-              is_streamable?: boolean;
-              stream?: { url?: string | null; mirrors?: string[] } | null;
-            };
+    try {
+      const analysis = await analyzeModerationCaseWithGemini({
+        apiKey: env.GEMINI_API_KEY || '',
+        targetType,
+        category,
+        targetUserName:
+          typeof body.targetUserName === 'string' ? body.targetUserName : 'Membre',
+        targetExcerpt: typeof body.targetExcerpt === 'string' ? body.targetExcerpt : '',
+        description: typeof body.description === 'string' ? body.description : '',
+      });
+      return jsonResponse({ analysis });
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
+      return jsonResponse(
+        {
+          error:
+            status < 500
+              ? e.message || 'Requête d’analyse invalide.'
+              : 'Impossible de contacter le service de modération IA.',
+        },
+        status
+      );
+    }
+  }
+
+  if (pathname === '/api/moderation/guard' && request.method === 'POST') {
+    const authHeader = request.headers.get('authorization') || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!bearerToken) {
+      return jsonResponse(
+        { error: 'Authentification requise pour la vérification du contenu.' },
+        401
+      );
+    }
+    const caller = await verifyFirebaseIdToken(bearerToken);
+    if (!caller) {
+      return jsonResponse({ error: 'Session expirée ou jeton Firebase invalide.' }, 401);
+    }
+    if (!caller.emailVerified) {
+      return jsonResponse(
+        { error: 'Veuillez vérifier votre adresse e-mail avant de publier.' },
+        403
+      );
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return jsonResponse({ error: 'Requête JSON invalide.' }, 400);
+    }
+
+    try {
+      const verdict = await guardContentWithGemini({
+        apiKey: env.GEMINI_API_KEY || '',
+        kind:
+          typeof body.kind === 'string'
+            ? (body.kind as ContentGuardKind)
+            : 'story',
+        title: typeof body.title === 'string' ? body.title : '',
+        text: typeof body.text === 'string' ? body.text : '',
+        declaredMinAge:
+          typeof body.declaredMinAge === 'number' ? body.declaredMinAge : 0,
+        declaredMature: Boolean(body.declaredMature),
+      });
+      return jsonResponse({ verdict });
+    } catch (err) {
+      const e = err as Error & { statusCode?: number };
+      const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
+      return jsonResponse(
+        {
+          error:
+            status < 500
+              ? e.message || 'Contenu invalide.'
+              : 'Le bot de régulation IA est momentanément indisponible.',
+        },
+        status
+      );
+    }
+  }
+
+  if (pathname === '/api/music/providers') {
+    const headers = new Headers();
+    const creds = getSpotifyCredentials(env);
+    const session = creds ? await ensureFreshSpotifySession(request, env, headers) : null;
+    const callbackUrl = `${getRequestOrigin(request, env)}/auth/spotify/callback`;
+    return jsonResponse(
+      {
+        spotify: {
+          configured: Boolean(creds),
+          connected: Boolean(session),
+          user: session?.user ?? null,
+          callbackUrl,
+        },
+      },
+      200,
+      headers
+    );
+  }
+
+  if (pathname === '/api/music/search') {
+    const q = (url.searchParams.get('q') || '').trim().slice(0, 120);
+    const source = url.searchParams.get('source') || 'audius';
+    if (!VALID_MUSIC_SEARCH_SOURCES.has(source)) {
+      return jsonResponse({ error: 'Source musicale non prise en charge.' }, 400);
+    }
+    if (!q) return jsonResponse({ tracks: [] });
+    try {
+      if (source === 'deezer') return jsonResponse({ tracks: await fetchDeezerTracks(q) });
+      if (source === 'youtube') {
+        return jsonResponse({ tracks: await fetchYouTubeTracks(q, env.YOUTUBE_API_KEY) });
+      }
+      return jsonResponse({ tracks: await fetchAudiusTracks(q) });
+    } catch {
+      return jsonResponse({ error: 'Erreur lors de la recherche musicale.' }, 502);
+    }
+  }
+
+  if (pathname.startsWith('/api/music/audius/stream/')) {
+    const rawId = pathname.slice('/api/music/audius/stream/'.length).trim();
+    const trackId = decodeURIComponent(rawId);
+    if (!trackId || !/^[a-zA-Z0-9_-]+$/.test(trackId)) {
+      return jsonResponse({ error: 'Identifiant de piste invalide.' }, 400);
+    }
+
+    let candidates: string[] = [];
+    try {
+      const metaResp = await fetch(
+        `https://api.audius.co/v1/tracks/${encodeURIComponent(trackId)}?app_name=Lisiere`,
+        { signal: AbortSignal.timeout(3500) }
+      );
+      if (metaResp.ok) {
+        const metaJson = (await metaResp.json()) as {
+          data?: {
+            is_delete?: boolean;
+            is_available?: boolean;
+            is_streamable?: boolean;
+            stream?: { url?: string | null; mirrors?: string[] } | null;
           };
-          const track = metaJson.data;
-          if (
-            !track ||
-            track.is_delete ||
-            track.is_available === false ||
-            track.is_streamable === false
-          ) {
-            return jsonResponse({ error: 'Ce morceau n’est plus disponible sur Audius.' }, 404);
-          }
-          candidates = buildAudiusCandidateUrls(trackId, track.stream);
+        };
+        const track = metaJson.data;
+        if (
+          !track ||
+          track.is_delete ||
+          track.is_available === false ||
+          track.is_streamable === false
+        ) {
+          return jsonResponse({ error: 'Ce morceau n’est plus disponible sur Audius.' }, 404);
         }
-      } catch {
-        // Fallback below
+        candidates = buildAudiusCandidateUrls(trackId, track.stream);
       }
-      if (candidates.length === 0) {
-        candidates = [`https://api.audius.co/v1/tracks/${encodeURIComponent(trackId)}/stream?app_name=Lisiere`];
-      }
-
-      const rangeHeader = request.headers.get('range');
-      for (const candidateUrl of candidates.slice(0, 4)) {
-        try {
-          const upstream = await fetch(candidateUrl, {
-            headers: rangeHeader ? { Range: rangeHeader } : undefined,
-            redirect: 'follow',
-            signal: AbortSignal.timeout(6000),
-          });
-          if (!upstream.ok || !upstream.body) {
-            await upstream.body?.cancel().catch(() => {});
-            continue;
-          }
-          const ct = upstream.headers.get('content-type') || 'audio/mpeg';
-          if (ct.includes('application/json') || ct.includes('text/html')) {
-            await upstream.body.cancel().catch(() => {});
-            continue;
-          }
-          const outHeaders = new Headers();
-          outHeaders.set('Content-Type', ct);
-          outHeaders.set('Cache-Control', 'public, max-age=300');
-          for (const h of ['content-length', 'content-range', 'accept-ranges']) {
-            const val = upstream.headers.get(h);
-            if (val) outHeaders.set(h, val);
-          }
-          return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
-        } catch {
-          continue;
-        }
-      }
-      return jsonResponse({ error: 'Flux audio indisponible sur Audius.' }, 502);
+    } catch {
+      // Fallback below
+    }
+    if (candidates.length === 0) {
+      candidates = [`https://api.audius.co/v1/tracks/${encodeURIComponent(trackId)}/stream?app_name=Lisiere`];
     }
 
-    if (pathname.startsWith('/api/music/deezer/stream/')) {
-      const trackId = pathname.slice('/api/music/deezer/stream/'.length).trim();
-      if (!trackId || !/^[0-9]+$/.test(trackId)) {
-        return jsonResponse({ error: 'Identifiant Deezer invalide.' }, 400);
-      }
+    const rangeHeader = request.headers.get('range');
+    for (const candidateUrl of candidates.slice(0, 4)) {
       try {
-        const metaResp = await fetch(`https://api.deezer.com/track/${trackId}`, {
-          signal: AbortSignal.timeout(6500),
-        });
-        if (!metaResp.ok) return jsonResponse({ error: 'Extrait Deezer introuvable.' }, 404);
-        const meta = (await metaResp.json()) as { preview?: string; error?: unknown };
-        if (!meta.preview || meta.error) {
-          return jsonResponse(
-            { error: 'Aucun extrait audio disponible sur Deezer pour ce titre.' },
-            404
-          );
-        }
-        const rangeHeader = request.headers.get('range');
-        const upstream = await fetch(meta.preview, {
+        const upstream = await safeFetchWithValidatedRedirects(candidateUrl, {
           headers: rangeHeader ? { Range: rangeHeader } : undefined,
-          redirect: 'follow',
-          signal: AbortSignal.timeout(10000),
+          signal: AbortSignal.timeout(6000),
         });
         if (!upstream.ok || !upstream.body) {
           await upstream.body?.cancel().catch(() => {});
-          return jsonResponse({ error: 'Flux extrait Deezer indisponible.' }, 502);
+          continue;
+        }
+        const ct = upstream.headers.get('content-type') || 'audio/mpeg';
+        if (ct.includes('application/json') || ct.includes('text/html')) {
+          await upstream.body.cancel().catch(() => {});
+          continue;
         }
         const outHeaders = new Headers();
-        outHeaders.set('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg');
-        outHeaders.set('Cache-Control', 'private, max-age=120');
+        outHeaders.set('Content-Type', ct);
+        outHeaders.set('Cache-Control', 'public, max-age=300');
         for (const h of ['content-length', 'content-range', 'accept-ranges']) {
           const val = upstream.headers.get(h);
           if (val) outHeaders.set(h, val);
         }
         return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
       } catch {
-        return jsonResponse({ error: 'Flux extrait Deezer momentanément indisponible.' }, 502);
+        continue;
       }
     }
+    return jsonResponse({ error: 'Flux audio indisponible sur Audius.' }, 502);
+  }
 
-    if (pathname === '/api/spotify/auth-url') {
-      const creds = getSpotifyCredentials(env);
-      const callbackUrl = `${getRequestOrigin(request, env)}/auth/spotify/callback`;
-      if (!creds) {
-        return jsonResponse({ error: 'SPOTIFY_NOT_CONFIGURED', callbackUrl }, 400);
-      }
-      const stateBytes = crypto.getRandomValues(new Uint8Array(16));
-      const state = Array.from(stateBytes, (b) => b.toString(16).padStart(2, '0')).join('');
-      const sealedState = await sealJson({ state, createdAt: Date.now() }, env);
-      const headers = new Headers();
-      headers.append(
-        'Set-Cookie',
-        buildCookieHeader(SPOTIFY_STATE_COOKIE, sealedState, 600, request.url.startsWith('https://'))
-      );
-      const params = new URLSearchParams({
-        client_id: creds.clientId,
-        response_type: 'code',
-        redirect_uri: callbackUrl,
-        state,
-        scope:
-          'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state user-read-currently-playing user-top-read',
-        show_dialog: 'true',
+  if (pathname.startsWith('/api/music/deezer/stream/')) {
+    const trackId = pathname.slice('/api/music/deezer/stream/'.length).trim();
+    if (!trackId || !/^[0-9]+$/.test(trackId)) {
+      return jsonResponse({ error: 'Identifiant Deezer invalide.' }, 400);
+    }
+    try {
+      const metaResp = await fetch(`https://api.deezer.com/track/${trackId}`, {
+        signal: AbortSignal.timeout(6500),
       });
-      return jsonResponse(
-        { url: `https://accounts.spotify.com/authorize?${params.toString()}`, callbackUrl },
+      if (!metaResp.ok) return jsonResponse({ error: 'Extrait Deezer introuvable.' }, 404);
+      const meta = (await metaResp.json()) as { preview?: string; error?: unknown };
+      if (!meta.preview || meta.error) {
+        return jsonResponse(
+          { error: 'Aucun extrait audio disponible sur Deezer pour ce titre.' },
+          404
+        );
+      }
+      const rangeHeader = request.headers.get('range');
+      const upstream = await safeFetchWithValidatedRedirects(
+        meta.preview,
+        {
+          headers: rangeHeader ? { Range: rangeHeader } : undefined,
+          signal: AbortSignal.timeout(10000),
+        },
+        { allowedHostSuffixes: ['dzcdn.net', 'deezer.com'] }
+      );
+      if (!upstream.ok || !upstream.body) {
+        await upstream.body?.cancel().catch(() => {});
+        return jsonResponse({ error: 'Flux extrait Deezer indisponible.' }, 502);
+      }
+      const outHeaders = new Headers();
+      outHeaders.set('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg');
+      outHeaders.set('Cache-Control', 'private, max-age=120');
+      for (const h of ['content-length', 'content-range', 'accept-ranges']) {
+        const val = upstream.headers.get(h);
+        if (val) outHeaders.set(h, val);
+      }
+      return new Response(upstream.body, { status: upstream.status, headers: outHeaders });
+    } catch {
+      return jsonResponse({ error: 'Flux extrait Deezer momentanément indisponible.' }, 502);
+    }
+  }
+
+  if (pathname === '/api/spotify/auth-url') {
+    const creds = getSpotifyCredentials(env);
+    const appOrigin = getRequestOrigin(request, env);
+    const callbackUrl = `${appOrigin}/auth/spotify/callback`;
+    if (!creds) {
+      return jsonResponse({ error: 'SPOTIFY_NOT_CONFIGURED', callbackUrl }, 400);
+    }
+    const targetOrigin = resolveTrustedOAuthTargetOrigin(url.searchParams.get('origin'), appOrigin);
+    const stateBytes = crypto.getRandomValues(new Uint8Array(16));
+    const state = Array.from(stateBytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    const sealedState = await sealJson({ state, targetOrigin, createdAt: Date.now() }, env);
+    const headers = new Headers();
+    headers.append(
+      'Set-Cookie',
+      buildCookieHeader(SPOTIFY_STATE_COOKIE, sealedState, 600, request.url.startsWith('https://'))
+    );
+    const params = new URLSearchParams({
+      client_id: creds.clientId,
+      response_type: 'code',
+      redirect_uri: callbackUrl,
+      state,
+      scope:
+        'streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state user-read-currently-playing user-top-read',
+      show_dialog: 'true',
+    });
+    return jsonResponse(
+      { url: `https://accounts.spotify.com/authorize?${params.toString()}`, callbackUrl },
+      200,
+      headers
+    );
+  }
+
+  if (pathname === '/auth/spotify/callback' || pathname === '/auth/spotify/callback/') {
+    const isHttps = request.url.startsWith('https://');
+    const appOrigin = getRequestOrigin(request, env);
+    const cookies = parseCookies(request);
+    const storedState = await unsealJson<{ state: string; targetOrigin?: string; createdAt: number }>(
+      cookies[SPOTIFY_STATE_COOKIE],
+      env
+    );
+    const headers = new Headers();
+    headers.append('Set-Cookie', buildCookieHeader(SPOTIFY_STATE_COOKIE, '', 0, isHttps));
+
+    const targetOrigin = resolveTrustedOAuthTargetOrigin(storedState?.targetOrigin, appOrigin);
+    const serializedTargetOrigin = JSON.stringify(targetOrigin);
+
+    const errorParam = (url.searchParams.get('error') || '').slice(0, 80);
+    if (errorParam) {
+      return htmlResponse(
+        `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_ERROR',provider:'spotify',error:${JSON.stringify(
+          errorParam
+        )}},${serializedTargetOrigin});window.close();}else{window.location.href='/';}</script><p>Connexion Spotify annulée.</p></body></html>`,
         200,
         headers
       );
     }
 
-    if (pathname === '/auth/spotify/callback' || pathname === '/auth/spotify/callback/') {
-      const isHttps = request.url.startsWith('https://');
-      const errorParam = url.searchParams.get('error') || '';
-      if (errorParam) {
-        return htmlResponse(
-          `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_ERROR',provider:'spotify',error:${JSON.stringify(
-            errorParam
-          )}},'*');window.close();}else{window.location.href='/';}</script><p>Connexion Spotify annulée.</p></body></html>`
-        );
-      }
-      const code = url.searchParams.get('code') || '';
-      const state = url.searchParams.get('state') || '';
-      const cookies = parseCookies(request);
-      const storedState = await unsealJson<{ state: string; createdAt: number }>(
-        cookies[SPOTIFY_STATE_COOKIE],
-        env
+    const code = url.searchParams.get('code') || '';
+    const state = url.searchParams.get('state') || '';
+    const stateExpired =
+      !storedState ||
+      typeof storedState.createdAt !== 'number' ||
+      Date.now() - storedState.createdAt > 10 * 60 * 1000;
+
+    if (!code || !state || stateExpired || storedState.state !== state) {
+      return htmlResponse(
+        `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_ERROR',provider:'spotify',error:'invalid_state'},${serializedTargetOrigin});window.close();}else{window.location.href='/';}</script><p>Session OAuth expirée ou invalide.</p></body></html>`,
+        400,
+        headers
       );
-      const headers = new Headers();
-      headers.append('Set-Cookie', buildCookieHeader(SPOTIFY_STATE_COOKIE, '', 0, isHttps));
+    }
+    const creds = getSpotifyCredentials(env);
+    if (!creds) return new Response('Spotify non configuré.', { status: 500, headers });
 
-      if (!code || !state || !storedState || storedState.state !== state) {
-        return htmlResponse(
-          `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_ERROR',provider:'spotify',error:'invalid_state'},'*');window.close();}else{window.location.href='/';}</script><p>Session OAuth expirée ou invalide.</p></body></html>`,
-          400,
-          headers
-        );
-      }
-      const creds = getSpotifyCredentials(env);
-      if (!creds) return new Response('Spotify non configuré.', { status: 500, headers });
+    try {
+      const callbackUrl = `${appOrigin}/auth/spotify/callback`;
+      const basic = btoa(`${creds.clientId}:${creds.clientSecret}`);
+      const tokenResp = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${basic}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: callbackUrl,
+        }).toString(),
+      });
+      if (!tokenResp.ok) throw new Error('Échec d’échange du jeton Spotify.');
+      const tokenData = (await tokenResp.json()) as {
+        access_token: string;
+        refresh_token?: string;
+        expires_in: number;
+      };
+      const meResp = await fetch('https://api.spotify.com/v1/me', {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      const meData = meResp.ok
+        ? ((await meResp.json()) as {
+            id?: string;
+            display_name?: string;
+            product?: string;
+            images?: Array<{ url: string }>;
+          })
+        : {};
+      const sessionPayload: SpotifySessionPayload = {
+        accessToken: tokenData.access_token,
+        refreshToken: tokenData.refresh_token || '',
+        expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
+        user: {
+          id: meData.id || 'spotify_user',
+          displayName: meData.display_name || 'Auditeur Spotify',
+          product: meData.product || 'open',
+          avatarUrl: meData.images?.[0]?.url,
+        },
+      };
+      const sealed = await sealJson(sessionPayload, env);
+      headers.append(
+        'Set-Cookie',
+        buildCookieHeader(SPOTIFY_SESSION_COOKIE, sealed, 30 * 24 * 60 * 60, isHttps)
+      );
+      return htmlResponse(
+        `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_SUCCESS',provider:'spotify'},${serializedTargetOrigin});window.close();}else{window.location.href='/';}</script><p>Compte Spotify connecté.</p></body></html>`,
+        200,
+        headers
+      );
+    } catch {
+      return htmlResponse(
+        `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_ERROR',provider:'spotify',error:'oauth_failed'},${serializedTargetOrigin});window.close();}</script><p>Erreur Spotify.</p></body></html>`,
+        500,
+        headers
+      );
+    }
+  }
 
-      try {
-        const callbackUrl = `${getRequestOrigin(request, env)}/auth/spotify/callback`;
-        const basic = btoa(`${creds.clientId}:${creds.clientSecret}`);
-        const tokenResp = await fetch('https://accounts.spotify.com/api/token', {
-          method: 'POST',
-          headers: {
-            Authorization: `Basic ${basic}`,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: new URLSearchParams({
-            grant_type: 'authorization_code',
-            code,
-            redirect_uri: callbackUrl,
-          }).toString(),
-        });
-        if (!tokenResp.ok) throw new Error('Échec d’échange du jeton Spotify.');
-        const tokenData = (await tokenResp.json()) as {
-          access_token: string;
-          refresh_token?: string;
-          expires_in: number;
-        };
-        const meResp = await fetch('https://api.spotify.com/v1/me', {
-          headers: { Authorization: `Bearer ${tokenData.access_token}` },
-        });
-        const meData = meResp.ok
-          ? ((await meResp.json()) as {
-              id?: string;
-              display_name?: string;
-              product?: string;
-              images?: Array<{ url: string }>;
-            })
-          : {};
-        const sessionPayload: SpotifySessionPayload = {
-          accessToken: tokenData.access_token,
-          refreshToken: tokenData.refresh_token || '',
-          expiresAt: Date.now() + (tokenData.expires_in || 3600) * 1000,
-          user: {
-            id: meData.id || 'spotify_user',
-            displayName: meData.display_name || 'Auditeur Spotify',
-            product: meData.product || 'open',
-            avatarUrl: meData.images?.[0]?.url,
-          },
-        };
-        const sealed = await sealJson(sessionPayload, env);
-        headers.append(
-          'Set-Cookie',
-          buildCookieHeader(SPOTIFY_SESSION_COOKIE, sealed, 30 * 24 * 60 * 60, isHttps)
-        );
-        return htmlResponse(
-          `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_SUCCESS',provider:'spotify'},'*');window.close();}else{window.location.href='/';}</script><p>Compte Spotify connecté.</p></body></html>`,
-          200,
-          headers
-        );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'oauth_failed';
-        return htmlResponse(
-          `<!doctype html><html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_ERROR',provider:'spotify',error:${JSON.stringify(
-            msg
-          )}},'*');window.close();}</script><p>Erreur Spotify.</p></body></html>`,
-          500,
-          headers
-        );
-      }
+  if (pathname.startsWith('/api/spotify/')) {
+    const headers = new Headers();
+    if (pathname === '/api/spotify/logout' && request.method === 'POST') {
+      headers.append(
+        'Set-Cookie',
+        buildCookieHeader(SPOTIFY_SESSION_COOKIE, '', 0, request.url.startsWith('https://'))
+      );
+      return jsonResponse({ ok: true }, 200, headers);
     }
 
-    if (pathname.startsWith('/api/spotify/')) {
-      const headers = new Headers();
-      if (pathname === '/api/spotify/logout' && request.method === 'POST') {
-        headers.append(
-          'Set-Cookie',
-          buildCookieHeader(SPOTIFY_SESSION_COOKIE, '', 0, request.url.startsWith('https://'))
-        );
-        return jsonResponse({ ok: true }, 200, headers);
+    const session = await ensureFreshSpotifySession(request, env, headers);
+    if (!session) return jsonResponse({ error: 'Non connecté à Spotify.' }, 401, headers);
+
+    if (pathname === '/api/spotify/token') {
+      return jsonResponse(
+        {
+          accessToken: session.accessToken,
+          product: session.user.product,
+          displayName: session.user.displayName,
+        },
+        200,
+        headers
+      );
+    }
+
+    if (pathname === '/api/spotify/top-tracks' || pathname === '/api/spotify/search') {
+      const target =
+        pathname === '/api/spotify/top-tracks'
+          ? 'https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=8'
+          : `https://api.spotify.com/v1/search?q=${encodeURIComponent(
+              (url.searchParams.get('q') || '').trim()
+            )}&type=track&limit=12`;
+      if (pathname === '/api/spotify/search' && !(url.searchParams.get('q') || '').trim()) {
+        return jsonResponse({ tracks: [] }, 200, headers);
       }
-
-      const session = await ensureFreshSpotifySession(request, env, headers);
-      if (!session) return jsonResponse({ error: 'Non connecté à Spotify.' }, 401, headers);
-
-      if (pathname === '/api/spotify/token') {
-        return jsonResponse(
-          {
-            accessToken: session.accessToken,
-            product: session.user.product,
-            displayName: session.user.displayName,
-          },
-          200,
-          headers
-        );
+      const resp = await fetch(target, {
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      if (!resp.ok) {
+        return jsonResponse({ error: 'Erreur Spotify.' }, resp.status, headers);
       }
-
-      if (pathname === '/api/spotify/top-tracks' || pathname === '/api/spotify/search') {
-        const target =
-          pathname === '/api/spotify/top-tracks'
-            ? 'https://api.spotify.com/v1/me/top/tracks?time_range=medium_term&limit=8'
-            : `https://api.spotify.com/v1/search?q=${encodeURIComponent(
-                (url.searchParams.get('q') || '').trim()
-              )}&type=track&limit=12`;
-        if (pathname === '/api/spotify/search' && !(url.searchParams.get('q') || '').trim()) {
-          return jsonResponse({ tracks: [] }, 200, headers);
-        }
-        const resp = await fetch(target, {
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-        });
-        if (!resp.ok) {
-          return jsonResponse({ error: 'Erreur Spotify.' }, resp.status, headers);
-        }
-        const raw = (await resp.json()) as {
+      const raw = (await resp.json()) as {
+        items?: Array<{
+          id: string;
+          name: string;
+          uri: string;
+          duration_ms?: number;
+          preview_url?: string | null;
+          external_urls?: { spotify?: string };
+          artists?: Array<{ name: string }>;
+          album?: { name?: string; images?: Array<{ url: string }> };
+        }>;
+        tracks?: {
           items?: Array<{
             id: string;
             name: string;
@@ -958,97 +1029,115 @@ export default {
             artists?: Array<{ name: string }>;
             album?: { name?: string; images?: Array<{ url: string }> };
           }>;
-          tracks?: {
-            items?: Array<{
-              id: string;
-              name: string;
-              uri: string;
-              duration_ms?: number;
-              preview_url?: string | null;
-              external_urls?: { spotify?: string };
-              artists?: Array<{ name: string }>;
-              album?: { name?: string; images?: Array<{ url: string }> };
-            }>;
-          };
         };
-        const items = raw.items ?? raw.tracks?.items ?? [];
-        const tracks: NormalizedTrack[] = items.map((item) => ({
-          id: `spotify_${item.id}`,
-          title: item.name,
-          artist: (item.artists ?? []).map((a) => a.name).join(', ') || 'Artiste Spotify',
-          album: item.album?.name,
-          coverUrl:
-            item.album?.images?.[item.album.images.length - 1]?.url || item.album?.images?.[0]?.url,
-          durationMs: item.duration_ms,
-          source: 'spotify',
-          spotifyUri: item.uri,
-          streamUrl: item.preview_url || undefined,
-          externalUrl: item.external_urls?.spotify,
-          isPreview: false,
-        }));
-        return jsonResponse({ tracks }, 200, headers);
-      }
-
-      if (pathname === '/api/spotify/play' && request.method === 'PUT') {
-        const body = (await request.json().catch(() => ({}))) as { uri?: string; deviceId?: string };
-        if (!body.uri) return jsonResponse({ error: 'URI Spotify manquante.' }, 400, headers);
-        const endpoint = body.deviceId
-          ? `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(body.deviceId)}`
-          : 'https://api.spotify.com/v1/me/player/play';
-        const resp = await fetch(endpoint, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${session.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ uris: [body.uri] }),
-        });
-        if (resp.status === 204 || resp.ok) return jsonResponse({ ok: true }, 200, headers);
-        return jsonResponse({ error: 'Impossible de démarrer la lecture Spotify.' }, resp.status, headers);
-      }
-
-      if (pathname === '/api/spotify/pause' && request.method === 'PUT') {
-        const body = (await request.json().catch(() => ({}))) as { deviceId?: string };
-        const endpoint = body.deviceId
-          ? `https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(body.deviceId)}`
-          : 'https://api.spotify.com/v1/me/player/pause';
-        await fetch(endpoint, {
-          method: 'PUT',
-          headers: { Authorization: `Bearer ${session.accessToken}` },
-        }).catch(() => {});
-        return jsonResponse({ ok: true }, 200, headers);
-      }
+      };
+      const items = raw.items ?? raw.tracks?.items ?? [];
+      const tracks: NormalizedTrack[] = items.map((item) => ({
+        id: `spotify_${item.id}`,
+        title: item.name,
+        artist: (item.artists ?? []).map((a) => a.name).join(', ') || 'Artiste Spotify',
+        album: item.album?.name,
+        coverUrl:
+          item.album?.images?.[item.album.images.length - 1]?.url || item.album?.images?.[0]?.url,
+        durationMs: item.duration_ms,
+        source: 'spotify',
+        spotifyUri: item.uri,
+        streamUrl: item.preview_url || undefined,
+        externalUrl: item.external_urls?.spotify,
+        isPreview: false,
+      }));
+      return jsonResponse({ tracks }, 200, headers);
     }
 
-    if (env.ASSETS) {
-      const assetResponse = await env.ASSETS.fetch(request);
-      const verificationToken = normalizeGoogleSiteVerificationToken(env.GOOGLE_SITE_VERIFICATION);
+    if (pathname === '/api/spotify/play' && request.method === 'PUT') {
+      const body = (await request.json().catch(() => ({}))) as { uri?: unknown; deviceId?: unknown };
+      if (typeof body.uri !== 'string' || !SPOTIFY_URI_REGEX.test(body.uri)) {
+        return jsonResponse({ error: 'URI Spotify invalide ou manquante.' }, 400, headers);
+      }
       if (
-        verificationToken &&
-        pathname === '/' &&
-        assetResponse.ok &&
-        (assetResponse.headers.get('content-type') || '').includes('text/html')
+        body.deviceId !== undefined &&
+        body.deviceId !== '' &&
+        (typeof body.deviceId !== 'string' || !SPOTIFY_DEVICE_ID_REGEX.test(body.deviceId))
       ) {
-        const html = await assetResponse.text();
-        if (!html.includes('name="google-site-verification"')) {
-          const injected = html.replace(
-            '</head>',
-            `    <meta name="google-site-verification" content="${verificationToken}" />\n  </head>`
-          );
-          const headers = new Headers(assetResponse.headers);
-          headers.delete('content-length');
-          return new Response(injected, {
-            status: assetResponse.status,
-            headers,
-          });
-        }
-        return new Response(html, {
+        return jsonResponse({ error: 'Identifiant d’appareil Spotify invalide.' }, 400, headers);
+      }
+      const cleanDeviceId = typeof body.deviceId === 'string' && body.deviceId ? body.deviceId : '';
+      const endpoint = cleanDeviceId
+        ? `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(cleanDeviceId)}`
+        : 'https://api.spotify.com/v1/me/player/play';
+      const resp = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${session.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ uris: [body.uri] }),
+      });
+      if (resp.status === 204 || resp.ok) return jsonResponse({ ok: true }, 200, headers);
+      return jsonResponse({ error: 'Impossible de démarrer la lecture Spotify.' }, resp.status, headers);
+    }
+
+    if (pathname === '/api/spotify/pause' && request.method === 'PUT') {
+      const body = (await request.json().catch(() => ({}))) as { deviceId?: unknown };
+      if (
+        body.deviceId !== undefined &&
+        body.deviceId !== '' &&
+        (typeof body.deviceId !== 'string' || !SPOTIFY_DEVICE_ID_REGEX.test(body.deviceId))
+      ) {
+        return jsonResponse({ error: 'Identifiant d’appareil Spotify invalide.' }, 400, headers);
+      }
+      const cleanDeviceId = typeof body.deviceId === 'string' && body.deviceId ? body.deviceId : '';
+      const endpoint = cleanDeviceId
+        ? `https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(cleanDeviceId)}`
+        : 'https://api.spotify.com/v1/me/player/pause';
+      await fetch(endpoint, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      }).catch(() => {});
+      return jsonResponse({ ok: true }, 200, headers);
+    }
+  }
+
+  if (env.ASSETS) {
+    const assetResponse = await env.ASSETS.fetch(request);
+    const verificationToken = normalizeGoogleSiteVerificationToken(env.GOOGLE_SITE_VERIFICATION);
+    if (
+      verificationToken &&
+      pathname === '/' &&
+      assetResponse.ok &&
+      (assetResponse.headers.get('content-type') || '').includes('text/html')
+    ) {
+      const html = await assetResponse.text();
+      if (!html.includes('name="google-site-verification"')) {
+        const injected = html.replace(
+          '</head>',
+          `    <meta name="google-site-verification" content="${verificationToken}" />\n  </head>`
+        );
+        const headers = new Headers(assetResponse.headers);
+        headers.delete('content-length');
+        return new Response(injected, {
           status: assetResponse.status,
-          headers: assetResponse.headers,
+          headers,
         });
       }
-      return assetResponse;
+      return new Response(html, {
+        status: assetResponse.status,
+        headers: assetResponse.headers,
+      });
     }
-    return new Response('Ressource introuvable.', { status: 404 });
+    return assetResponse;
+  }
+  return new Response('Ressource introuvable.', { status: 404 });
+}
+
+export default {
+  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+    const { pathname } = new URL(request.url);
+    const response = await handleWorkerRequest(request, env);
+    const isSensitiveRoute =
+      pathname.startsWith('/api/spotify/') ||
+      pathname.startsWith('/auth/spotify/') ||
+      pathname.startsWith('/api/moderation/');
+    return applySecurityHeadersToFetchResponse(response, isSensitiveRoute);
   },
 };

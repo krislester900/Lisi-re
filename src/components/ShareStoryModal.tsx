@@ -32,6 +32,7 @@ import {
   sendSalonMessage,
 } from '../lib/storyService';
 import { ACCENT_TONE_PALETTES, STORY_THEMES } from '../lib/themes';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import {
   CustomSalon,
   PublicProfile,
@@ -723,9 +724,9 @@ export function ShareStoryModal({
                                 }`}
                               >
                                 <div className="flex items-center gap-2.5 min-w-0">
-                                  {member.avatarUrl ? (
+                                  {sanitizeMediaUrl(member.avatarUrl) ? (
                                     <img
-                                      src={member.avatarUrl}
+                                      src={sanitizeMediaUrl(member.avatarUrl)}
                                       alt=""
                                       referrerPolicy="no-referrer"
                                       className="w-7 h-7 rounded-full object-cover border border-stone-200 dark:border-stone-700 shrink-0"

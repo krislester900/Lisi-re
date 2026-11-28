@@ -47,6 +47,8 @@ export interface AuthEnvironmentSnapshot {
   providerId: string;
   currentUserUid: string | null;
   currentUserEmailVerified: boolean | null;
+  androidPackageName: string;
+  expectedAndroidSha1: string;
 }
 
 const DIAGNOSTIC_STORAGE_KEY = 'lisiere_auth_diagnostics_v1';
@@ -210,6 +212,8 @@ export function getAuthEnvironmentSnapshot(): AuthEnvironmentSnapshot {
     providerId: firebaseAuthMetadata.providerId,
     currentUserUid: auth.currentUser?.uid ?? null,
     currentUserEmailVerified: auth.currentUser?.emailVerified ?? null,
+    androidPackageName: 'app.lisiere.recits',
+    expectedAndroidSha1: '5E:BA:36:38:A0:EF:7A:AF:0B:76:A4:E6:A6:30:4F:B7:7A:BB:B9:D9',
   };
 }
 

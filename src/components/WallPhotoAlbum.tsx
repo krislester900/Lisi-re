@@ -20,6 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatFrenchDate } from '../lib/themes';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import {
   FIELD_LIMITS,
   WallItem,
@@ -270,7 +271,7 @@ export function WallPhotoAlbum({
                 isFlipped ? 'pointer-events-none' : 'pointer-events-auto'
               }`}
             >
-              {!imgFailed ? (
+              {!imgFailed && sanitizeMediaUrl(photo.mediaUrl) ? (
                 <button
                   type="button"
                   onClick={() => toggleFlipPhoto(photo.itemId)}
@@ -278,7 +279,7 @@ export function WallPhotoAlbum({
                   className="relative flex-1 w-full h-full overflow-hidden focus-visible:outline-2 focus-visible:outline-white text-left cursor-pointer"
                 >
                   <img
-                    src={photo.mediaUrl}
+                    src={sanitizeMediaUrl(photo.mediaUrl)}
                     alt={photo.title}
                     referrerPolicy="no-referrer"
                     onError={() => onImageError(photo.itemId)}
@@ -423,7 +424,7 @@ export function WallPhotoAlbum({
             } ${isFlipped ? 'pointer-events-none' : 'pointer-events-auto'}`}
           >
             <div className="relative">
-              {!imgFailed ? (
+              {!imgFailed && sanitizeMediaUrl(photo.mediaUrl) ? (
                 <button
                   type="button"
                   onClick={() => toggleFlipPhoto(photo.itemId)}
@@ -431,7 +432,7 @@ export function WallPhotoAlbum({
                   className={`block w-full ${aspectClass} rounded overflow-hidden bg-stone-200 focus-visible:outline-2 focus-visible:outline-[#1B365D] cursor-pointer`}
                 >
                   <img
-                    src={photo.mediaUrl}
+                    src={sanitizeMediaUrl(photo.mediaUrl)}
                     alt={photo.title}
                     referrerPolicy="no-referrer"
                     onError={() => onImageError(photo.itemId)}

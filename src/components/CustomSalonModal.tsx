@@ -8,6 +8,7 @@ import {
   updateCustomSalon,
 } from '../lib/storyService';
 import { ACCENT_TONE_PALETTES } from '../lib/themes';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import {
   AgeRating,
   CustomSalon,
@@ -255,9 +256,9 @@ export function CustomSalonModal({
 
           {/* Salon Profile Photo */}
           <div className="p-4 bg-white dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 rounded-md flex flex-col sm:flex-row sm:items-center gap-4">
-            {avatarUrl && !avatarPreviewFailed ? (
+            {sanitizeMediaUrl(avatarUrl) && !avatarPreviewFailed ? (
               <img
-                src={avatarUrl}
+                src={sanitizeMediaUrl(avatarUrl)}
                 alt={name || 'Photo du salon'}
                 referrerPolicy="no-referrer"
                 onError={() => setAvatarPreviewFailed(true)}

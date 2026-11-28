@@ -138,16 +138,28 @@ jobs:
               }
               console.log("Identifiants Firebase injectés dans strings.xml.");
             }
-            // 3. Vérifier que le plugin google-services est présent dans Gradle si google-services.json existe
+            // 3. Vérifier que le plugin et classpath google-services sont présents dans Gradle si google-services.json existe
             if (fs.existsSync("android/app/google-services.json")) {
               const gs = JSON.parse(fs.readFileSync("android/app/google-services.json", "utf8"));
               const pkgs = (gs.client || []).map((c) => c.client_info?.android_client_info?.package_name).filter(Boolean);
               console.log("google-services.json packages:", pkgs.join(", "));
+              const rootGradlePath = "android/build.gradle";
+              if (fs.existsSync(rootGradlePath)) {
+                let rootGradle = fs.readFileSync(rootGradlePath, "utf8");
+                if (!rootGradle.includes("com.google.gms:google-services")) {
+                  rootGradle = rootGradle.replace(
+                    "dependencies {",
+                    "dependencies {\n        classpath '\''com.google.gms:google-services:4.4.2'\''"
+                  );
+                  fs.writeFileSync(rootGradlePath, rootGradle, "utf8");
+                  console.log("Classpath com.google.gms:google-services:4.4.2 ajouté à android/build.gradle.");
+                }
+              }
               const appGradlePath = "android/app/build.gradle";
               if (fs.existsSync(appGradlePath)) {
                 let appGradle = fs.readFileSync(appGradlePath, "utf8");
                 if (!appGradle.includes("com.google.gms.google-services")) {
-                  appGradle += "\napply plugin: 'com.google.gms.google-services'\n";
+                  appGradle += "\napply plugin: '\''com.google.gms.google-services'\''\n";
                   fs.writeFileSync(appGradlePath, appGradle, "utf8");
                   console.log("Plugin com.google.gms.google-services ajouté à android/app/build.gradle.");
                 }
@@ -173,8 +185,6 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: android-debug-keystore-lisiere-v1
-          restore-keys: |
-            gradle-v8-${{ runner.os }}-
 
       - name: Préparer la clé de signature debug (fixe)
         id: debug-keystore-setup
@@ -289,6 +299,7 @@ jobs:
           cp "$APK_PATH" release-assets/Lisiere-mobile.apk
           cp "$AAB_PATH" release-assets/Lisiere-mobile.aab
 
+          set -o pipefail
           {
             echo "=== Empreintes de signature de l'APK (pour Firebase Console SHA-1 / SHA-256) ==="
             APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name "apksigner" 2>/dev/null | sort -V | tail -n 1)
@@ -303,24 +314,67 @@ jobs:
             echo "--- Vérification google-services.json & default_web_client_id ---"
             node -e '
               const fs = require("fs");
+              const path = require("path");
               const { execSync } = require("child_process");
               const gsPath = "android/app/google-services.json";
+              const cfgPath = "firebase-applet-config.json";
               let apkSha1 = "";
+              let apkSha256 = "";
               try {
                 const out = execSync("keytool -printcert -jarfile release-assets/Lisiere-mobile.apk", { encoding: "utf8" });
-                const m = out.match(/SHA1:\s*([0-9A-Fa-f:]+)/);
-                if (m) apkSha1 = m[1].replace(/:/g, "").toLowerCase();
+                const m1 = out.match(/SHA1:\s*([0-9A-Fa-f:]+)/);
+                const m2 = out.match(/SHA256:\s*([0-9A-Fa-f:]+)/);
+                if (m1) apkSha1 = m1[1].replace(/:/g, "").toLowerCase();
+                if (m2) apkSha256 = m2[1].toUpperCase();
               } catch {}
               if (!apkSha1) {
                 try {
                   const apksigner = execSync("find \"${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools\" -name apksigner | sort -V | tail -n 1", { encoding: "utf8" }).trim();
                   if (apksigner) {
                     const out = execSync(`"${apksigner}" verify --print-certs release-assets/Lisiere-mobile.apk`, { encoding: "utf8" });
-                    const m = out.match(/SHA-1 digest:\s*([0-9a-fA-F]+)/);
-                    if (m) apkSha1 = m[1].toLowerCase();
+                    const m1 = out.match(/SHA-1 digest:\s*([0-9a-fA-F]+)/);
+                    const m2 = out.match(/SHA-256 digest:\s*([0-9a-fA-F]+)/);
+                    if (m1) apkSha1 = m1[1].toLowerCase();
+                    if (m2) apkSha256 = m2[1].toUpperCase().match(/.{2}/g).join(":");
                   }
                 } catch {}
               }
+              const colonSha1 = apkSha1 ? apkSha1.toUpperCase().match(/.{2}/g).join(":") : "inconnu";
+
+              // Vérifier que default_web_client_id a bien été généré dans les ressources Android
+              let generatedClientId = "";
+              const genRoot = "android/app/build/generated/res/google-services";
+              if (fs.existsSync(genRoot)) {
+                const stack = [genRoot];
+                while (stack.length > 0 && !generatedClientId) {
+                  const dir = stack.pop();
+                  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                    const full = path.join(dir, entry.name);
+                    if (entry.isDirectory()) stack.push(full);
+                    else if (entry.name.endsWith(".xml")) {
+                      const xml = fs.readFileSync(full, "utf8");
+                      const m = xml.match(/name="default_web_client_id"[^>]*>([^<]+)</);
+                      if (m) generatedClientId = m[1].trim();
+                    }
+                  }
+                }
+              }
+              console.log("default_web_client_id généré:", generatedClientId || "(non trouvé dans generated/res)");
+              const expectedClientId = fs.existsSync(cfgPath)
+                ? (JSON.parse(fs.readFileSync(cfgPath, "utf8")).oAuthClientId || "")
+                : "";
+              if (expectedClientId && generatedClientId && expectedClientId !== generatedClientId) {
+                console.error(`ERREUR: default_web_client_id (${generatedClientId}) != oAuthClientId (${expectedClientId})`);
+                process.exitCode = 1;
+              }
+
+              const summaryLines = [
+                "### Empreintes de signature APK Android (`app.lisiere.recits`)",
+                `- **SHA-1 de cet APK** : \`${colonSha1}\``,
+                `- **SHA-256 de cet APK** : \`${apkSha256 || "inconnu"}\``,
+                `- **default_web_client_id** : \`${generatedClientId || "absent"}\``,
+              ];
+
               if (fs.existsSync(gsPath)) {
                 const gs = JSON.parse(fs.readFileSync(gsPath, "utf8"));
                 const hashes = [];
@@ -331,16 +385,22 @@ jobs:
                     }
                   }
                 }
-                console.log("APK SHA-1 (hex):", apkSha1 || "inconnu");
+                console.log("APK SHA-1 (colon):", colonSha1);
                 console.log("google-services.json certificate_hash:", hashes.join(", ") || "aucun");
                 if (apkSha1 && hashes.includes(apkSha1)) {
                   console.log("STATUT: OK — Empreinte SHA-1 de l APK conforme a google-services.json.");
-                } else if (apkSha1) {
-                  const colonSha1 = apkSha1.toUpperCase().match(/.{2}/g).join(":");
-                  console.log(`STATUT: ATTENTION — Empreinte APK (${colonSha1}) absente de google-services.json. Ajoutez ${colonSha1} dans Firebase Console.`);
+                  summaryLines.push("- **Statut Firebase Console** : ✅ Conforme à `google-services.json`");
+                } else {
+                  console.error(`STATUT: ERREUR — Empreinte APK (${colonSha1}) absente de google-services.json. Ajoutez ${colonSha1} dans Firebase Console et régénérez google-services.json (ou configurez le secret ANDROID_DEBUG_KEYSTORE_BASE64).`);
+                  summaryLines.push(`- **Statut Firebase Console** : ❌ \`${colonSha1}\` absent de \`google-services.json\` — ajoutez cette empreinte SHA-1 dans Firebase Console puis mettez à jour \`google-services.json\`.`);
+                  process.exitCode = 1;
                 }
               } else {
                 console.log("google-services.json absent (mode strings.xml).");
+              }
+
+              if (process.env.GITHUB_STEP_SUMMARY) {
+                fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summaryLines.join("\n") + "\n");
               }
             '
           } | tee release-assets/apk-fingerprints.txt
@@ -349,7 +409,7 @@ jobs:
           ls -lh release-assets/
 
       - name: Publier les artifacts APK et AAB dans GitHub Actions
-        if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
+        if: ${{ always() && ((github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true) }}
         uses: actions/upload-artifact@v4
         with:
           name: lisiere-android-packages

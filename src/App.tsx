@@ -99,6 +99,7 @@ import {
   STORY_THEMES,
   THEME_MAP,
 } from './lib/themes';
+import { sanitizeMediaUrl } from './lib/urlSecurity';
 import {
   CustomSalon,
   Exchange,
@@ -1018,7 +1019,7 @@ function SalonApp({ introActive }: { introActive: boolean }) {
   );
   const isOtherProfilesActive =
     activeTab === 'membres' && !isMyProfileActive;
-  const headerAvatarUrl = profile?.avatarUrl || user?.photoURL || '';
+  const headerAvatarUrl = sanitizeMediaUrl(profile?.avatarUrl || user?.photoURL || '');
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF9F5] dark:bg-[#12100E] text-stone-900 dark:text-stone-100 transition-colors">
@@ -1571,7 +1572,7 @@ function SalonApp({ introActive }: { introActive: boolean }) {
                   </div>
 
                   {/* Operational strip */}
-                  <div className="grid grid-cols-3 gap-6 pt-6 border-t border-stone-200 dark:border-stone-800">
+                  <div className="grid grid-cols-3 gap-3 sm:gap-6 pt-5 sm:pt-6 border-t border-stone-200 dark:border-stone-800">
                     <div>
                       <p className="font-display text-2xl font-medium text-stone-900 dark:text-stone-100 tabular-nums">
                         {STORY_THEMES.length}
@@ -1927,9 +1928,9 @@ function SalonApp({ introActive }: { introActive: boolean }) {
                           </div>
 
                           <div className="flex items-start gap-3">
-                            {cs.avatarUrl && !customSalonImgFailedMap[cs.salonId] && (
+                            {sanitizeMediaUrl(cs.avatarUrl) && !customSalonImgFailedMap[cs.salonId] && (
                               <img
-                                src={cs.avatarUrl}
+                                src={sanitizeMediaUrl(cs.avatarUrl)}
                                 alt={`Photo du salon ${cs.name}`}
                                 referrerPolicy="no-referrer"
                                 onError={() =>

@@ -42,6 +42,11 @@ import {
   revokeLocalTrackUrls,
 } from '../lib/localAudioStore';
 import { parseMusicSource } from '../lib/storageService';
+import {
+  isTrustedAppOrigin,
+  sanitizeHttpUrl,
+  sanitizeMediaUrl,
+} from '../lib/urlSecurity';
 
 export interface AuthorMusicInfo {
   title: string;
@@ -172,12 +177,7 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
   // Listen for OAuth popup completion
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      const origin = event.origin;
-      if (
-        origin !== window.location.origin &&
-        !origin.endsWith('.run.app') &&
-        !origin.includes('localhost')
-      ) {
+      if (!isTrustedAppOrigin(event.origin)) {
         return;
       }
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.provider === 'spotify') {
@@ -582,7 +582,11 @@ export function useReadingAudioEngine(storyOpen: boolean): ReadingAudioControlle
     setPlaybackError(null);
     try {
       const { url } = await fetchSpotifyAuthUrl();
-      const authWin = window.open(url, 'spotify_oauth_popup', 'width=540,height=720');
+      const safeAuthUrl = sanitizeHttpUrl(url);
+      if (!safeAuthUrl || !safeAuthUrl.startsWith('https://accounts.spotify.com/')) {
+        throw new Error('URL d’autorisation Spotify invalide.');
+      }
+      const authWin = window.open(safeAuthUrl, 'spotify_oauth_popup', 'width=540,height=720');
       if (!authWin) {
         setPlaybackError(
           'Votre navigateur a bloqué la fenêtre de connexion Spotify. Autorisez les fenêtres contextuelles pour ce site.'
@@ -1063,10 +1067,11 @@ export function ReadingMusicPanel({
         <div className="rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800/80 p-3 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2.5">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
-              {activeTrack.coverUrl ? (
+              {sanitizeMediaUrl(activeTrack.coverUrl) ? (
                 <img
-                  src={activeTrack.coverUrl}
+                  src={sanitizeMediaUrl(activeTrack.coverUrl)}
                   alt=""
+                  referrerPolicy="no-referrer"
                   className="w-10 h-10 rounded object-cover border border-stone-200 dark:border-stone-700 shrink-0"
                 />
               ) : (
@@ -1560,10 +1565,11 @@ export function ReadingMusicPanel({
                     className="flex items-center justify-between gap-2.5 px-3 py-2 hover:bg-white dark:hover:bg-stone-800 transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      {track.coverUrl ? (
+                      {sanitizeMediaUrl(track.coverUrl) ? (
                         <img
-                          src={track.coverUrl}
+                          src={sanitizeMediaUrl(track.coverUrl)}
                           alt=""
+                          referrerPolicy="no-referrer"
                           className="w-9 h-9 rounded object-cover border border-stone-200 dark:border-stone-700 shrink-0"
                         />
                       ) : (
@@ -1581,9 +1587,9 @@ export function ReadingMusicPanel({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {track.externalUrl && (
+                      {sanitizeHttpUrl(track.externalUrl) && (
                         <a
-                          href={track.externalUrl}
+                          href={sanitizeHttpUrl(track.externalUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label={`Ouvrir ${track.title} dans l’application`}

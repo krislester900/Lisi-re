@@ -83,10 +83,11 @@ export async function verifyFirebaseIdToken(
         localId?: string;
         email?: string;
         emailVerified?: boolean;
+        disabled?: boolean;
       }>;
     };
     const user = json.users?.[0];
-    if (!user?.localId) return null;
+    if (!user?.localId || user.disabled) return null;
     const caller: VerifiedFirebaseCaller = {
       uid: user.localId,
       email: typeof user.email === 'string' ? user.email.toLowerCase() : null,
@@ -654,4 +655,203 @@ ${urls}
 </urlset>
 `;
 }
+
+// --- Server & Edge Security Helpers ---
+
+export const VALID_MODERATION_TARGET_TYPES = new Set([
+  'private_message',
+  'story',
+  'echo',
+  'salon_message',
+  'salon_thread',
+  'thread_reply',
+  'profile',
+]);
+
+export const VALID_MODERATION_CATEGORIES = new Set([
+  'propos-outrageants',
+  'harcelement',
+  'haine-discrimination',
+  'contenu-inapproprie',
+  'usurpation-spam',
+  'plagiat',
+  'autre',
+]);
+
+export const VALID_MUSIC_SEARCH_SOURCES = new Set(['audius', 'deezer', 'youtube']);
+export const SPOTIFY_URI_REGEX = /^spotify:(track|album|playlist):[a-zA-Z0-9]{10,40}$/;
+export const SPOTIFY_DEVICE_ID_REGEX = /^[a-zA-Z0-9_-]{4,80}$/;
+
+const TRUSTED_SERVER_ORIGIN_PATTERNS: RegExp[] = [
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i,
+  /^https:\/\/[a-z0-9-]+\.run\.app$/i,
+  /^https:\/\/[a-z0-9-]+\.[a-z0-9-]+\.workers\.dev$/i,
+];
+
+export function resolveTrustedOAuthTargetOrigin(
+  candidateOrigin: string | null | undefined,
+  appOrigin: string
+): string {
+  const fallback = (() => {
+    try {
+      return new URL(appOrigin).origin;
+    } catch {
+      return 'https://lisi-re.krislester900.workers.dev';
+    }
+  })();
+
+  const raw = (candidateOrigin || '').trim();
+  if (!raw) return fallback;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.origin === fallback) return parsed.origin;
+    if (TRUSTED_SERVER_ORIGIN_PATTERNS.some((p) => p.test(parsed.origin))) {
+      return parsed.origin;
+    }
+  } catch {
+    // Ignore malformed origin
+  }
+  return fallback;
+}
+
+function isPrivateOrDisallowedIpv4(host: string): boolean {
+  const parts = host.split('.');
+  if (parts.length !== 4 || !parts.every((p) => /^\d{1,3}$/.test(p))) {
+    return false;
+  }
+  const octets = parts.map((p) => Number(p));
+  if (octets.some((n) => n < 0 || n > 255)) return true;
+  const [a, b] = octets;
+  if (a === 0 || a === 10 || a === 127) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 192 && b === 0) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a >= 224) return true;
+  return false;
+}
+
+function isPrivateOrDisallowedHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return true;
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    host.endsWith('.arpa')
+  ) {
+    return true;
+  }
+  if (isPrivateOrDisallowedIpv4(host)) return true;
+  if (
+    host.includes(':') &&
+    (host === '::' ||
+      host === '::1' ||
+      host.startsWith('fe80:') ||
+      host.startsWith('fc') ||
+      host.startsWith('fd') ||
+      host.includes('::ffff:'))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isSafePublicHttpsUrl(
+  rawUrl: string,
+  allowedHostSuffixes?: readonly string[]
+): boolean {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.username || parsed.password) return false;
+    if (parsed.port && parsed.port !== '443') return false;
+    if (isPrivateOrDisallowedHost(parsed.hostname)) return false;
+    if (allowedHostSuffixes && allowedHostSuffixes.length > 0) {
+      const host = parsed.hostname.toLowerCase();
+      const allowed = allowedHostSuffixes.some((suffix) => {
+        const cleanSuffix = suffix.toLowerCase().replace(/^\./, '');
+        return host === cleanSuffix || host.endsWith(`.${cleanSuffix}`);
+      });
+      if (!allowed) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function safeFetchWithValidatedRedirects(
+  initialUrl: string,
+  init: RequestInit = {},
+  options: { allowedHostSuffixes?: readonly string[]; maxRedirects?: number } = {}
+): Promise<Response> {
+  const maxRedirects = options.maxRedirects ?? 3;
+  let currentUrl = initialUrl;
+
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    if (!isSafePublicHttpsUrl(currentUrl, options.allowedHostSuffixes)) {
+      throw new Error('BLOCKED_UPSTREAM_URL');
+    }
+
+    const resp = await fetch(currentUrl, {
+      ...init,
+      redirect: 'manual',
+    });
+
+    if (resp.status >= 300 && resp.status < 400) {
+      const location = resp.headers.get('location');
+      await resp.body?.cancel().catch(() => {});
+      if (!location || hop === maxRedirects) {
+        throw new Error('TOO_MANY_REDIRECTS');
+      }
+      currentUrl = new URL(location, currentUrl).toString();
+      continue;
+    }
+
+    return resp;
+  }
+
+  throw new Error('TOO_MANY_REDIRECTS');
+}
+
+export const SECURITY_HEADERS_LIST: ReadonlyArray<[string, string]> = [
+  ['X-Content-Type-Options', 'nosniff'],
+  ['Referrer-Policy', 'strict-origin-when-cross-origin'],
+  ['Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()'],
+  ['Cross-Origin-Opener-Policy', 'same-origin-allow-popups'],
+  ['X-Permitted-Cross-Domain-Policies', 'none'],
+];
+
+export function applySecurityHeadersToNodeResponse(res: {
+  setHeader(name: string, value: string): void;
+}): void {
+  for (const [k, v] of SECURITY_HEADERS_LIST) {
+    res.setHeader(k, v);
+  }
+}
+
+export function applySecurityHeadersToFetchResponse(
+  response: Response,
+  noStore = false
+): Response {
+  const headers = new Headers(response.headers);
+  for (const [k, v] of SECURITY_HEADERS_LIST) {
+    if (!headers.has(k)) {
+      headers.set(k, v);
+    }
+  }
+  if (noStore) {
+    headers.set('Cache-Control', 'no-store');
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 

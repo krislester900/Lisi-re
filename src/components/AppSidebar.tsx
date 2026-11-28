@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { ACCENT_TONE_PALETTES, STORY_THEMES } from '../lib/themes';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import { CustomSalon, StoryThemeId } from '../types/story';
 import { PWAInstallButton } from './MobileAppModal';
 import { SalonEmblem } from './SalonEmblem';
@@ -319,7 +320,8 @@ export function AppSidebar({
                   {customSalons.slice(0, 6).map((cs) => {
                     const isSelected = activeTab === 'recits' && activeCustomSalonId === cs.salonId;
                     const pal = ACCENT_TONE_PALETTES[cs.accentTone] ?? ACCENT_TONE_PALETTES.ink;
-                    const hasAvatar = Boolean(cs.avatarUrl && !brokenAvatarIds[cs.salonId]);
+                    const safeAvatarUrl = sanitizeMediaUrl(cs.avatarUrl);
+                    const hasAvatar = Boolean(safeAvatarUrl && !brokenAvatarIds[cs.salonId]);
                     return (
                       <button
                         key={cs.salonId}
@@ -336,7 +338,7 @@ export function AppSidebar({
                       >
                         {hasAvatar ? (
                           <img
-                            src={cs.avatarUrl}
+                            src={safeAvatarUrl}
                             alt=""
                             onError={() =>
                               setBrokenAvatarIds((prev) => ({ ...prev, [cs.salonId]: true }))

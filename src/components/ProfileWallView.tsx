@@ -76,20 +76,21 @@ import {
 import {
   computeMemberEngagementBadges,
   computeMemberEngagementStats,
-  ENGAGEMENT_BADGE_MAP,
   getProfileBadges,
   MEMBER_BADGE_DEFINITIONS,
 } from '../lib/memberBadges';
 import { isModerationAdminEmail } from '../lib/moderationLabels';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 import { NovelCoverArt } from './NovelCoverArt';
+import { ProfileBadgesSection } from './ProfileBadgesSection';
 import type { ReportDraft } from './ReportModal';
-import { EngagementBadgeChip, ProfileBadgeChip, RoleBadgesRow } from './RoleBadge';
+import { RoleBadgesRow } from './RoleBadge';
 import { StoryFormatKicker } from './StoryFormatKicker';
 import { WallPhotoAlbum } from './WallPhotoAlbum';
 
-import { Award, Check, Settings, ShieldCheck } from 'lucide-react';
+import { Settings } from 'lucide-react';
 
 interface ProfileWallViewProps {
   memberId: string;
@@ -696,6 +697,36 @@ export function ProfileWallView({
     }
   };
 
+  const handleToggleMemberBadge = async (badgeId: MemberBadgeId, hasBadge: boolean) => {
+    if (!isGlobalAdmin || !memberProfile || adminBadgeBusy) return;
+    setAdminBadgeFeedback(null);
+    setAdminBadgeBusy(badgeId);
+    const activeBadges = getProfileBadges(memberProfile);
+    const def = MEMBER_BADGE_DEFINITIONS.find((b) => b.id === badgeId);
+    const nextBadges = hasBadge
+      ? activeBadges.filter((b) => b !== badgeId)
+      : [...activeBadges, badgeId].slice(0, FIELD_LIMITS.memberBadgesMax);
+    try {
+      await updateMemberProfileBadges(memberId, nextBadges);
+      setAdminBadgeFeedback({
+        kind: 'success',
+        message: hasBadge
+          ? `Badge « ${def?.label ?? badgeId} » retiré.`
+          : `Badge « ${def?.label ?? badgeId} » attribué.`,
+      });
+    } catch (err) {
+      setAdminBadgeFeedback({
+        kind: 'error',
+        message: formatFriendlyFirestoreError(
+          err,
+          'Impossible de mettre à jour les badges de ce profil.'
+        ),
+      });
+    } finally {
+      setAdminBadgeBusy(null);
+    }
+  };
+
   const { albumPhotos, circularPhoto, featuredTrack, remainingCollageItems } = useMemo(() => {
     const photos = wallItems
       .filter((item) => item.kind === 'photo' && item.mediaUrl)
@@ -707,7 +738,7 @@ export function ProfileWallView({
       });
     const musics = wallItems.filter((item) => item.kind === 'music');
 
-    const circleSrc = memberProfile?.avatarUrl || null;
+    const circleSrc = sanitizeMediaUrl(memberProfile?.avatarUrl) || null;
     const circleAlt = memberProfile?.displayName || 'Portrait';
 
     let featured: {
@@ -872,9 +903,16 @@ export function ProfileWallView({
     return true;
   });
   const isAnyMusicPlaying = Boolean(activeTrackId);
+  const safeHeaderAvatarUrl = sanitizeMediaUrl(memberProfile.avatarUrl);
 
   return (
-    <div className={embedded ? 'space-y-6' : 'max-w-6xl mx-auto px-6 py-8 space-y-6'}>
+    <div
+      className={
+        embedded
+          ? 'space-y-5 sm:space-y-6'
+          : 'max-w-6xl mx-auto px-3.5 sm:px-6 py-5 sm:py-8 space-y-5 sm:space-y-6'
+      }
+    >
       {onBack && (
         <div>
           <button
@@ -889,9 +927,9 @@ export function ProfileWallView({
       )}
 
       {/* Unified Member Identity + Grouped Wall Toolbar */}
-      <section className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-xl p-6 sm:p-7 space-y-5">
+      <section className="bg-white dark:bg-[#1A1815] border border-stone-200 dark:border-stone-800 rounded-xl p-4 sm:p-7 space-y-5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div className="flex items-start gap-4 min-w-0">
+          <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
             {isOwner ? (
               <button
                 type="button"
@@ -899,9 +937,9 @@ export function ProfileWallView({
                 aria-label="Modifier votre photo de profil"
                 className="relative group shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1B365D]"
               >
-                {memberProfile.avatarUrl && !failedImages['header-avatar'] ? (
+                {safeHeaderAvatarUrl && !failedImages['header-avatar'] ? (
                   <img
-                    src={memberProfile.avatarUrl}
+                    src={safeHeaderAvatarUrl}
                     alt={memberProfile.displayName}
                     referrerPolicy="no-referrer"
                     onError={() => setFailedImages((prev) => ({ ...prev, 'header-avatar': true }))}
@@ -916,9 +954,9 @@ export function ProfileWallView({
                   <Camera className="w-3 h-3" />
                 </span>
               </button>
-            ) : memberProfile.avatarUrl && !failedImages['header-avatar'] ? (
+            ) : safeHeaderAvatarUrl && !failedImages['header-avatar'] ? (
               <img
-                src={memberProfile.avatarUrl}
+                src={safeHeaderAvatarUrl}
                 alt={memberProfile.displayName}
                 referrerPolicy="no-referrer"
                 onError={() => setFailedImages((prev) => ({ ...prev, 'header-avatar': true }))}
@@ -941,12 +979,12 @@ export function ProfileWallView({
                     onClick={openAvatarModal}
                     className="text-xs font-medium text-[#1B365D] dark:text-sky-300 hover:underline whitespace-nowrap"
                   >
-                    {memberProfile.avatarUrl ? 'Changer la photo de profil' : 'Ajouter une photo de profil'}
+                    {safeHeaderAvatarUrl ? 'Changer la photo de profil' : 'Ajouter une photo de profil'}
                   </button>
                 )}
               </div>
               <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="font-display text-3xl font-medium text-stone-900 dark:text-stone-100">
+                <h1 className="font-display text-2xl sm:text-3xl font-medium text-stone-900 dark:text-stone-100">
                   {memberProfile.displayName}
                 </h1>
                 <RoleBadgesRow
@@ -964,21 +1002,7 @@ export function ProfileWallView({
                         : undefined
                   }
                   profileBadges={memberProfile.badges}
-                  engagementBadges={memberEngagementBadges}
                 />
-                {isGlobalAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowAdminBadgesPanel((prev) => !prev);
-                      setAdminBadgeFeedback(null);
-                    }}
-                    className="min-h-[28px] px-2.5 py-0.5 rounded border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-sky-300 text-xs font-medium hover:border-[#1B365D] inline-flex items-center gap-1 whitespace-nowrap"
-                  >
-                    <Award className="w-3 h-3" />
-                    <span>{showAdminBadgesPanel ? 'Fermer badges' : 'Gérer les badges'}</span>
-                  </button>
-                )}
               </div>
               {memberProfile.bio ? (
                 <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed max-w-2xl">
@@ -1006,107 +1030,10 @@ export function ProfileWallView({
                   <span>Commentaires désactivés sur les écrits de ce profil</span>
                 </p>
               )}
-              {memberEngagementBadges.length > 0 && (
-                <div className="pt-2 flex flex-wrap items-center gap-2 text-[11px] text-stone-600 dark:text-stone-400">
-                  <span className="uppercase tracking-wider font-medium text-stone-500 dark:text-stone-400">
-                    Engagement :
-                  </span>
-                  {memberEngagementBadges.map((badgeId) => (
-                    <span
-                      key={badgeId}
-                      className="inline-flex items-center gap-1.5"
-                      title={ENGAGEMENT_BADGE_MAP[badgeId].description}
-                    >
-                      <EngagementBadgeChip badgeId={badgeId} compact />
-                    </span>
-                  ))}
-                  <span className="tabular-nums text-stone-500 dark:text-stone-400">
-                    · {memberEngagementStats.publicStoriesCount} récit
-                    {memberEngagementStats.publicStoriesCount > 1 ? 's' : ''}
-                    {memberEngagementStats.novelCount > 0
-                      ? ` · ${memberEngagementStats.novelCount} roman${memberEngagementStats.novelCount > 1 ? 's' : ''}`
-                      : ''}
-                  </span>
-                </div>
-              )}
-
-              {isGlobalAdmin && showAdminBadgesPanel && (
-                <div className="mt-3 p-3.5 rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA]/70 dark:bg-stone-900 space-y-2.5 max-w-2xl">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-[#1B365D] dark:text-sky-300 inline-flex items-center gap-1.5">
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      <span>Badges distinctifs sur ce profil (administration)</span>
-                    </p>
-                    <span className="text-[11px] text-stone-500 dark:text-stone-400 tabular-nums">
-                      {getProfileBadges(memberProfile).length}/{FIELD_LIMITS.memberBadgesMax}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {MEMBER_BADGE_DEFINITIONS.map((def) => {
-                      const activeBadges = getProfileBadges(memberProfile);
-                      const hasBadge = activeBadges.includes(def.id);
-                      const busy = adminBadgeBusy === def.id;
-                      return (
-                        <button
-                          key={def.id}
-                          type="button"
-                          disabled={adminBadgeBusy !== null}
-                          onClick={async () => {
-                            if (adminBadgeBusy) return;
-                            setAdminBadgeFeedback(null);
-                            setAdminBadgeBusy(def.id);
-                            const nextBadges = hasBadge
-                              ? activeBadges.filter((b) => b !== def.id)
-                              : [...activeBadges, def.id].slice(0, FIELD_LIMITS.memberBadgesMax);
-                            try {
-                              await updateMemberProfileBadges(memberId, nextBadges);
-                              setAdminBadgeFeedback({
-                                kind: 'success',
-                                message: hasBadge
-                                  ? `Badge « ${def.label} » retiré.`
-                                  : `Badge « ${def.label} » attribué.`,
-                              });
-                            } catch (err) {
-                              setAdminBadgeFeedback({
-                                kind: 'error',
-                                message: formatFriendlyFirestoreError(
-                                  err,
-                                  'Impossible de mettre à jour les badges de ce profil.'
-                                ),
-                              });
-                            } finally {
-                              setAdminBadgeBusy(null);
-                            }
-                          }}
-                          title={def.description}
-                          className={`min-h-[32px] px-2.5 py-1 rounded border text-xs font-medium inline-flex items-center gap-1.5 transition-colors disabled:opacity-60 ${
-                            hasBadge
-                              ? 'border-[#1B365D] bg-white dark:bg-stone-800 ring-1 ring-[#1B365D]/35'
-                              : 'border-stone-200 dark:border-stone-700 bg-white/80 dark:bg-stone-950 opacity-80 hover:opacity-100 hover:border-stone-400'
-                          }`}
-                        >
-                          {hasBadge && <Check className="w-3 h-3 text-[#1B365D] dark:text-amber-300" />}
-                          <ProfileBadgeChip badgeId={def.id} compact />
-                          {busy && <span className="text-[10px] text-stone-500">…</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {adminBadgeFeedback && (
-                    <p
-                      className={`text-xs ${
-                        adminBadgeFeedback.kind === 'error' ? 'text-red-700 dark:text-red-400' : 'text-emerald-800 dark:text-emerald-300'
-                      }`}
-                    >
-                      {adminBadgeFeedback.message}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 shrink-0 w-full lg:w-auto">
             {isOwner ? (
               <>
                 {(
@@ -1410,11 +1337,33 @@ export function ProfileWallView({
         )}
       </section>
 
+      <ProfileBadgesSection
+        memberProfile={memberProfile}
+        isOwner={isOwner}
+        isGlobalAdmin={isGlobalAdmin}
+        isProfileAdmin={Boolean(
+          memberProfile.isAdmin ||
+            adminUserIds?.has(memberId) ||
+            (isOwner && isGlobalAdmin)
+        )}
+        moderatedSalonNames={moderatedSalonNames}
+        engagementBadges={memberEngagementBadges}
+        engagementStats={memberEngagementStats}
+        showAdminBadgesPanel={showAdminBadgesPanel}
+        onToggleAdminBadgesPanel={() => {
+          setShowAdminBadgesPanel((prev) => !prev);
+          setAdminBadgeFeedback(null);
+        }}
+        adminBadgeBusy={adminBadgeBusy}
+        adminBadgeFeedback={adminBadgeFeedback}
+        onToggleMemberBadge={handleToggleMemberBadge}
+      />
+
       {/* Clean Sub-Navigation inside Profile Page so it is uncluttered & easy to browse */}
       <div
         role="tablist"
         aria-label="Sections du profil"
-        className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-lg w-fit"
+        className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 rounded-lg w-full sm:w-fit overflow-x-auto"
       >
         {(
           [
@@ -1449,7 +1398,7 @@ export function ProfileWallView({
       {profileSection === 'wall' && (
       <section
         aria-label={`Mur collage de ${memberProfile.displayName}`}
-        className="lisiere-wall-board rounded-2xl p-6 sm:p-8 lg:p-10 text-white space-y-10 shadow-sm"
+        className="lisiere-wall-board rounded-2xl p-4 sm:p-8 lg:p-10 text-white space-y-8 sm:space-y-10 shadow-sm"
       >
         {/* 1. Welcoming Photo Album & Configurable Gallery */}
         <WallPhotoAlbum
@@ -1729,7 +1678,8 @@ export function ProfileWallView({
                   );
                 }
 
-                if (item.kind === 'photo' && item.mediaUrl) {
+                const safeItemMediaUrl = sanitizeMediaUrl(item.mediaUrl);
+                if (item.kind === 'photo' && safeItemMediaUrl) {
                   return (
                     <article
                       key={item.itemId}
@@ -1741,7 +1691,7 @@ export function ProfileWallView({
                           onClick={() =>
                             setLightboxItem({
                               itemId: item.itemId,
-                              src: item.mediaUrl!,
+                              src: safeItemMediaUrl,
                               title: item.title,
                               body: item.body,
                             })
@@ -1750,7 +1700,7 @@ export function ProfileWallView({
                           className="block w-full aspect-[4/3] bg-stone-200 overflow-hidden"
                         >
                           <img
-                            src={item.mediaUrl}
+                            src={safeItemMediaUrl}
                             alt={item.title}
                             referrerPolicy="no-referrer"
                             onError={() =>
@@ -2393,10 +2343,10 @@ export function ProfileWallView({
                     </label>
                   </div>
 
-                  {mediaUrl && (
+                  {sanitizeMediaUrl(mediaUrl) && (
                     <div className="pt-2">
                       <img
-                        src={mediaUrl}
+                        src={sanitizeMediaUrl(mediaUrl)}
                         alt="Aperçu de votre photo"
                         referrerPolicy="no-referrer"
                         className="max-h-56 rounded-md border border-stone-200 dark:border-stone-700 object-cover"
@@ -2652,9 +2602,9 @@ export function ProfileWallView({
 
             <form onSubmit={handleSaveAvatar} className="space-y-5">
               <div className="flex flex-col items-center gap-4 py-2">
-                {avatarDraftUrl && !avatarDraftFailed ? (
+                {sanitizeMediaUrl(avatarDraftUrl) && !avatarDraftFailed ? (
                   <img
-                    src={avatarDraftUrl}
+                    src={sanitizeMediaUrl(avatarDraftUrl)}
                     alt="Aperçu de votre photo de profil"
                     referrerPolicy="no-referrer"
                     onError={() => setAvatarDraftFailed(true)}
@@ -2791,12 +2741,18 @@ export function ProfileWallView({
                         lightboxFlipped ? 'pointer-events-none' : 'pointer-events-auto'
                       }`}
                     >
-                      <img
-                        src={lightboxItem.src}
-                        alt={lightboxItem.title}
-                        referrerPolicy="no-referrer"
-                        className="w-full max-h-[72vh] object-contain mx-auto"
-                      />
+                      {sanitizeMediaUrl(lightboxItem.src) ? (
+                        <img
+                          src={sanitizeMediaUrl(lightboxItem.src)}
+                          alt={lightboxItem.title}
+                          referrerPolicy="no-referrer"
+                          className="w-full max-h-[72vh] object-contain mx-auto"
+                        />
+                      ) : (
+                        <div className="py-16 text-center text-xs text-stone-400">
+                          Image indisponible
+                        </div>
+                      )}
                     </button>
 
                     {/* Verso */}

@@ -99,40 +99,54 @@ export function AuthDiagnosticsPanel() {
 
       {/* Environment & oAuthClientId check */}
       <div className="grid grid-cols-1 gap-1.5 p-2.5 rounded-md bg-[#FBF9F5] dark:bg-stone-950 border border-stone-200 dark:border-stone-800 text-[11px] text-stone-700 dark:text-stone-300">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
           <span className="text-stone-500 dark:text-stone-400">Mode détecté :</span>
-          <span className="font-medium text-stone-900 dark:text-stone-100">
+          <span className="font-medium text-stone-900 dark:text-stone-100 text-right">
             {RUNTIME_LABELS[env.runtimeMode] || env.runtimeMode}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
           <span className="text-stone-500 dark:text-stone-400">Origine :</span>
-          <span className="font-mono truncate max-w-[230px]">{env.origin}</span>
+          <span className="font-mono break-all text-right">{env.origin}</span>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
           <span className="text-stone-500 dark:text-stone-400">Service Worker PWA :</span>
-          <span className="font-medium">
+          <span className="font-medium text-right">
             {env.serviceWorkerControlled ? 'Actif (/__/ exclu)' : 'Inactif'}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-stone-500 dark:text-stone-400">Redirection OAuth en cours :</span>
-          <span className="font-medium">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <span className="text-stone-500 dark:text-stone-400">Redirection OAuth :</span>
+          <span className="font-medium text-right">
             {env.redirectPending ? `Oui (${env.redirectInitiatedAt})` : 'Non'}
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
           <span className="text-stone-500 dark:text-stone-400">authDomain SDK :</span>
-          <span className="font-mono truncate max-w-[230px]">
+          <span className="font-mono break-all text-right">
             {env.sdkAuthDomain || '—'} ({env.authDomainMatches ? 'OK' : 'Écart'})
           </span>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
           <span className="text-stone-500 dark:text-stone-400">oAuthClientId config :</span>
-          <span className="font-mono truncate max-w-[220px]">
+          <span className="font-mono break-all text-right">
             {env.hasOAuthClientIdInConfig ? env.oAuthClientId : 'Absent'}
           </span>
         </div>
+        {env.isNative && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <span className="text-stone-500 dark:text-stone-400">Package Android :</span>
+              <span className="font-mono break-all text-right">{env.androidPackageName}</span>
+            </div>
+            <div className="flex flex-wrap items-start justify-between gap-1.5">
+              <span className="text-stone-500 dark:text-stone-400 shrink-0">SHA-1 attendu :</span>
+              <span className="font-mono break-all text-right text-[10px]">
+                {env.expectedAndroidSha1}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="p-2.5 rounded-md bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/70 text-[11px] text-amber-950 dark:text-amber-100 leading-relaxed flex items-start gap-2">

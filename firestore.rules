@@ -97,6 +97,30 @@ service cloud.firestore {
         && badge in ['administrateur', 'moderateur', 'expert_litteraire', 'plume_confirmee', 'grand_lecteur'];
     }
 
+    function isValidSafeHttpUrl(url) {
+      return url is string
+        && (url == '' || url.matches('^https?://[^\\s<>"\'`]+$'));
+    }
+
+    function isValidSafeImageUrl(url) {
+      return url is string
+        && (
+          url == ''
+          || url.matches('^https?://[^\\s<>"\'`]+$')
+          || url.matches('^data:image/(jpeg|jpg|png|webp|gif);base64,[A-Za-z0-9+/=]+$')
+        );
+    }
+
+    function isValidSafeMusicUrl(url) {
+      return url is string
+        && (
+          url == ''
+          || url.matches('^https?://[^\\s<>"\'`]+$')
+          || url.matches('^/api/music/(audius|deezer)/stream/[a-zA-Z0-9_%\\-]+$')
+          || url.matches('^spotify:(track|album|playlist|episode):[a-zA-Z0-9]+$')
+        );
+    }
+
     // --- Validation Blueprints ---
     function isValidPublicProfile(data) {
       return data.keys().hasAll(['userId', 'displayName', 'bio', 'listeningNote', 'createdAt', 'updatedAt'])
@@ -114,10 +138,10 @@ service cloud.firestore {
         && data.listeningNote is string && data.listeningNote.size() <= 200
         && (!('favoriteTrackTitle' in data) || (data.favoriteTrackTitle is string && data.favoriteTrackTitle.size() <= 120))
         && (!('favoriteTrackArtist' in data) || (data.favoriteTrackArtist is string && data.favoriteTrackArtist.size() <= 100))
-        && (!('favoriteTrackUrl' in data) || (data.favoriteTrackUrl is string && data.favoriteTrackUrl.size() <= 500))
+        && (!('favoriteTrackUrl' in data) || (data.favoriteTrackUrl is string && data.favoriteTrackUrl.size() <= 500 && isValidSafeMusicUrl(data.favoriteTrackUrl)))
         && (!('favoriteNovel' in data) || (data.favoriteNovel is string && data.favoriteNovel.size() <= 140))
         && (!('interests' in data) || (data.interests is string && data.interests.size() <= 240))
-        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000 && isValidSafeImageUrl(data.avatarUrl)))
         && (!('photoLayout' in data) || data.photoLayout in ['album', 'cote', 'bento', 'galerie'])
         && (!('photoAlbumTitle' in data) || (data.photoAlbumTitle is string && data.photoAlbumTitle.size() <= 100))
         && (!('photoAlbumNote' in data) || (data.photoAlbumNote is string && data.photoAlbumNote.size() <= 240))
@@ -161,6 +185,11 @@ service cloud.firestore {
         && data.subtitle is string && data.subtitle.size() <= 140
         && data.body is string && data.body.size() <= 600
         && data.mediaUrl is string && data.mediaUrl.size() <= 160000
+        && (
+          (data.kind == 'photo' && isValidSafeImageUrl(data.mediaUrl))
+          || (data.kind == 'music' && isValidSafeMusicUrl(data.mediaUrl))
+          || (data.kind in ['novel', 'note'] && isValidSafeHttpUrl(data.mediaUrl))
+        )
         && data.accentTone in ['ink', 'ochre', 'terracotta', 'sage', 'sand']
         && (!('displayOrder' in data) || (data.displayOrder is int && data.displayOrder >= 0 && data.displayOrder <= 10000))
         && (!('photoPlacement' in data) || data.photoPlacement in ['auto', 'top', 'side'])
@@ -309,7 +338,7 @@ service cloud.firestore {
         && (!('storyScope' in data) || data.storyScope in ['salon', 'pelemele'])
         && (!('storyFormat' in data) || data.storyFormat in ['confession', 'roman'])
         && (!('novelGenre' in data) || data.novelGenre in ['poeme', 'drame', 'romance', 'historique', 'fantastique', 'polar', 'contemporain', 'essai', 'autre'])
-        && (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() <= 160000))
+        && (!('coverUrl' in data) || (data.coverUrl is string && data.coverUrl.size() <= 160000 && isValidSafeImageUrl(data.coverUrl)))
         && (!('plagiarismAttested' in data) || data.plagiarismAttested is bool)
         && (!('releaseCadence' in data) || data.releaseCadence in ['unique', 'hebdomadaire', 'bihebdomadaire', 'libre'])
         && (!('seriesStatus' in data) || data.seriesStatus in ['complet', 'en-cours', 'termine'])
@@ -409,7 +438,7 @@ service cloud.firestore {
         && data.reporterName is string && data.reporterName.size() >= 2 && data.reporterName.size() <= 60
         && data.reason in ['copie-interne', 'oeuvre-publiee', 'autre']
         && data.details is string && data.details.size() >= 10 && data.details.size() <= 600
-        && data.referenceUrl is string && data.referenceUrl.size() <= 300
+        && data.referenceUrl is string && data.referenceUrl.size() <= 300 && isValidSafeHttpUrl(data.referenceUrl)
         && data.createdAt is timestamp;
     }
 
@@ -448,7 +477,7 @@ service cloud.firestore {
         && isValidId(data.ownerId)
         && data.ownerName is string && data.ownerName.size() >= 2 && data.ownerName.size() <= 60
         && data.accentTone in ['ink', 'ochre', 'terracotta', 'sage', 'sand']
-        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000))
+        && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000 && isValidSafeImageUrl(data.avatarUrl)))
         && (!('minAge' in data) || (data.minAge is int && data.minAge in [0, 13, 16, 18]))
         && data.memberCount is int && data.memberCount >= 1
         && data.createdAt is timestamp

@@ -26,6 +26,7 @@ import {
   STORY_FORMAT_LABELS,
   THEME_MAP,
 } from '../lib/themes';
+import { sanitizeMediaUrl } from '../lib/urlSecurity';
 import { PublicProfile, Story } from '../types/story';
 import { NovelCoverArt } from './NovelCoverArt';
 
@@ -92,6 +93,7 @@ function SpotlightAvatar({
   ringClass?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  const safeAvatarUrl = sanitizeMediaUrl(avatarUrl);
   const initial = (name.trim()[0] || 'A').toUpperCase();
   const sizeClass =
     size === 'xl'
@@ -102,13 +104,13 @@ function SpotlightAvatar({
           ? 'w-10 h-10 text-sm'
           : 'w-8 h-8 text-xs';
 
-  if (avatarUrl && !failed) {
+  if (safeAvatarUrl && !failed) {
     return (
       <div
         className={`${sizeClass} rounded-full overflow-hidden border-2 ${ringClass} bg-stone-100 dark:bg-stone-800 shrink-0`}
       >
         <img
-          src={avatarUrl}
+          src={safeAvatarUrl}
           alt={name}
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}

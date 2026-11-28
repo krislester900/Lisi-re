@@ -7,12 +7,21 @@ import { fileURLToPath } from 'node:url';
 import express, { type Request, type Response } from 'express';
 import {
   analyzeModerationCaseWithGemini,
+  applySecurityHeadersToNodeResponse,
   buildRobotsTxt,
   buildSitemapXml,
   ContentGuardKind,
   guardContentWithGemini,
+  isSafePublicHttpsUrl,
   normalizeGoogleSiteVerificationToken,
   normalizeGoogleVerificationFile,
+  resolveTrustedOAuthTargetOrigin,
+  safeFetchWithValidatedRedirects,
+  SPOTIFY_DEVICE_ID_REGEX,
+  SPOTIFY_URI_REGEX,
+  VALID_MODERATION_CATEGORIES,
+  VALID_MODERATION_TARGET_TYPES,
+  VALID_MUSIC_SEARCH_SOURCES,
   verifyFirebaseIdToken,
 } from './api-helpers.ts';
 
@@ -217,13 +226,16 @@ function buildCandidateUrlsFromStream(
   stream?: { url?: string | null; mirrors?: string[] } | null
 ): string[] {
   const candidates: string[] = [];
-  if (stream?.url) {
+  if (stream?.url && isSafePublicHttpsUrl(stream.url)) {
     candidates.push(stream.url);
     try {
       const parsedUrl = new URL(stream.url);
       const suffix = `${parsedUrl.pathname}${parsedUrl.search}`;
       for (const mirror of stream.mirrors ?? []) {
-        candidates.push(`${mirror.replace(/\/+$/, '')}${suffix}`);
+        const candidate = `${mirror.replace(/\/+$/, '')}${suffix}`;
+        if (isSafePublicHttpsUrl(candidate)) {
+          candidates.push(candidate);
+        }
       }
     } catch {
       // Ignore malformed mirror URL
@@ -247,9 +259,8 @@ async function isAudiusTrackReachable(
   try {
     await Promise.any(
       urls.map(async (url, idx) => {
-        const resp = await fetch(url, {
+        const resp = await safeFetchWithValidatedRedirects(url, {
           headers: { Range: 'bytes=0-0' },
-          redirect: 'follow',
           signal: controllers[idx].signal,
         });
         const ct = resp.headers.get('content-type') || '';
@@ -280,9 +291,12 @@ async function fetchAudiusTracks(query: string): Promise<NormalizedTrack[]> {
       const hostsJson = (await hostsResp.json()) as { data?: string[] };
       if (Array.isArray(hostsJson.data)) {
         for (const host of hostsJson.data.slice(0, 2)) {
-          endpoints.push(
-            `${host.replace(/\/+$/, '')}/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=Lisiere`
-          );
+          const cleanHost = typeof host === 'string' ? host.replace(/\/+$/, '') : '';
+          if (cleanHost && isSafePublicHttpsUrl(cleanHost)) {
+            endpoints.push(
+              `${cleanHost}/v1/tracks/search?query=${encodeURIComponent(query)}&app_name=Lisiere`
+            );
+          }
         }
       }
     }
@@ -584,10 +598,44 @@ async function fetchYouTubeTracks(query: string): Promise<NormalizedTrack[]> {
   return tracks;
 }
 
+function createIpRateLimiter(maxRequests: number, windowMs: number) {
+  const hits = new Map<string, number[]>();
+  return (req: Request, res: Response, next: express.NextFunction) => {
+    const now = Date.now();
+    const clientIp =
+      req.ip || req.socket.remoteAddress || 'unknown';
+    if (hits.size > 2000) {
+      for (const [key, stamps] of hits.entries()) {
+        if (stamps.every((t) => now - t >= windowMs)) {
+          hits.delete(key);
+        }
+      }
+    }
+    const recent = (hits.get(clientIp) || []).filter((t) => now - t < windowMs);
+    if (recent.length >= maxRequests) {
+      res.status(429).json({
+        error: 'Trop de requêtes effectuées. Veuillez patienter un instant.',
+      });
+      return;
+    }
+    recent.push(now);
+    hits.set(clientIp, recent);
+    next();
+  };
+}
+
 export function createApiApp(): express.Express {
   const app = express();
+  app.disable('x-powered-by');
   app.set('trust proxy', 1);
+  app.use((_req, res, next) => {
+    applySecurityHeadersToNodeResponse(res);
+    next();
+  });
   app.use(express.json({ limit: '256kb' }));
+  app.use('/api/moderation/', createIpRateLimiter(20, 60_000));
+  app.use(['/api/spotify/', '/auth/spotify/'], createIpRateLimiter(30, 60_000));
+  app.use('/api/music/', createIpRateLimiter(60, 60_000));
 
   const resolveRequestOrigin = (req: Request): string => {
     const configured = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
@@ -637,6 +685,7 @@ export function createApiApp(): express.Express {
   });
 
   app.get('/api/spotify/auth-url', (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
     const creds = getSpotifyCredentials();
     if (!creds) {
       res.status(400).json({
@@ -646,10 +695,12 @@ export function createApiApp(): express.Express {
       return;
     }
 
+    const originQuery = typeof req.query.origin === 'string' ? req.query.origin : '';
+    const targetOrigin = resolveTrustedOAuthTargetOrigin(originQuery, resolveRequestOrigin(req));
     const state = crypto.randomBytes(16).toString('hex');
     res.cookie(
       SPOTIFY_STATE_COOKIE,
-      sealJson({ state, createdAt: Date.now() }),
+      sealJson({ state, targetOrigin, createdAt: Date.now() }),
       getCookieOptions(req, 10 * 60 * 1000)
     );
 
@@ -670,11 +721,24 @@ export function createApiApp(): express.Express {
   });
 
   const handleSpotifyCallback = async (req: Request, res: Response) => {
-    const errorParam = typeof req.query.error === 'string' ? req.query.error : '';
+    res.setHeader('Cache-Control', 'no-store');
+    const cookies = parseCookies(req);
+    const storedState = unsealJson<{ state: string; targetOrigin?: string; createdAt: number }>(
+      cookies[SPOTIFY_STATE_COOKIE]
+    );
+    res.clearCookie(SPOTIFY_STATE_COOKIE, getCookieOptions(req, 0));
+
+    const targetOrigin = resolveTrustedOAuthTargetOrigin(
+      storedState?.targetOrigin,
+      resolveRequestOrigin(req)
+    );
+    const serializedTargetOrigin = JSON.stringify(targetOrigin);
+
+    const errorParam = typeof req.query.error === 'string' ? req.query.error.slice(0, 80) : '';
     if (errorParam) {
       res.send(`<!doctype html><html><body><script>
         if (window.opener) {
-          window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: 'spotify', error: ${JSON.stringify(errorParam)} }, '*');
+          window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: 'spotify', error: ${JSON.stringify(errorParam)} }, ${serializedTargetOrigin});
           window.close();
         } else {
           window.location.href = '/';
@@ -685,16 +749,15 @@ export function createApiApp(): express.Express {
 
     const code = typeof req.query.code === 'string' ? req.query.code : '';
     const state = typeof req.query.state === 'string' ? req.query.state : '';
-    const cookies = parseCookies(req);
-    const storedState = unsealJson<{ state: string; createdAt: number }>(
-      cookies[SPOTIFY_STATE_COOKIE]
-    );
-    res.clearCookie(SPOTIFY_STATE_COOKIE, getCookieOptions(req, 0));
+    const stateExpired =
+      !storedState ||
+      typeof storedState.createdAt !== 'number' ||
+      Date.now() - storedState.createdAt > 10 * 60 * 1000;
 
-    if (!code || !state || !storedState || storedState.state !== state) {
+    if (!code || !state || stateExpired || storedState.state !== state) {
       res.status(400).send(`<!doctype html><html><body><script>
         if (window.opener) {
-          window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: 'spotify', error: 'invalid_state' }, '*');
+          window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: 'spotify', error: 'invalid_state' }, ${serializedTargetOrigin});
           window.close();
         } else {
           window.location.href = '/';
@@ -768,17 +831,16 @@ export function createApiApp(): express.Express {
 
       res.send(`<!doctype html><html><body><script>
         if (window.opener) {
-          window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'spotify' }, '*');
+          window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', provider: 'spotify' }, ${serializedTargetOrigin});
           window.close();
         } else {
           window.location.href = '/';
         }
       </script><p>Compte Spotify connecté. Cette fenêtre va se fermer automatiquement.</p></body></html>`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'oauth_failed';
+    } catch {
       res.status(500).send(`<!doctype html><html><body><script>
         if (window.opener) {
-          window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: 'spotify', error: ${JSON.stringify(msg)} }, '*');
+          window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', provider: 'spotify', error: 'oauth_failed' }, ${serializedTargetOrigin});
           window.close();
         }
       </script><p>Erreur de connexion Spotify.</p></body></html>`);
@@ -788,6 +850,7 @@ export function createApiApp(): express.Express {
   app.get(['/auth/spotify/callback', '/auth/spotify/callback/'], handleSpotifyCallback);
 
   app.get('/api/spotify/token', async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
     const session = await ensureFreshSpotifySession(req, res);
     if (!session) {
       res.status(401).json({ error: 'Non connecté à Spotify.' });
@@ -922,14 +985,19 @@ export function createApiApp(): express.Express {
       return;
     }
 
-    const { uri, deviceId } = req.body as { uri?: string; deviceId?: string };
-    if (!uri) {
-      res.status(400).json({ error: 'URI Spotify manquante.' });
+    const { uri, deviceId } = (req.body || {}) as { uri?: unknown; deviceId?: unknown };
+    if (typeof uri !== 'string' || !SPOTIFY_URI_REGEX.test(uri)) {
+      res.status(400).json({ error: 'URI Spotify invalide ou manquante.' });
+      return;
+    }
+    if (deviceId !== undefined && deviceId !== '' && (typeof deviceId !== 'string' || !SPOTIFY_DEVICE_ID_REGEX.test(deviceId))) {
+      res.status(400).json({ error: 'Identifiant d’appareil Spotify invalide.' });
       return;
     }
 
-    const endpoint = deviceId
-      ? `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`
+    const cleanDeviceId = typeof deviceId === 'string' && deviceId ? deviceId : '';
+    const endpoint = cleanDeviceId
+      ? `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(cleanDeviceId)}`
       : 'https://api.spotify.com/v1/me/player/play';
 
     const resp = await fetch(endpoint, {
@@ -946,12 +1014,11 @@ export function createApiApp(): express.Express {
       return;
     }
 
-    const errText = await resp.text().catch(() => '');
     res.status(resp.status).json({
       error:
         resp.status === 403
           ? 'La lecture complète en direct nécessite un compte Spotify Premium.'
-          : errText || 'Impossible de démarrer la lecture sur Spotify.',
+          : 'Impossible de démarrer la lecture sur Spotify.',
     });
   });
 
@@ -962,9 +1029,15 @@ export function createApiApp(): express.Express {
       return;
     }
 
-    const { deviceId } = (req.body || {}) as { deviceId?: string };
-    const endpoint = deviceId
-      ? `https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(deviceId)}`
+    const { deviceId } = (req.body || {}) as { deviceId?: unknown };
+    if (deviceId !== undefined && deviceId !== '' && (typeof deviceId !== 'string' || !SPOTIFY_DEVICE_ID_REGEX.test(deviceId))) {
+      res.status(400).json({ error: 'Identifiant d’appareil Spotify invalide.' });
+      return;
+    }
+
+    const cleanDeviceId = typeof deviceId === 'string' && deviceId ? deviceId : '';
+    const endpoint = cleanDeviceId
+      ? `https://api.spotify.com/v1/me/player/pause?device_id=${encodeURIComponent(cleanDeviceId)}`
       : 'https://api.spotify.com/v1/me/player/pause';
 
     await fetch(endpoint, {
@@ -1008,9 +1081,8 @@ export function createApiApp(): express.Express {
     try {
       const winner = await Promise.any(
         raceUrls.map(async (candidateUrl, idx) => {
-          const upstream = await fetch(candidateUrl, {
+          const upstream = await safeFetchWithValidatedRedirects(candidateUrl, {
             headers: rangeHeader ? { Range: rangeHeader } : undefined,
-            redirect: 'follow',
             signal: controllers[idx].signal,
           });
           if (!upstream.ok || !upstream.body) {
@@ -1091,11 +1163,14 @@ export function createApiApp(): express.Express {
       }
 
       const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined;
-      const upstream = await fetch(meta.preview, {
-        headers: rangeHeader ? { Range: rangeHeader } : undefined,
-        redirect: 'follow',
-        signal: AbortSignal.timeout(12000),
-      });
+      const upstream = await safeFetchWithValidatedRedirects(
+        meta.preview,
+        {
+          headers: rangeHeader ? { Range: rangeHeader } : undefined,
+          signal: AbortSignal.timeout(12000),
+        },
+        { allowedHostSuffixes: ['dzcdn.net', 'deezer.com'] }
+      );
 
       if (!upstream.ok || !upstream.body) {
         await upstream.body?.cancel().catch(() => {});
@@ -1137,6 +1212,10 @@ export function createApiApp(): express.Express {
   app.get('/api/music/search', async (req: Request, res: Response) => {
     const q = typeof req.query.q === 'string' ? req.query.q.trim().slice(0, 120) : '';
     const source = typeof req.query.source === 'string' ? req.query.source : 'audius';
+    if (!VALID_MUSIC_SEARCH_SOURCES.has(source)) {
+      res.status(400).json({ error: 'Source musicale non prise en charge.' });
+      return;
+    }
     if (!q) {
       res.json({ tracks: [] });
       return;
@@ -1155,9 +1234,9 @@ export function createApiApp(): express.Express {
       }
       const tracks = await fetchAudiusTracks(q);
       res.json({ tracks });
-    } catch (err) {
+    } catch {
       res.status(502).json({
-        error: err instanceof Error ? err.message : 'Erreur lors de la recherche musicale.',
+        error: 'Erreur lors de la recherche musicale.',
       });
     }
   });
@@ -1175,30 +1254,52 @@ export function createApiApp(): express.Express {
       res.status(401).json({ error: 'Session expirée ou jeton Firebase invalide.' });
       return;
     }
+    if (!caller.emailVerified) {
+      res.status(403).json({
+        error: 'Veuillez vérifier votre adresse e-mail avant de lancer l’analyse IA.',
+      });
+      return;
+    }
 
     const body = (req.body || {}) as {
-      targetType?: string;
-      category?: string;
-      targetUserName?: string;
-      targetExcerpt?: string;
-      description?: string;
+      targetType?: unknown;
+      category?: unknown;
+      targetUserName?: unknown;
+      targetExcerpt?: unknown;
+      description?: unknown;
     };
+
+    const targetType =
+      typeof body.targetType === 'string' && body.targetType ? body.targetType : 'story';
+    const category =
+      typeof body.category === 'string' && body.category ? body.category : 'autre';
+    if (!VALID_MODERATION_TARGET_TYPES.has(targetType)) {
+      res.status(400).json({ error: 'Type de cible de modération invalide.' });
+      return;
+    }
+    if (!VALID_MODERATION_CATEGORIES.has(category)) {
+      res.status(400).json({ error: 'Catégorie de signalement invalide.' });
+      return;
+    }
 
     try {
       const analysis = await analyzeModerationCaseWithGemini({
         apiKey: process.env.GEMINI_API_KEY || '',
-        targetType: body.targetType || 'story',
-        category: body.category || 'autre',
-        targetUserName: body.targetUserName || 'Membre',
-        targetExcerpt: body.targetExcerpt || '',
-        description: body.description || '',
+        targetType,
+        category,
+        targetUserName: typeof body.targetUserName === 'string' ? body.targetUserName : 'Membre',
+        targetExcerpt: typeof body.targetExcerpt === 'string' ? body.targetExcerpt : '',
+        description: typeof body.description === 'string' ? body.description : '',
       });
       res.json({ analysis });
     } catch (err) {
       const e = err as Error & { statusCode?: number };
       const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
       res.status(status).json({
-        error: e.message || 'Impossible de contacter le service de modération IA.',
+        error:
+          status < 500
+            ? e.message || 'Requête d’analyse invalide.'
+            : 'Impossible de contacter le service de modération IA.',
       });
     }
   });
@@ -1216,19 +1317,25 @@ export function createApiApp(): express.Express {
       res.status(401).json({ error: 'Session expirée ou jeton Firebase invalide.' });
       return;
     }
+    if (!caller.emailVerified) {
+      res.status(403).json({
+        error: 'Veuillez vérifier votre adresse e-mail avant de publier.',
+      });
+      return;
+    }
 
     const body = (req.body || {}) as {
       kind?: ContentGuardKind;
-      title?: string;
-      text?: string;
-      declaredMinAge?: number;
-      declaredMature?: boolean;
+      title?: unknown;
+      text?: unknown;
+      declaredMinAge?: unknown;
+      declaredMature?: unknown;
     };
 
     try {
       const verdict = await guardContentWithGemini({
         apiKey: process.env.GEMINI_API_KEY || '',
-        kind: body.kind || 'story',
+        kind: typeof body.kind === 'string' ? (body.kind as ContentGuardKind) : 'story',
         title: typeof body.title === 'string' ? body.title : '',
         text: typeof body.text === 'string' ? body.text : '',
         declaredMinAge: typeof body.declaredMinAge === 'number' ? body.declaredMinAge : 0,
@@ -1239,7 +1346,10 @@ export function createApiApp(): express.Express {
       const e = err as Error & { statusCode?: number };
       const status = typeof e.statusCode === 'number' ? e.statusCode : 502;
       res.status(status).json({
-        error: e.message || 'Le bot de régulation IA est momentanément indisponible.',
+        error:
+          status < 500
+            ? e.message || 'Contenu invalide.'
+            : 'Le bot de régulation IA est momentanément indisponible.',
       });
     }
   });
