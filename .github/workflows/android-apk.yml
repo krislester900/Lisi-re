@@ -211,13 +211,25 @@ jobs:
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}
         run: |
           rm -f android/app/src/main/res/mipmap-anydpi-v26/*.png
-          if [ -f public/pwa-512x512.png ]; then
+          LAUNCHER_SRC="android-assets/ic_launcher.png"
+          FOREGROUND_SRC="android-assets/ic_launcher_foreground.png"
+          if [ ! -f "$LAUNCHER_SRC" ]; then
+            LAUNCHER_SRC="public/pwa-512x512.png"
+          fi
+          if [ ! -f "$FOREGROUND_SRC" ]; then
+            FOREGROUND_SRC="$LAUNCHER_SRC"
+          fi
+          if [ -f "$LAUNCHER_SRC" ]; then
             for dir in android/app/src/main/res/mipmap-{mdpi,hdpi,xhdpi,xxhdpi,xxxhdpi}; do
               [ -d "$dir" ] || continue
-              cp -f public/pwa-512x512.png "$dir/ic_launcher.png"
-              cp -f public/pwa-512x512.png "$dir/ic_launcher_round.png"
-              cp -f public/pwa-512x512.png "$dir/ic_launcher_foreground.png"
+              cp -f "$LAUNCHER_SRC" "$dir/ic_launcher.png"
+              cp -f "$LAUNCHER_SRC" "$dir/ic_launcher_round.png"
+              cp -f "$FOREGROUND_SRC" "$dir/ic_launcher_foreground.png"
             done
+          fi
+          BG_XML="android/app/src/main/res/values/ic_launcher_background.xml"
+          if [ -f "$BG_XML" ]; then
+            printf '<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#FFFFFF</color>\n</resources>\n' > "$BG_XML"
           fi
 
       - name: Compiler l'APK et l'AAB Android avec Gradle
