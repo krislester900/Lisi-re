@@ -1,7 +1,20 @@
 import React from 'react';
-import { Award, BookOpen, Crown, Feather, Shield, ShieldCheck } from 'lucide-react';
-import { MEMBER_BADGE_MAP, sanitizeMemberBadges } from '../lib/memberBadges';
-import { MemberBadgeId } from '../types/story';
+import {
+  Award,
+  BookOpen,
+  Compass,
+  Crown,
+  Feather,
+  Heart,
+  Shield,
+  ShieldCheck,
+} from 'lucide-react';
+import {
+  ENGAGEMENT_BADGE_MAP,
+  MEMBER_BADGE_MAP,
+  sanitizeMemberBadges,
+} from '../lib/memberBadges';
+import { EngagementBadgeId, MemberBadgeId } from '../types/story';
 
 export type MemberRoleBadgeKind = 'admin' | 'owner' | 'moderator';
 
@@ -66,6 +79,26 @@ function BadgeGlyph({ badgeId, compact }: { badgeId: MemberBadgeId; compact: boo
   }
 }
 
+function EngagementGlyph({
+  badgeId,
+  compact,
+}: {
+  badgeId: EngagementBadgeId;
+  compact: boolean;
+}) {
+  const sizeClass = compact ? 'w-2.5 h-2.5 shrink-0' : 'w-3 h-3 shrink-0';
+  switch (badgeId) {
+    case 'contributeur_bienveillant':
+      return <Heart className={sizeClass} />;
+    case 'romancier_prolifique':
+      return <BookOpen className={sizeClass} />;
+    case 'plume_reguliere':
+      return <Feather className={sizeClass} />;
+    case 'voix_des_salons':
+      return <Compass className={sizeClass} />;
+  }
+}
+
 export function ProfileBadgeChip({
   badgeId,
   compact = false,
@@ -91,11 +124,37 @@ export function ProfileBadgeChip({
   );
 }
 
+export function EngagementBadgeChip({
+  badgeId,
+  compact = false,
+  label,
+  title,
+}: {
+  badgeId: EngagementBadgeId;
+  compact?: boolean;
+  label?: string;
+  title?: string;
+}) {
+  const def = ENGAGEMENT_BADGE_MAP[badgeId];
+  return (
+    <span
+      title={title ?? `${def.description} (${def.criteriaLabel})`}
+      className={`inline-flex items-center gap-1 rounded border font-medium whitespace-nowrap shrink-0 ${
+        compact ? 'px-1.5 py-0.5 text-[10px] leading-tight' : 'px-2 py-0.5 text-[11px] leading-tight'
+      } ${def.toneClass}`}
+    >
+      <EngagementGlyph badgeId={badgeId} compact={compact} />
+      <span>{label ?? def.label}</span>
+    </span>
+  );
+}
+
 interface RoleBadgesRowProps {
   isAdmin?: boolean;
   isOwner?: boolean;
   isModerator?: boolean;
   profileBadges?: MemberBadgeId[];
+  engagementBadges?: EngagementBadgeId[];
   compact?: boolean;
   moderatorLabel?: string;
 }
@@ -105,6 +164,7 @@ export function RoleBadgesRow({
   isOwner = false,
   isModerator = false,
   profileBadges,
+  engagementBadges,
   compact = false,
   moderatorLabel,
 }: RoleBadgesRowProps) {
@@ -114,8 +174,21 @@ export function RoleBadgesRow({
   const extraBadges = cleanBadges.filter(
     (id) => id !== 'administrateur' && id !== 'moderateur'
   );
+  const cleanEngagement = (engagementBadges ?? []).filter((id, idx, arr) => {
+    if (arr.indexOf(id) !== idx) return false;
+    if (id === 'plume_reguliere' && extraBadges.includes('plume_confirmee')) return false;
+    return Boolean(ENGAGEMENT_BADGE_MAP[id]);
+  });
 
-  if (!showAdmin && !isOwner && !showModerator && extraBadges.length === 0) return null;
+  if (
+    !showAdmin &&
+    !isOwner &&
+    !showModerator &&
+    extraBadges.length === 0 &&
+    cleanEngagement.length === 0
+  ) {
+    return null;
+  }
 
   return (
     <span className="inline-flex flex-wrap items-center gap-1 shrink-0">
@@ -135,6 +208,9 @@ export function RoleBadgesRow({
       )}
       {extraBadges.map((badgeId) => (
         <ProfileBadgeChip key={badgeId} badgeId={badgeId} compact={compact} />
+      ))}
+      {cleanEngagement.map((badgeId) => (
+        <EngagementBadgeChip key={badgeId} badgeId={badgeId} compact={compact} />
       ))}
     </span>
   );

@@ -19,7 +19,11 @@ import {
   checkLocalContentHygiene,
   evaluateStoryFormatCompliance,
 } from '../lib/contentRegulation';
-import { buildStoryShareSummary, buildStoryShareUrl } from '../lib/storyShare';
+import {
+  buildSocialShareTargets,
+  buildStoryShareSummary,
+  buildStoryShareUrl,
+} from '../lib/storyShare';
 import {
   createDirectExchangeWithFirstMessage,
   formatFriendlyFirestoreError,
@@ -152,6 +156,11 @@ export function ShareStoryModal({
 
   const directUrl = buildStoryShareUrl(story.storyId);
   const summaryText = buildStoryShareSummary(story);
+  const socialShareTargets = buildSocialShareTargets({
+    url: directUrl,
+    title: `${story.title} — Lisière`,
+    summary: summaryText,
+  });
   const canUseNativeShare =
     typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
@@ -483,49 +492,22 @@ export function ShareStoryModal({
                       Partager sur un réseau social
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      <a
-                        href={`https://wa.me/?text=${encodeURIComponent(`${summaryText} ${directUrl}`)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center justify-between gap-1.5"
-                      >
-                        <span>WhatsApp</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                      </a>
-                      <a
-                        href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(summaryText)}&url=${encodeURIComponent(directUrl)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center justify-between gap-1.5"
-                      >
-                        <span>X / Twitter</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                      </a>
-                      <a
-                        href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(directUrl)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center justify-between gap-1.5"
-                      >
-                        <span>Facebook</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                      </a>
-                      <a
-                        href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(directUrl)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center justify-between gap-1.5"
-                      >
-                        <span>LinkedIn</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                      </a>
-                      <a
-                        href={`mailto:?subject=${encodeURIComponent(summaryText)}&body=${encodeURIComponent(`${summaryText}\n\nLire ce récit sur Lisière :\n${directUrl}`)}`}
-                        className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 dark:hover:border-stone-500 inline-flex items-center justify-between gap-1.5 col-span-2 sm:col-span-1"
-                      >
-                        <span>E-mail</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                      </a>
+                      {socialShareTargets.map((target) => (
+                        <a
+                          key={target.id}
+                          href={target.href}
+                          target={target.isExternal ? '_blank' : undefined}
+                          rel={target.isExternal ? 'noopener noreferrer' : undefined}
+                          className={`min-h-[38px] px-3 py-2 rounded-md border text-xs font-medium inline-flex items-center justify-between gap-1.5 ${
+                            target.id === 'linkedin'
+                              ? 'border-[#0A66C2]/40 bg-[#0A66C2]/10 dark:bg-[#0A66C2]/20 text-[#0A66C2] dark:text-sky-300 hover:border-[#0A66C2]'
+                              : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 hover:border-stone-400 dark:hover:border-stone-500'
+                          }`}
+                        >
+                          <span>{target.label}</span>
+                          <ArrowUpRight className="w-3.5 h-3.5 opacity-70" />
+                        </a>
+                      ))}
                     </div>
                   </div>
                 </div>

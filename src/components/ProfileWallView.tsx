@@ -4,6 +4,8 @@ import {
   Ban,
   BookOpen,
   Camera,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   EyeOff,
   Feather,
@@ -16,6 +18,7 @@ import {
   Music2,
   Plus,
   Repeat2,
+  RotateCcw,
   Send,
   Share2,
   Star,
@@ -39,14 +42,17 @@ import {
   ensureUserProfiles,
   formatFriendlyFirestoreError,
   removeUserRelationship,
+  reorderWallPhotos,
   subscribeToProfileReposts,
   subscribeToPublicProfile,
   subscribeToWallItems,
   toggleFavoriteAuthor,
   updateMemberProfileBadges,
   updateProfileCommentsDisabled,
+  updateProfilePhotoGallerySettings,
   updatePublicProfile,
   updateRepostVisibility,
+  updateWallItemPhotoSettings,
   upsertUserRelationship,
 } from '../lib/storyService';
 import {
@@ -64,15 +70,24 @@ import {
   WallAccentTone,
   WallItem,
   WallItemKind,
+  WallPhotoLayout,
+  WallPhotoPlacement,
 } from '../types/story';
-import { getProfileBadges, MEMBER_BADGE_DEFINITIONS } from '../lib/memberBadges';
+import {
+  computeMemberEngagementBadges,
+  computeMemberEngagementStats,
+  ENGAGEMENT_BADGE_MAP,
+  getProfileBadges,
+  MEMBER_BADGE_DEFINITIONS,
+} from '../lib/memberBadges';
 import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { ImmersiveMusicPlayer } from './ImmersiveMusicPlayer';
 import { MusicCatalogPicker } from './MusicCatalogPicker';
 import { NovelCoverArt } from './NovelCoverArt';
 import type { ReportDraft } from './ReportModal';
-import { ProfileBadgeChip, RoleBadgesRow } from './RoleBadge';
+import { EngagementBadgeChip, ProfileBadgeChip, RoleBadgesRow } from './RoleBadge';
 import { StoryFormatKicker } from './StoryFormatKicker';
+import { WallPhotoAlbum } from './WallPhotoAlbum';
 
 import { Award, Check, Settings, ShieldCheck } from 'lucide-react';
 
@@ -179,7 +194,9 @@ export function ProfileWallView({
     src: string;
     title: string;
     body?: string;
+    subtitle?: string;
   } | null>(null);
+  const [lightboxFlipped, setLightboxFlipped] = useState(false);
 
   const [wallActionError, setWallActionError] = useState<string | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
@@ -206,6 +223,7 @@ export function ProfileWallView({
   const [body, setBody] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [accentTone, setAccentTone] = useState<WallAccentTone>('sand');
+  const [photoPlacement, setPhotoPlacement] = useState<WallPhotoPlacement>('auto');
   const [setAsFavoriteMusic, setSetAsFavoriteMusic] = useState(true);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [savingItem, setSavingItem] = useState(false);
@@ -272,17 +290,20 @@ export function ProfileWallView({
   }, [loaded, isOwner, memberProfile, user]);
 
   useEffect(() => {
-    if (!lightboxItem && !composerOpen && !avatarModalOpen) return;
+    setLightboxFlipped(false);
+  }, [lightboxItem?.itemId, lightboxItem?.src]);
+
+  useEffect(() => {
+    if (!composerOpen && !avatarModalOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (lightboxItem) setLightboxItem(null);
-        else if (avatarModalOpen && !savingAvatar) setAvatarModalOpen(false);
+        if (avatarModalOpen && !savingAvatar) setAvatarModalOpen(false);
         else if (composerOpen && !savingItem) setComposerOpen(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [lightboxItem, composerOpen, savingItem, avatarModalOpen, savingAvatar]);
+  }, [composerOpen, savingItem, avatarModalOpen, savingAvatar]);
 
   const existingDirectExchange =
     user && !isOwner
@@ -302,6 +323,7 @@ export function ProfileWallView({
     setTitle('');
     setSubtitle('');
     setBody('');
+    setPhotoPlacement('auto');
     setSetAsFavoriteMusic(true);
     setComposerOpen(true);
   };
@@ -426,17 +448,82 @@ export function ProfileWallView({
         body,
         mediaUrl,
         accentTone,
+        ...(kind === 'photo' ? { displayOrder: 0, photoPlacement } : {}),
       });
 
       setTitle('');
       setSubtitle('');
       setBody('');
       setMediaUrl('');
+      setPhotoPlacement('auto');
       setComposerOpen(false);
     } catch (err) {
       setItemError(formatReadableWallError(err, 'Impossible d’ajouter cette carte sur le mur.'));
     } finally {
       setSavingItem(false);
+    }
+  };
+
+  const handleChangePhotoLayout = async (nextLayout: WallPhotoLayout) => {
+    if (!user || !isOwner) return;
+    setWallActionError(null);
+    try {
+      if (!memberProfile) {
+        await ensureUserProfiles(user);
+      }
+      await updateProfilePhotoGallerySettings(user.uid, { photoLayout: nextLayout });
+    } catch (err) {
+      setWallActionError(
+        formatReadableWallError(err, 'Impossible de modifier l’agencement de l’album photo.')
+      );
+    }
+  };
+
+  const handleSaveAlbumHeader = async (nextTitle: string, nextNote: string) => {
+    if (!user || !isOwner) return;
+    setWallActionError(null);
+    try {
+      if (!memberProfile) {
+        await ensureUserProfiles(user);
+      }
+      await updateProfilePhotoGallerySettings(user.uid, {
+        photoAlbumTitle: nextTitle,
+        photoAlbumNote: nextNote,
+      });
+    } catch (err) {
+      setWallActionError(
+        formatReadableWallError(err, 'Impossible d’enregistrer l’en-tête de l’album.')
+      );
+    }
+  };
+
+  const handleReorderPhotos = async (nextPhotos: WallItem[]) => {
+    if (!user || !isOwner) return;
+    setWallActionError(null);
+    try {
+      await reorderWallPhotos(
+        user.uid,
+        nextPhotos.map((p, idx) => ({ itemId: p.itemId, displayOrder: idx }))
+      );
+    } catch (err) {
+      setWallActionError(
+        formatReadableWallError(err, 'Impossible de réorganiser les photos.')
+      );
+    }
+  };
+
+  const handleSetPhotoPlacement = async (
+    itemId: string,
+    placement: WallPhotoPlacement
+  ) => {
+    if (!user || !isOwner) return;
+    setWallActionError(null);
+    try {
+      await updateWallItemPhotoSettings(user.uid, itemId, { photoPlacement: placement });
+    } catch (err) {
+      setWallActionError(
+        formatReadableWallError(err, 'Impossible de modifier la position de cette photo.')
+      );
     }
   };
 
@@ -609,32 +696,19 @@ export function ProfileWallView({
     }
   };
 
-  const { leadPhoto, circularPhoto, featuredTrack, remainingCollageItems } = useMemo(() => {
-    const photos = wallItems.filter((item) => item.kind === 'photo' && item.mediaUrl);
+  const { albumPhotos, circularPhoto, featuredTrack, remainingCollageItems } = useMemo(() => {
+    const photos = wallItems
+      .filter((item) => item.kind === 'photo' && item.mediaUrl)
+      .sort((a, b) => {
+        const orderA = typeof a.displayOrder === 'number' ? a.displayOrder : 0;
+        const orderB = typeof b.displayOrder === 'number' ? b.displayOrder : 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0);
+      });
     const musics = wallItems.filter((item) => item.kind === 'music');
 
-    const primaryPhoto = photos[0] ?? null;
-
-    let circleSrc: string | null = null;
-    let circleAlt = memberProfile?.displayName || 'Portrait';
-    let circleItemId: string | undefined;
-    let circleBody: string | undefined;
-    let consumedPhotoCount = primaryPhoto ? 1 : 0;
-
-    if (photos.length >= 2) {
-      circleSrc = photos[1].mediaUrl || null;
-      circleAlt = photos[1].title || circleAlt;
-      circleItemId = photos[1].itemId;
-      circleBody = photos[1].body;
-      consumedPhotoCount = 2;
-    } else if (memberProfile?.avatarUrl) {
-      circleSrc = memberProfile.avatarUrl;
-    } else if (primaryPhoto?.mediaUrl) {
-      circleSrc = primaryPhoto.mediaUrl;
-      circleAlt = primaryPhoto.title || circleAlt;
-      circleItemId = primaryPhoto.itemId;
-      circleBody = primaryPhoto.body;
-    }
+    const circleSrc = memberProfile?.avatarUrl || null;
+    const circleAlt = memberProfile?.displayName || 'Portrait';
 
     let featured: {
       id: string;
@@ -670,31 +744,23 @@ export function ProfileWallView({
       remainingMusics = musics.slice(1);
     }
 
-    const extraPhotos = photos.slice(consumedPhotoCount);
-
     const usedIds = new Set<string>();
-    if (primaryPhoto) usedIds.add(primaryPhoto.itemId);
-    if (consumedPhotoCount === 2 && photos[1]) usedIds.add(photos[1].itemId);
     if (featured?.wallItemId) usedIds.add(featured.wallItemId);
 
     const remaining = wallItems.filter((item) => {
+      if (item.kind === 'photo') return false;
       if (usedIds.has(item.itemId)) return false;
       if (item.kind === 'music' && !remainingMusics.some((m) => m.itemId === item.itemId)) {
-        return false;
-      }
-      if (item.kind === 'photo' && !extraPhotos.some((p) => p.itemId === item.itemId)) {
         return false;
       }
       return true;
     });
 
     return {
-      leadPhoto: primaryPhoto,
+      albumPhotos: photos,
       circularPhoto: {
         src: circleSrc,
         alt: circleAlt,
-        itemId: circleItemId,
-        body: circleBody,
       },
       featuredTrack: featured,
       remainingCollageItems: remaining,
@@ -709,6 +775,44 @@ export function ProfileWallView({
     const found = wallItems.find((w) => w.itemId === activeTrackId);
     return found?.title ?? null;
   }, [activeTrackId, featuredTrack, wallItems]);
+
+  useEffect(() => {
+    if (!lightboxItem) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setLightboxItem(null);
+        return;
+      }
+      if (!lightboxItem.itemId || albumPhotos.length <= 1) return;
+      const idx = albumPhotos.findIndex((p) => p.itemId === lightboxItem.itemId);
+      if (idx === -1) return;
+      if (e.key === 'ArrowLeft') {
+        const prev = albumPhotos[(idx - 1 + albumPhotos.length) % albumPhotos.length];
+        if (prev) {
+          setLightboxItem({
+            itemId: prev.itemId,
+            src: prev.mediaUrl,
+            title: prev.title,
+            subtitle: prev.subtitle,
+            body: prev.body,
+          });
+        }
+      } else if (e.key === 'ArrowRight') {
+        const next = albumPhotos[(idx + 1) % albumPhotos.length];
+        if (next) {
+          setLightboxItem({
+            itemId: next.itemId,
+            src: next.mediaUrl,
+            title: next.title,
+            subtitle: next.subtitle,
+            body: next.body,
+          });
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [lightboxItem, albumPhotos]);
 
   if (!loaded || (isOwner && !memberProfile && user)) {
     return (
@@ -752,6 +856,12 @@ export function ProfileWallView({
       s.visibility === 'public' &&
       (isOwner || (!s.isAnonymous && isStoryCompliantForPublicFeed(s)))
   );
+  const memberEngagementStats = computeMemberEngagementStats(
+    memberStories,
+    existingExchanges,
+    memberId
+  );
+  const memberEngagementBadges = computeMemberEngagementBadges(memberEngagementStats);
   const confessionStoriesCount = publicStories.filter(
     (s) => (s.storyFormat ?? 'confession') !== 'roman'
   ).length;
@@ -773,7 +883,7 @@ export function ProfileWallView({
             className="min-h-[38px] px-3 py-1.5 text-xs font-medium text-stone-700 dark:text-stone-200 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 inline-flex items-center gap-1.5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Tous les profils</span>
+            <span>Autres profils</span>
           </button>
         </div>
       )}
@@ -854,6 +964,7 @@ export function ProfileWallView({
                         : undefined
                   }
                   profileBadges={memberProfile.badges}
+                  engagementBadges={memberEngagementBadges}
                 />
                 {isGlobalAdmin && (
                   <button
@@ -894,6 +1005,29 @@ export function ProfileWallView({
                   <MessageSquareOff className="w-3.5 h-3.5 shrink-0" />
                   <span>Commentaires désactivés sur les écrits de ce profil</span>
                 </p>
+              )}
+              {memberEngagementBadges.length > 0 && (
+                <div className="pt-2 flex flex-wrap items-center gap-2 text-[11px] text-stone-600 dark:text-stone-400">
+                  <span className="uppercase tracking-wider font-medium text-stone-500 dark:text-stone-400">
+                    Engagement :
+                  </span>
+                  {memberEngagementBadges.map((badgeId) => (
+                    <span
+                      key={badgeId}
+                      className="inline-flex items-center gap-1.5"
+                      title={ENGAGEMENT_BADGE_MAP[badgeId].description}
+                    >
+                      <EngagementBadgeChip badgeId={badgeId} compact />
+                    </span>
+                  ))}
+                  <span className="tabular-nums text-stone-500 dark:text-stone-400">
+                    · {memberEngagementStats.publicStoriesCount} récit
+                    {memberEngagementStats.publicStoriesCount > 1 ? 's' : ''}
+                    {memberEngagementStats.novelCount > 0
+                      ? ` · ${memberEngagementStats.novelCount} roman${memberEngagementStats.novelCount > 1 ? 's' : ''}`
+                      : ''}
+                  </span>
+                </div>
               )}
 
               {isGlobalAdmin && showAdminBadgesPanel && (
@@ -1311,264 +1445,221 @@ export function ProfileWallView({
         })}
       </div>
 
-      {/* UNIFIED YOPE-STYLE COLLAGE WALL BOARD (Photos + Music + Soundwave + Notes + Novels together) */}
+      {/* UNIFIED WALL BOARD (Welcoming Photo Album Gallery + Music & Portrait + Notes & Novels) */}
       {profileSection === 'wall' && (
       <section
         aria-label={`Mur collage de ${memberProfile.displayName}`}
-        className="lisiere-wall-board rounded-2xl p-6 sm:p-8 lg:p-10 text-white space-y-8 shadow-sm"
+        className="lisiere-wall-board rounded-2xl p-6 sm:p-8 lg:p-10 text-white space-y-10 shadow-sm"
       >
-        {/* Top Collage Composition matching Yope wall layout */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
-          {/* Left Collage Column: Featured Photo + Floating Music Widget */}
-          <div className="md:col-span-6 space-y-7">
-            {/* Primary Photo Tile */}
-            {leadPhoto && leadPhoto.mediaUrl ? (
-              <article className="relative group max-w-md mx-auto md:mx-0">
-                <div className="bg-[#FAF9F6] p-1.5 rounded-sm shadow-[7px_7px_0px_rgba(8,7,6,0.9)]">
-                  {!failedImages[leadPhoto.itemId] ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setLightboxItem({
-                          itemId: leadPhoto.itemId,
-                          src: leadPhoto.mediaUrl!,
-                          title: leadPhoto.title,
-                          body: leadPhoto.body,
-                        })
-                      }
-                      aria-label={`Agrandir ${leadPhoto.title}`}
-                      className="block w-full aspect-[4/4.4] overflow-hidden bg-stone-200 focus-visible:outline-2 focus-visible:outline-white"
-                    >
-                      <img
-                        src={leadPhoto.mediaUrl}
-                        alt={leadPhoto.title}
-                        referrerPolicy="no-referrer"
-                        onError={() =>
-                          setFailedImages((prev) => ({ ...prev, [leadPhoto.itemId]: true }))
-                        }
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                      />
-                    </button>
-                  ) : (
-                    <div className="w-full aspect-[4/4.4] bg-stone-800 flex flex-col items-center justify-center p-6 text-center text-stone-300">
-                      <ImageIcon className="w-7 h-7 mb-2" />
-                      <span className="text-xs">{leadPhoto.title}</span>
-                    </div>
-                  )}
+        {/* 1. Welcoming Photo Album & Configurable Gallery */}
+        <WallPhotoAlbum
+          memberName={memberProfile.displayName}
+          photos={albumPhotos}
+          photoLayout={memberProfile.photoLayout ?? 'album'}
+          albumTitle={memberProfile.photoAlbumTitle}
+          albumNote={memberProfile.photoAlbumNote}
+          isOwner={isOwner}
+          deletingItemId={deletingItemId}
+          failedImages={failedImages}
+          onImageError={(itemId) =>
+            setFailedImages((prev) => ({ ...prev, [itemId]: true }))
+          }
+          onAddPhoto={() => openComposerWithKind('photo')}
+          onOpenLightbox={(photo) =>
+            setLightboxItem({
+              itemId: photo.itemId,
+              src: photo.mediaUrl,
+              title: photo.title,
+              subtitle: photo.subtitle,
+              body: photo.body,
+            })
+          }
+          onDeletePhoto={(itemId) => void handleDeleteWallItem(itemId)}
+          onChangeLayout={handleChangePhotoLayout}
+          onSaveAlbumHeader={handleSaveAlbumHeader}
+          onReorderPhotos={handleReorderPhotos}
+          onSetPhotoPlacement={handleSetPhotoPlacement}
+        />
 
-                  <div className="pt-2 px-1.5 pb-1 flex items-center justify-between gap-3 text-stone-800">
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium truncate">{leadPhoto.title}</p>
-                      {leadPhoto.body && (
-                        <p className="text-[11px] text-stone-500 truncate">{leadPhoto.body}</p>
-                      )}
-                    </div>
-                    {isOwner && (
-                      <button
-                        type="button"
-                        disabled={deletingItemId === leadPhoto.itemId}
-                        onClick={() => void handleDeleteWallItem(leadPhoto.itemId)}
-                        aria-label={`Supprimer ${leadPhoto.title}`}
-                        className="text-stone-400 hover:text-red-700 disabled:opacity-50 p-1 shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
+        {/* 2. Music Showcase + Soundwave + Circular Member Portrait */}
+        <div className="pt-8 border-t border-white/15 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+          {/* Left Music Column: Soundwave + Floating Music Widget */}
+          <div className="lg:col-span-7 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-widest text-stone-300">
+                  Ambiance sonore · Musique du mur
+                </p>
+                <p className="text-sm text-stone-300">
+                  {featuredTrack
+                    ? `À l’écoute chez ${memberProfile.displayName}`
+                    : isOwner
+                      ? 'Ajoutez un morceau pour accompagner la visite de votre album.'
+                      : 'Aucune musique épinglée pour le moment.'}
+                </p>
+              </div>
+
+              {/* Minimalist Acoustic Soundwave Bars */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!featuredTrack) {
+                    if (isOwner) openComposerWithKind('music');
+                    return;
+                  }
+                  setActiveTrackId((prev) =>
+                    prev === featuredTrack.id ? null : featuredTrack.id
+                  );
+                }}
+                aria-label={
+                  featuredTrack
+                    ? isAnyMusicPlaying
+                      ? `Mettre en pause ${activeTrackTitle || featuredTrack.title}`
+                      : `Lancer la lecture de ${featuredTrack.title}`
+                    : isOwner
+                      ? 'Ajouter une musique au mur'
+                      : 'Onde sonore du mur'
+                }
+                className="group flex flex-col items-start sm:items-end space-y-1.5 py-1 focus-visible:outline-2 focus-visible:outline-white rounded-xl transition-transform duration-150 active:scale-[0.97]"
+              >
+                <div className="flex items-center justify-center gap-1.5 h-12">
+                  {HERO_WAVE_BARS.map((height, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        height: `${height}%`,
+                        animationDelay: `${idx * 85}ms`,
+                      }}
+                      className={`w-1.5 rounded-full bg-white transition-opacity ${
+                        isAnyMusicPlaying
+                          ? 'lisiere-wave-bar opacity-100'
+                          : 'opacity-85 group-hover:opacity-100'
+                      }`}
+                    />
+                  ))}
                 </div>
-              </article>
+                <span className="text-[11px] text-stone-300 tracking-wide">
+                  {isAnyMusicPlaying && activeTrackTitle
+                    ? `En écoute · ${activeTrackTitle}`
+                    : featuredTrack
+                      ? `Écouter · ${featuredTrack.title}`
+                      : isOwner
+                        ? 'Ajouter un morceau'
+                        : 'En attente'}
+                </span>
+              </button>
+            </div>
+
+            {featuredTrack ? (
+              <ImmersiveMusicPlayer
+                variant="wall-widget"
+                title={featuredTrack.title}
+                artist={featuredTrack.artist}
+                mediaUrl={featuredTrack.url}
+                kicker={featuredTrack.kicker}
+                isActive={activeTrackId === featuredTrack.id}
+                onTogglePlay={() =>
+                  setActiveTrackId((prev) =>
+                    prev === featuredTrack.id ? null : featuredTrack.id
+                  )
+                }
+                onDelete={isOwner ? () => void handleRemoveFeaturedMusic() : undefined}
+                onChangeTrack={isOwner ? () => openComposerWithKind('music') : undefined}
+              />
             ) : isOwner ? (
               <button
                 type="button"
-                onClick={() => openComposerWithKind('photo')}
-                className="w-full max-w-md aspect-[4/3] rounded-xl border border-dashed border-white/30 bg-white/5 hover:bg-white/10 transition-[background-color,transform] duration-150 active:scale-[0.98] flex flex-col items-center justify-center p-6 text-center space-y-2.5"
+                onClick={() => openComposerWithKind('music')}
+                className="w-full bg-[#FAF9F6] text-stone-900 rounded-2xl p-4 shadow-[6px_6px_0px_rgba(8,7,6,0.85)] flex items-center gap-3.5 text-left hover:bg-white transition-[background-color,transform] duration-150 active:scale-[0.98]"
               >
-                <Camera className="w-7 h-7 text-white/80" />
-                <span className="font-display text-lg text-white">
-                  Ajouter une photo depuis votre téléphone
-                </span>
-                <span className="text-xs text-stone-300">
-                  Elle s’affichera ici sur votre mur collage
-                </span>
+                <div className="w-12 h-12 rounded-xl bg-[#1F1E1C] text-white flex items-center justify-center shrink-0">
+                  <Music2 className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-stone-900">
+                    Choisir ou connecter votre musique préférée
+                  </p>
+                  <p className="text-xs text-stone-600">
+                    Recherchez sur Audius (gratuit), Spotify, Deezer ou SoundCloud
+                  </p>
+                </div>
               </button>
-            ) : (
-              <div className="w-full max-w-md rounded-xl border border-white/15 bg-white/5 p-6 space-y-2">
-                <p className="text-xs uppercase tracking-widest text-stone-300">Carnet visuel</p>
-                <p className="font-display text-xl text-white">
-                  {memberProfile.bio || `${memberProfile.displayName} prépare ses premières photos.`}
-                </p>
-              </div>
-            )}
-
-            {/* Floating White Music Card Widget */}
-            <div className="max-w-md mx-auto md:mx-0">
-              {featuredTrack ? (
-                <ImmersiveMusicPlayer
-                  variant="wall-widget"
-                  title={featuredTrack.title}
-                  artist={featuredTrack.artist}
-                  mediaUrl={featuredTrack.url}
-                  kicker={featuredTrack.kicker}
-                  isActive={activeTrackId === featuredTrack.id}
-                  onTogglePlay={() =>
-                    setActiveTrackId((prev) =>
-                      prev === featuredTrack.id ? null : featuredTrack.id
-                    )
-                  }
-                  onDelete={isOwner ? () => void handleRemoveFeaturedMusic() : undefined}
-                  onChangeTrack={isOwner ? () => openComposerWithKind('music') : undefined}
-                />
-              ) : isOwner ? (
-                <button
-                  type="button"
-                  onClick={() => openComposerWithKind('music')}
-                  className="w-full bg-[#FAF9F6] text-stone-900 rounded-2xl p-4 shadow-[6px_6px_0px_rgba(8,7,6,0.85)] flex items-center gap-3.5 text-left hover:bg-white transition-[background-color,transform] duration-150 active:scale-[0.98]"
-                >
-                  <div className="w-12 h-12 rounded-xl bg-[#1F1E1C] text-white flex items-center justify-center shrink-0">
-                    <Music2 className="w-5 h-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-stone-900">
-                      Choisir ou connecter votre musique préférée
-                    </p>
-                    <p className="text-xs text-stone-600">
-                      Recherchez sur Audius (gratuit), Spotify, Deezer ou SoundCloud
-                    </p>
-                  </div>
-                </button>
-              ) : null}
-            </div>
+            ) : null}
           </div>
 
-          {/* Right Collage Column: Minimalist Soundwave Graphic + Circular White-Ringed Portrait */}
-          <div className="md:col-span-6 flex flex-col items-center justify-center space-y-10">
-            {/* Minimalist Acoustic Soundwave Bars */}
-            <button
-              type="button"
-              onClick={() => {
-                if (!featuredTrack) {
-                  if (isOwner) openComposerWithKind('music');
-                  return;
-                }
-                setActiveTrackId((prev) =>
-                  prev === featuredTrack.id ? null : featuredTrack.id
-                );
-              }}
-              aria-label={
-                featuredTrack
-                  ? isAnyMusicPlaying
-                    ? `Mettre en pause ${activeTrackTitle || featuredTrack.title}`
-                    : `Lancer la lecture de ${featuredTrack.title}`
-                  : isOwner
-                    ? 'Ajouter une musique au mur'
-                    : 'Onde sonore du mur'
-              }
-              className="group flex flex-col items-center space-y-3 py-2 focus-visible:outline-2 focus-visible:outline-white rounded-xl px-4 transition-transform duration-150 active:scale-[0.97]"
-            >
-              <div className="flex items-center justify-center gap-1.5 sm:gap-2 h-24">
-                {HERO_WAVE_BARS.map((height, idx) => (
-                  <span
-                    key={idx}
-                    style={{
-                      height: `${height}%`,
-                      animationDelay: `${idx * 85}ms`,
-                    }}
-                    className={`w-1.5 sm:w-2 rounded-full bg-white transition-opacity ${
-                      isAnyMusicPlaying
-                        ? 'lisiere-wave-bar opacity-100'
-                        : 'opacity-90 group-hover:opacity-100'
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-stone-300 tracking-wide">
-                {isAnyMusicPlaying && activeTrackTitle
-                  ? `En écoute · ${activeTrackTitle}`
-                  : featuredTrack
-                    ? `Touchez l’onde pour écouter · ${featuredTrack.title}`
-                    : isOwner
-                      ? 'Ajoutez un morceau pour animer votre onde'
-                      : 'Onde sonore en attente'}
-              </span>
-            </button>
+          {/* Right Column: Circular White-Ringed Portrait */}
+          <div className="lg:col-span-5 flex flex-col items-center justify-center space-y-3">
+            <div className="relative inline-flex items-center justify-center">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 60 60"
+                className="w-11 h-11 absolute -top-2 -left-3 text-white pointer-events-none"
+                fill="none"
+              >
+                <path
+                  d="M12 40 C13 24, 24 13, 40 12"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M21 43 C22 30, 31 21, 44 20"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                />
+              </svg>
 
-            {/* Circular White-Ringed Portrait with Subtle Organic Accents */}
-            <div className="flex flex-col items-center space-y-3">
-              <div className="relative inline-flex items-center justify-center">
-                {/* Subtle dual curved white accent strokes on top-left corner */}
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 60 60"
-                  className="w-12 h-12 absolute -top-2 -left-3 text-white pointer-events-none"
-                  fill="none"
-                >
-                  <path
-                    d="M12 40 C13 24, 24 13, 40 12"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M21 43 C22 30, 31 21, 44 20"
-                    stroke="currentColor"
-                    strokeWidth="2.2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-
-                {circularPhoto.src && !failedImages['circle-portrait'] ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLightboxItem({
-                        itemId: circularPhoto.itemId,
-                        src: circularPhoto.src!,
-                        title: circularPhoto.alt,
-                        body: circularPhoto.body,
-                      })
-                    }
-                    aria-label={`Voir le portrait ${circularPhoto.alt}`}
-                    className="w-48 h-48 sm:w-56 sm:h-56 rounded-full ring-[5px] ring-white overflow-hidden shadow-[7px_7px_0px_rgba(8,7,6,0.9)] bg-stone-800 focus-visible:outline-2 focus-visible:outline-white group"
-                  >
-                    <img
-                      src={circularPhoto.src}
-                      alt={circularPhoto.alt}
-                      referrerPolicy="no-referrer"
-                      onError={() =>
-                        setFailedImages((prev) => ({ ...prev, 'circle-portrait': true }))
-                      }
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-                    />
-                  </button>
-                ) : (
-                  <div className="w-48 h-48 sm:w-56 sm:h-56 rounded-full ring-[5px] ring-white shadow-[7px_7px_0px_rgba(8,7,6,0.9)] bg-[#353330] flex flex-col items-center justify-center text-center p-6">
-                    <span className="font-display text-5xl text-white">
-                      {memberProfile.displayName.slice(0, 1).toUpperCase()}
-                    </span>
-                    {isOwner && (
-                      <button
-                        type="button"
-                        onClick={() => openComposerWithKind('photo')}
-                        className="mt-2 text-xs text-stone-200 underline hover:text-white"
-                      >
-                        Ajouter un portrait
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {isOwner && circularPhoto.src && (
+              {circularPhoto.src && !failedImages['circle-portrait'] ? (
                 <button
                   type="button"
-                  onClick={() => openComposerWithKind('photo')}
-                  className="text-xs text-stone-300 hover:text-white underline inline-flex items-center gap-1.5"
+                  onClick={() =>
+                    setLightboxItem({
+                      src: circularPhoto.src!,
+                      title: circularPhoto.alt,
+                    })
+                  }
+                  aria-label={`Voir le portrait ${circularPhoto.alt}`}
+                  className="w-44 h-44 sm:w-48 sm:h-48 rounded-full ring-[5px] ring-white overflow-hidden shadow-[7px_7px_0px_rgba(8,7,6,0.9)] bg-stone-800 focus-visible:outline-2 focus-visible:outline-white group"
                 >
-                  <Camera className="w-3.5 h-3.5" />
-                  <span>Ajouter une autre photo</span>
+                  <img
+                    src={circularPhoto.src}
+                    alt={circularPhoto.alt}
+                    referrerPolicy="no-referrer"
+                    onError={() =>
+                      setFailedImages((prev) => ({ ...prev, 'circle-portrait': true }))
+                    }
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                  />
                 </button>
+              ) : (
+                <div className="w-44 h-44 sm:w-48 sm:h-48 rounded-full ring-[5px] ring-white shadow-[7px_7px_0px_rgba(8,7,6,0.9)] bg-[#353330] flex flex-col items-center justify-center text-center p-6">
+                  <span className="font-display text-5xl text-white">
+                    {memberProfile.displayName.slice(0, 1).toUpperCase()}
+                  </span>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={openAvatarModal}
+                      className="mt-2 text-xs text-stone-200 underline hover:text-white"
+                    >
+                      Ajouter un portrait
+                    </button>
+                  )}
+                </div>
               )}
             </div>
+
+            {isOwner && circularPhoto.src && (
+              <button
+                type="button"
+                onClick={openAvatarModal}
+                className="text-xs text-stone-300 hover:text-white underline inline-flex items-center gap-1.5"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Changer mon portrait</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -2326,6 +2417,35 @@ export function ProfileWallView({
                       className="w-full px-3 py-2 bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-700 rounded-md text-xs text-stone-800 dark:text-stone-100 focus:outline-none focus:border-[#1B365D]"
                     />
                   </div>
+
+                  <div className="pt-1">
+                    <span className="block text-xs text-stone-600 dark:text-stone-400 mb-1.5">
+                      Format du tirage
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(
+                        [
+                          { id: 'auto', label: 'Format libre' },
+                          { id: 'top', label: 'Grand format' },
+                          { id: 'side', label: 'Format portrait' },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          aria-pressed={photoPlacement === opt.id}
+                          onClick={() => setPhotoPlacement(opt.id)}
+                          className={`min-h-[32px] px-3 py-1 rounded-md text-xs font-medium border transition-colors ${
+                            photoPlacement === opt.id
+                              ? 'bg-[#1B365D] text-white border-[#1B365D]'
+                              : 'bg-white dark:bg-stone-950 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-stone-400'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2619,60 +2739,162 @@ export function ProfileWallView({
         </div>
       )}
 
-      {/* Fullscreen Photo Lightbox Modal */}
-      {lightboxItem && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={lightboxItem.title}
-          onClick={() => setLightboxItem(null)}
-          className="fixed inset-0 z-50 bg-stone-950/85 p-4 sm:p-8 flex items-center justify-center"
-        >
+      {/* Fullscreen Album Photo Lightbox Modal with Prev / Next & click-to-turn */}
+      {lightboxItem && (() => {
+        const currentPhotoIndex = lightboxItem.itemId
+          ? albumPhotos.findIndex((p) => p.itemId === lightboxItem.itemId)
+          : -1;
+        const canNavigateAlbum = currentPhotoIndex !== -1 && albumPhotos.length > 1;
+        const goToAlbumIndex = (idx: number) => {
+          const target = albumPhotos[idx];
+          if (!target) return;
+          setLightboxItem({
+            itemId: target.itemId,
+            src: target.mediaUrl,
+            title: target.title,
+            subtitle: target.subtitle,
+            body: target.body,
+          });
+        };
+
+        return (
           <div
-            onClick={(e) => e.stopPropagation()}
-            className="relative max-w-3xl w-full bg-[#FAF9F6] dark:bg-[#1A1815] rounded-xl p-3 sm:p-4 space-y-3 shadow-xl border border-transparent dark:border-stone-800"
+            role="dialog"
+            aria-modal="true"
+            aria-label={lightboxItem.title}
+            onClick={() => setLightboxItem(null)}
+            className="fixed inset-0 z-50 bg-stone-950/85 p-4 sm:p-8 flex items-center justify-center"
           >
-            <button
-              type="button"
-              onClick={() => setLightboxItem(null)}
-              aria-label="Fermer la photo"
-              className="absolute top-5 right-5 z-10 w-9 h-9 rounded-full bg-stone-900/80 text-white hover:bg-stone-900 flex items-center justify-center"
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative max-w-3xl w-full bg-[#FAF9F6] dark:bg-[#1A1815] rounded-xl p-3 sm:p-4 space-y-3 shadow-xl border border-transparent dark:border-stone-800"
             >
-              <X className="w-4 h-4" />
-            </button>
+              <button
+                type="button"
+                onClick={() => setLightboxItem(null)}
+                aria-label="Fermer la photo"
+                className="absolute top-5 right-5 z-20 w-9 h-9 rounded-full bg-stone-900/80 text-white hover:bg-stone-900 flex items-center justify-center"
+              >
+                <X className="w-4 h-4" />
+              </button>
 
-            <img
-              src={lightboxItem.src}
-              alt={lightboxItem.title}
-              referrerPolicy="no-referrer"
-              className="w-full max-h-[75vh] object-contain rounded-lg bg-stone-900"
-            />
+              <div className="relative">
+                <div className="lisiere-flip-scene">
+                  <div className={`lisiere-flip-card ${lightboxFlipped ? 'is-flipped' : ''}`}>
+                    {/* Recto */}
+                    <button
+                      type="button"
+                      aria-hidden={lightboxFlipped}
+                      onClick={() => setLightboxFlipped((prev) => !prev)}
+                      aria-label={`Retourner ${lightboxItem.title}`}
+                      className={`lisiere-flip-face relative block w-full rounded-lg overflow-hidden bg-stone-900 cursor-pointer ${
+                        lightboxFlipped ? 'pointer-events-none' : 'pointer-events-auto'
+                      }`}
+                    >
+                      <img
+                        src={lightboxItem.src}
+                        alt={lightboxItem.title}
+                        referrerPolicy="no-referrer"
+                        className="w-full max-h-[72vh] object-contain mx-auto"
+                      />
+                    </button>
 
-            <div className="px-1 flex items-start justify-between gap-4">
-              <div>
-                <p className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
-                  {lightboxItem.title}
-                </p>
-                {lightboxItem.body && (
-                  <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">{lightboxItem.body}</p>
+                    {/* Verso */}
+                    <div
+                      aria-hidden={!lightboxFlipped}
+                      onClick={() => setLightboxFlipped((prev) => !prev)}
+                      className={`lisiere-flip-face lisiere-flip-face-back absolute inset-0 rounded-lg bg-[#F5F1E8] text-stone-900 p-6 sm:p-10 flex flex-col justify-between overflow-y-auto cursor-pointer ${
+                        lightboxFlipped ? 'pointer-events-auto' : 'pointer-events-none'
+                      }`}
+                    >
+                      <div className="space-y-3 max-w-xl">
+                        {lightboxItem.subtitle && (
+                          <p className="text-xs uppercase tracking-widest text-stone-500">
+                            {lightboxItem.subtitle}
+                          </p>
+                        )}
+                        <h3 className="font-display text-2xl sm:text-3xl font-medium text-stone-900">
+                          {lightboxItem.title}
+                        </h3>
+                        <p className="text-sm sm:text-base text-stone-700 leading-relaxed whitespace-pre-line">
+                          {lightboxItem.body?.trim() ||
+                            `Instantané conservé dans l’album de ${memberProfile.displayName}.`}
+                        </p>
+                      </div>
+
+                      <div className="pt-4 border-t border-stone-300/70 flex items-center justify-between text-xs text-stone-500">
+                        <span>Cliquer pour revenir à la photo</span>
+                        <RotateCcw className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {canNavigateAlbum && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goToAlbumIndex(
+                          (currentPhotoIndex - 1 + albumPhotos.length) % albumPhotos.length
+                        );
+                      }}
+                      aria-label="Photo précédente"
+                      className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-stone-950/75 text-white hover:bg-stone-950 flex items-center justify-center shadow"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goToAlbumIndex((currentPhotoIndex + 1) % albumPhotos.length);
+                      }}
+                      aria-label="Photo suivante"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-stone-950/75 text-white hover:bg-stone-950 flex items-center justify-center shadow"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </>
                 )}
               </div>
 
-              {isOwner && lightboxItem.itemId && (
-                <button
-                  type="button"
-                  disabled={deletingItemId === lightboxItem.itemId}
-                  onClick={() => void handleDeleteWallItem(lightboxItem.itemId!)}
-                  className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1.5 shrink-0"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Supprimer</span>
-                </button>
-              )}
+              <div className="px-1 flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-display text-lg font-medium text-stone-900 dark:text-stone-100">
+                      {lightboxItem.title}
+                    </p>
+                    {canNavigateAlbum && (
+                      <span className="text-xs text-stone-500 dark:text-stone-400 tabular-nums">
+                        · {currentPhotoIndex + 1} / {albumPhotos.length}
+                      </span>
+                    )}
+                  </div>
+                  {lightboxItem.body && !lightboxFlipped && (
+                    <p className="text-sm text-stone-600 dark:text-stone-400 mt-1 line-clamp-2">
+                      {lightboxItem.body}
+                    </p>
+                  )}
+                </div>
+
+                {isOwner && lightboxItem.itemId && (
+                  <button
+                    type="button"
+                    disabled={deletingItemId === lightboxItem.itemId}
+                    onClick={() => void handleDeleteWallItem(lightboxItem.itemId!)}
+                    className="min-h-[36px] px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-md inline-flex items-center gap-1.5 shrink-0"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Supprimer</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

@@ -295,6 +295,10 @@ function SalonApp({ introActive }: { introActive: boolean }) {
   const [profilesSubTab, setProfilesSubTab] = useState<'directory' | 'my-profile' | 'edit-profile'>(
     'directory'
   );
+  const [headerAvatarFailed, setHeaderAvatarFailed] = useState(false);
+  useEffect(() => {
+    setHeaderAvatarFailed(false);
+  }, [profile?.avatarUrl, user?.photoURL]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showMobileAppModal, setShowMobileAppModal] = useState(false);
   const [openMobileModalWithDiagnostics, setOpenMobileModalWithDiagnostics] = useState(false);
@@ -1007,6 +1011,15 @@ function SalonApp({ introActive }: { introActive: boolean }) {
   const secondaryStories = filteredPublicStories.slice(1);
   const authorDisplayName = profile?.displayName || user?.displayName || 'Auteur';
 
+  const isMyProfileActive = Boolean(
+    user &&
+      activeTab === 'membres' &&
+      ((profilesSubTab !== 'directory' && !selectedMemberId) || selectedMemberId === user.uid)
+  );
+  const isOtherProfilesActive =
+    activeTab === 'membres' && !isMyProfileActive;
+  const headerAvatarUrl = profile?.avatarUrl || user?.photoURL || '';
+
   return (
     <div className="min-h-screen flex flex-col bg-[#FBF9F5] dark:bg-[#12100E] text-stone-900 dark:text-stone-100 transition-colors">
       {/* Clean Single-Row Sticky Header (sidebar handles all destination & salon navigation) */}
@@ -1039,7 +1052,7 @@ function SalonApp({ introActive }: { introActive: boolean }) {
               aria-label="Lisière — Retour aux salons"
               className="text-stone-900 dark:text-stone-100 whitespace-nowrap shrink-0 text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1E3A8A] flex items-center"
             >
-              <LisiereLogo className="h-7 sm:h-8 w-auto" />
+              <LisiereLogo className="h-6 sm:h-8 w-auto" />
             </button>
           </div>
 
@@ -1050,7 +1063,7 @@ function SalonApp({ introActive }: { introActive: boolean }) {
               aria-pressed={themeMode === 'dark'}
               aria-label={themeMode === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
               title={themeMode === 'dark' ? 'Mode clair' : 'Mode sombre'}
-              className="min-h-[38px] min-w-[38px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-amber-300 hover:border-stone-400 dark:hover:border-stone-500 transition-colors shrink-0"
+              className="min-h-[36px] min-w-[36px] sm:min-h-[38px] sm:min-w-[38px] md:px-2.5 inline-flex items-center justify-center gap-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-amber-300 hover:border-stone-400 dark:hover:border-stone-500 transition-colors shrink-0"
             >
               {themeMode === 'dark' ? (
                 <Sun className="w-4 h-4" />
@@ -1062,24 +1075,59 @@ function SalonApp({ introActive }: { introActive: boolean }) {
               </span>
             </button>
 
-            <PWAInstallButton
-              variant="header"
-              onOpenMobileGuide={() => setShowMobileAppModal(true)}
-            />
+            <div className="hidden sm:flex">
+              <PWAInstallButton
+                variant="header"
+                onOpenMobileGuide={() => setShowMobileAppModal(true)}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                void openComposer();
+              }}
+              aria-label="Écrire un récit"
+              className="min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3.5 py-1.5 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+            >
+              <Feather className="w-3.5 h-3.5" />
+              <span className="md:hidden">Écrire</span>
+              <span className="hidden md:inline">Écrire un récit</span>
+            </button>
 
             {user ? (
               <button
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  void openComposer();
+                  setProfilesSubTab('my-profile');
+                  navigateTo('membres', null, null);
                 }}
-                aria-label="Écrire un récit"
-                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+                aria-current={isMyProfileActive ? 'page' : undefined}
+                aria-label="Mon profil"
+                title="Mon profil"
+                className={`min-h-[36px] sm:min-h-[38px] pl-1.5 pr-2.5 sm:pr-3 py-1 rounded-md border transition-colors whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium ${
+                  isMyProfileActive
+                    ? 'border-[#1E3A8A] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1E3A8A] dark:text-amber-300'
+                    : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-100 hover:border-stone-400 dark:hover:border-stone-500'
+                }`}
               >
-                <Feather className="w-3.5 h-3.5" />
-                <span className="sm:hidden">Écrire</span>
-                <span className="hidden sm:inline">Écrire un récit</span>
+                {headerAvatarUrl && !headerAvatarFailed ? (
+                  <img
+                    src={headerAvatarUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={() => setHeaderAvatarFailed(true)}
+                    className="w-6 h-6 rounded-full object-cover border border-stone-200 dark:border-stone-700 shrink-0"
+                  />
+                ) : (
+                  <span className="w-6 h-6 rounded-full bg-[#1E3A8A]/10 dark:bg-amber-500/20 text-[#1E3A8A] dark:text-amber-300 font-display text-xs flex items-center justify-center shrink-0">
+                    {authorDisplayName.slice(0, 1).toUpperCase()}
+                  </span>
+                )}
+                <span className="sm:hidden">Profil</span>
+                <span className="hidden sm:inline">Mon profil</span>
               </button>
             ) : (
               <button
@@ -1088,7 +1136,7 @@ function SalonApp({ introActive }: { introActive: boolean }) {
                   setMobileMenuOpen(false);
                   void signInWithGoogle();
                 }}
-                className="min-h-[38px] px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-white bg-[#1E3A8A] dark:bg-amber-600 rounded-md hover:bg-[#172D6B] dark:hover:bg-amber-500 transition-colors whitespace-nowrap shrink-0"
+                className="min-h-[36px] sm:min-h-[38px] px-2.5 sm:px-3.5 py-1.5 text-xs sm:text-sm font-medium text-stone-800 dark:text-stone-100 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-md hover:border-stone-400 transition-colors whitespace-nowrap shrink-0"
               >
                 Se connecter
               </button>
@@ -1104,6 +1152,7 @@ function SalonApp({ introActive }: { introActive: boolean }) {
           mobileOpen={mobileMenuOpen}
           onCloseMobile={() => setMobileMenuOpen(false)}
           activeTab={highlightedTab}
+          isOtherProfilesActive={isOtherProfilesActive}
           activeSalonId={activeSalonId}
           activeCustomSalonId={activeCustomSalonId}
           exchangesCount={exchanges.length}
@@ -1379,7 +1428,9 @@ function SalonApp({ introActive }: { introActive: boolean }) {
             profiles={discoverableProfiles}
             profilesLoaded={profilesLoaded}
             selectedMemberId={selectedMemberId}
+            subTab={profilesSubTab}
             initialSubTab={profilesSubTab}
+            onChangeSubTab={setProfilesSubTab}
             publicStories={regulatedPublicStories}
             myStories={myStories}
             myReposts={myReposts}
@@ -1495,7 +1546,7 @@ function SalonApp({ introActive }: { introActive: boolean }) {
                     Créer des histoires qui relient ceux qui peinent parfois à se parler.
                   </h1>
                   <p className="text-base sm:text-lg text-stone-600 dark:text-stone-300 leading-relaxed max-w-2xl">
-                    Explorez les six salons de Lisière (dont le Salon FAQ), parcourez toutes les histoires pêle-mêle ou créez votre propre salon public ou privé avec vos règles d’admission.
+                    Un lieu calme pour écrire, lire entre les lignes et tisser des échanges humains au fil des salons.
                   </p>
                 </div>
 
@@ -1516,14 +1567,6 @@ function SalonApp({ introActive }: { introActive: boolean }) {
                     >
                       <Compass className="w-4 h-4" />
                       <span>Histoires pêle-mêle</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void openCustomSalonModal(null)}
-                      className="min-h-[44px] px-4 py-2.5 text-sm font-medium text-[#1B365D] dark:text-amber-300 bg-white dark:bg-stone-900 border border-[#1B365D]/40 dark:border-amber-400/40 rounded-md hover:border-[#1B365D] dark:hover:border-amber-400 transition-colors inline-flex items-center gap-2 whitespace-nowrap shrink-0"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Créer un salon</span>
                     </button>
                   </div>
 
@@ -2665,15 +2708,15 @@ function SalonApp({ introActive }: { introActive: boolean }) {
               setProfilesSubTab('directory');
               navigateTo('membres', null, null);
             }}
-            aria-current={highlightedTab === 'membres' ? 'page' : undefined}
+            aria-current={isOtherProfilesActive ? 'page' : undefined}
             className={`flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors ${
-              highlightedTab === 'membres'
+              isOtherProfilesActive
                 ? 'text-[#1B365D] dark:text-amber-300 font-semibold'
                 : 'text-stone-500 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Profils</span>
+            <span>Membres</span>
           </button>
           <button
             type="button"

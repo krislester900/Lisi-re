@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Accessibility,
   AlertTriangle,
   ArrowUpRight,
+  AudioLines,
   Bookmark,
   BookOpen,
   Check,
@@ -42,9 +44,15 @@ import {
   getStoryAgeAccessBlockReason,
   shouldShowMatureWarning,
 } from '../lib/contentRegulation';
+import { buildEngagementBadgesByUser } from '../lib/memberBadges';
 import { checkNovelPlagiarism } from '../lib/plagiarismCheck';
 import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { MatureContentBadge } from './MatureContentBadge';
+import {
+  AudioDescriptionContext,
+  ReadingAudioDescriptionBar,
+  useStoryAudioDescription,
+} from './ReadingAudioDescriptionBar';
 import { ReadingMusicPanel, useReadingAudioEngine } from './ReadingMusicPanel';
 import type { ReportDraft } from './ReportModal';
 import { RoleBadgesRow } from './RoleBadge';
@@ -82,6 +90,10 @@ import {
   SERIES_STATUS_LABELS,
   THEME_MAP,
 } from '../lib/themes';
+import {
+  buildLinkedInShareUrl,
+  buildSocialShareTargets,
+} from '../lib/storyShare';
 import {
   Chapter,
   CustomSalon,
@@ -161,6 +173,7 @@ export function StoryReaderModal({
   const [favAuthorBusy, setFavAuthorBusy] = useState(false);
   const [showSharePanel, setShowSharePanel] = useState(false);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [quickShareFallbackNotice, setQuickShareFallbackNotice] = useState(false);
   const [confirmClaimAnon, setConfirmClaimAnon] = useState(false);
   const [claimBusy, setClaimBusy] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -242,6 +255,9 @@ export function StoryReaderModal({
   const scrollContainerRef = React.useRef<HTMLDivElement | null>(null);
   const storyParagraphsRef = React.useRef<HTMLDivElement | null>(null);
   const [showMusicPanel, setShowMusicPanel] = useState(false);
+  const [showAudioDescriptionPanel, setShowAudioDescriptionPanel] = useState(false);
+  const [paragraphFocusMode, setParagraphFocusMode] = useState(false);
+  const [focusedParagraphIdx, setFocusedParagraphIdx] = useState<number | null>(null);
   const audioController = useReadingAudioEngine(Boolean(story));
 
   const [pendingSelection, setPendingSelection] = useState<{
@@ -300,6 +316,8 @@ export function StoryReaderModal({
     setMatureAcknowledged(false);
     setZenMode(false);
     setShowMusicPanel(false);
+    setShowAudioDescriptionPanel(false);
+    setFocusedParagraphIdx(null);
     setShowZenAppearance(false);
     setScrollProgress(0);
     setEchoText('');
@@ -329,6 +347,7 @@ export function StoryReaderModal({
     setShowStoryQuotesDrawer(false);
     setShowSharePanel(false);
     setShareLinkCopied(false);
+    setQuickShareFallbackNotice(false);
     setConfirmClaimAnon(false);
     setClaimBusy(false);
     setClaimError(null);
@@ -607,6 +626,8 @@ export function StoryReaderModal({
           setShowZenAppearance(false);
         } else if (showMusicPanel) {
           setShowMusicPanel(false);
+        } else if (showAudioDescriptionPanel) {
+          setShowAudioDescriptionPanel(false);
         } else if (zenMode) {
           setZenMode(false);
         } else {
@@ -621,6 +642,7 @@ export function StoryReaderModal({
     showSharePanel,
     zenMode,
     showMusicPanel,
+    showAudioDescriptionPanel,
     showZenAppearance,
     pendingSelection,
     activeQuotePopover,
@@ -644,6 +666,106 @@ export function StoryReaderModal({
     if (!hiddenUserIds || hiddenUserIds.size === 0) return echoes;
     return echoes.filter((echo) => !hiddenUserIds.has(echo.authorId));
   }, [echoes, hiddenUserIds]);
+
+  const engagementByAuthor = useMemo(
+    () => buildEngagementBadgesByUser(existingStories, existingExchanges),
+    [existingStories, existingExchanges]
+  );
+
+  const audioDescriptionContext = useMemo<AudioDescriptionContext | null>(() => {
+    if (!story) return null;
+    const isAuthorCheck = Boolean(user && user.uid === story.authorId);
+    const complianceCheck = evaluateStoryFormatCompliance(story);
+    const blockedRetro = Boolean(
+      story.visibility === 'public' && !complianceCheck.compliant && !isAuthorCheck
+    );
+    const ageReason = getStoryAgeAccessBlockReason(
+      story,
+      viewerAge,
+      Boolean(user),
+      isAuthorCheck
+    );
+    const isMature = shouldShowMatureWarning(story);
+    const needsGate = Boolean(
+      !blockedRetro &&
+        ageReason === null &&
+        !isAuthorCheck &&
+        isMature &&
+        !matureAcknowledged
+    );
+    if (blockedRetro || ageReason !== null || needsGate) return null;
+
+    const storyIsRoman = story.storyFormat === 'roman';
+    const followup =
+      storyIsRoman && activeChapterIdx > 0 ? chapters[activeChapterIdx - 1] ?? null : null;
+    if (followup && !evaluateNovelChapterLength(followup.content).ok && !isAuthorCheck) {
+      return null;
+    }
+
+    const text = followup ? followup.content : story.content;
+    const paras = text
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (paras.length === 0) return null;
+
+    const themeDef = THEME_MAP[story.theme];
+    const salonLabel = story.customSalonName
+      ? story.customSalonName
+      : story.storyScope === 'pelemele'
+        ? 'Hors salon, Pêle-mêle'
+        : themeDef.salonName;
+    const salonAtmosphere =
+      !story.customSalonId && story.storyScope !== 'pelemele'
+        ? themeDef.atmosphere
+        : undefined;
+
+    return {
+      storyId: story.storyId,
+      title: story.title,
+      authorName: story.isAnonymous ? 'Auteur anonyme' : story.authorName,
+      isAnonymous: Boolean(story.isAnonymous),
+      isRoman: storyIsRoman,
+      genreLabel: story.novelGenre ? NOVEL_GENRE_LABELS[story.novelGenre] : undefined,
+      salonLabel,
+      salonAtmosphere,
+      hasCustomCover: Boolean(story.coverUrl?.trim()),
+      isMature,
+      matureReason: story.matureReason,
+      currentChapterNumber: activeChapterIdx + 1,
+      totalChapters: storyIsRoman ? 1 + chapters.length : 1,
+      chapterTitle: followup?.title,
+      authorNote: followup?.authorNote,
+      readingMinutes: followup ? followup.readingMinutes : story.readingMinutes,
+      paragraphs: paras,
+    };
+  }, [story, user, viewerAge, matureAcknowledged, activeChapterIdx, chapters]);
+
+  const audioDescController = useStoryAudioDescription(audioDescriptionContext, {
+    onBeforeStart: () => {
+      if (audioController.isPlaying) {
+        void audioController.togglePlayPause();
+      }
+    },
+  });
+
+  useEffect(() => {
+    const idx = audioDescController.activeParagraphIndex;
+    if (idx === null) return;
+    setFocusedParagraphIdx(idx);
+    const container = storyParagraphsRef.current;
+    if (!container) return;
+    const target = container.querySelector(`[data-paragraph-index="${idx}"]`);
+    if (target instanceof HTMLElement) {
+      const reduced =
+        typeof window !== 'undefined' &&
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      target.scrollIntoView({
+        behavior: reduced ? 'auto' : 'smooth',
+        block: 'center',
+      });
+    }
+  }, [audioDescController.activeParagraphIndex]);
 
   if (!story) return null;
 
@@ -687,6 +809,17 @@ export function StoryReaderModal({
   const canUseNativeShare =
     typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
+  const linkedInShareUrl = directStoryUrl
+    ? buildLinkedInShareUrl(directStoryUrl, shareSummaryText)
+    : '#';
+  const socialShareTargets = directStoryUrl
+    ? buildSocialShareTargets({
+        url: directStoryUrl,
+        title: `${story.title} — Lisière`,
+        summary: shareSummaryText,
+      })
+    : [];
+
   const handleCopyDirectLink = async () => {
     if (!directStoryUrl) return;
     try {
@@ -711,6 +844,31 @@ export function StoryReaderModal({
     } catch {
       // User cancelled or native share unavailable
     }
+  };
+
+  const handleQuickLinkedInShare = async () => {
+    if (!directStoryUrl) return;
+    setQuickShareFallbackNotice(false);
+    try {
+      await navigator.clipboard.writeText(`${shareSummaryText}\n${directStoryUrl}`);
+    } catch {
+      // Clipboard optional
+    }
+
+    if (canUseNativeShare) {
+      try {
+        await navigator.share({
+          title: `${story.title} — Lisière`,
+          text: shareSummaryText,
+          url: directStoryUrl,
+        });
+        return;
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') return;
+      }
+    }
+
+    setQuickShareFallbackNotice(true);
   };
 
   const handleClaimAnonymousInReader = async () => {
@@ -1456,7 +1614,31 @@ export function StoryReaderModal({
                 <button
                   type="button"
                   onClick={() => {
+                    setShowAudioDescriptionPanel((prev) => !prev);
+                    setShowMusicPanel(false);
+                    setShowZenAppearance(false);
+                  }}
+                  aria-label="Audiodescription et lecture vocale"
+                  aria-expanded={showAudioDescriptionPanel}
+                  className={`min-h-[34px] px-2 sm:px-2.5 py-1 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                    showAudioDescriptionPanel || audioDescController.isPlaying
+                      ? 'border-[#1B365D] bg-[#1B365D] text-white'
+                      : 'border-current/25 hover:border-current/50'
+                  }`}
+                >
+                  {audioDescController.isPlaying ? (
+                    <AudioLines className="w-3.5 h-3.5" />
+                  ) : (
+                    <Accessibility className="w-3.5 h-3.5" />
+                  )}
+                  <span className="hidden md:inline">Audio</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
                     setShowMusicPanel((prev) => !prev);
+                    setShowAudioDescriptionPanel(false);
                     setShowZenAppearance(false);
                   }}
                   aria-label="Musique de lecture"
@@ -1605,6 +1787,19 @@ export function StoryReaderModal({
                 />
               </div>
             )}
+
+            {showAudioDescriptionPanel && !isReadingBlocked && (
+              <div className="fixed top-[calc(3.5rem+env(safe-area-inset-top))] right-3 sm:top-[calc(4rem+env(safe-area-inset-top))] sm:right-6 z-20 w-[min(92vw,480px)] shadow-xl">
+                <ReadingAudioDescriptionBar
+                  controller={audioDescController}
+                  paragraphFocusMode={paragraphFocusMode}
+                  onToggleParagraphFocusMode={() => setParagraphFocusMode((p) => !p)}
+                  zenNight={zenTheme === 'night'}
+                  zenSepia={zenTheme === 'sepia'}
+                  onClose={() => setShowAudioDescriptionPanel(false)}
+                />
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -1696,6 +1891,27 @@ export function StoryReaderModal({
                       )}
                     </button>
                   )}
+                  {!isReadingBlocked && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAudioDescriptionPanel((prev) => !prev)}
+                      aria-label="Audiodescription et lecture vocale pour malvoyants"
+                      aria-expanded={showAudioDescriptionPanel}
+                      className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-md border text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                        showAudioDescriptionPanel || audioDescController.isPlaying
+                          ? 'border-[#1B365D] bg-[#1B365D] text-white'
+                          : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-800 text-stone-700 dark:text-stone-200 hover:text-stone-900 dark:hover:text-white hover:border-stone-400'
+                      }`}
+                    >
+                      {audioDescController.isPlaying ? (
+                        <AudioLines className="w-3.5 h-3.5" />
+                      ) : (
+                        <Accessibility className="w-3.5 h-3.5" />
+                      )}
+                      <span className="hidden md:inline">Audiodescription</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => setShowMusicPanel((prev) => !prev)}
@@ -2001,6 +2217,7 @@ export function StoryReaderModal({
                           profileBadges={
                             authorProfile?.badges ?? profilesByUserId.get(story.authorId)?.badges
                           }
+                          engagementBadges={engagementByAuthor.get(story.authorId)?.badges}
                           compact
                         />
                         {!isAuthor && (
@@ -2145,40 +2362,81 @@ export function StoryReaderModal({
                   </div>
                 )}
 
-                {/* Quick Zen Reading & Ambient Music Invitation Bar */}
+                {/* Quick Zen Reading, Audio Description & Focus Animation Bar */}
                 {!isReadingBlocked && (
-                  <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md px-3.5 py-2.5">
-                    <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-400">
-                      <Maximize2 className="w-3.5 h-3.5 text-[#1B365D] dark:text-amber-300 shrink-0" />
-                      <span>Lire au calme en plein écran avec musique</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {authorPinnedMusic && !audioController.isPlaying && (
+                  <div className="space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-md px-3.5 py-2.5">
+                      <div className="flex items-center gap-2 text-xs text-stone-600 dark:text-stone-400">
+                        <Maximize2 className="w-3.5 h-3.5 text-[#1B365D] dark:text-amber-300 shrink-0" />
+                        <span>Lire au calme, écouter en audiodescription ou animer le fil</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() =>
-                            void audioController.playAuthorMusic(
-                              authorPinnedMusic,
-                              publicAuthorLabel
-                            )
-                          }
-                          className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                          onClick={() => setParagraphFocusMode((prev) => !prev)}
+                          aria-pressed={paragraphFocusMode}
+                          className={`min-h-[32px] px-2.5 py-1 rounded border text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                            paragraphFocusMode
+                              ? 'border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA] dark:bg-stone-800 text-[#1B365D] dark:text-amber-300'
+                              : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 text-stone-700 dark:text-stone-300 hover:border-[#1B365D]'
+                          }`}
                         >
-                          <Play className="w-3 h-3 fill-current" />
-                          <span className="max-w-[160px] truncate">
-                            Son : {authorPinnedMusic.title}
+                          <Eye className="w-3 h-3" />
+                          <span>Focus animé</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAudioDescriptionPanel((prev) => !prev)}
+                          aria-expanded={showAudioDescriptionPanel}
+                          className={`min-h-[32px] px-2.5 py-1 rounded border text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap transition-colors ${
+                            showAudioDescriptionPanel || audioDescController.isPlaying
+                              ? 'border-[#1B365D] dark:border-amber-500 bg-[#1B365D] dark:bg-amber-600 text-white'
+                              : 'border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 text-stone-800 dark:text-stone-200 hover:border-[#1B365D] hover:text-[#1B365D]'
+                          }`}
+                        >
+                          <Accessibility className="w-3.5 h-3.5" />
+                          <span>
+                            {audioDescController.isPlaying
+                              ? 'Audiodescription active'
+                              : 'Audiodescription'}
                           </span>
                         </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setZenMode(true)}
-                        className="min-h-[32px] px-3 py-1 rounded bg-[#1B365D] dark:bg-amber-600 text-white hover:bg-[#132744] dark:hover:bg-amber-500 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
-                      >
-                        <Maximize2 className="w-3 h-3" />
-                        <span>Mode lecture zen</span>
-                      </button>
+                        {authorPinnedMusic && !audioController.isPlaying && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void audioController.playAuthorMusic(
+                                authorPinnedMusic,
+                                publicAuthorLabel
+                              )
+                            }
+                            className="min-h-[32px] px-2.5 py-1 rounded border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-[#1B365D] hover:text-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <Play className="w-3 h-3 fill-current" />
+                            <span className="max-w-[160px] truncate">
+                              Son : {authorPinnedMusic.title}
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setZenMode(true)}
+                          className="min-h-[32px] px-3 py-1 rounded bg-[#1B365D] dark:bg-amber-600 text-white hover:bg-[#132744] dark:hover:bg-amber-500 text-xs font-medium inline-flex items-center gap-1.5 whitespace-nowrap"
+                        >
+                          <Maximize2 className="w-3 h-3" />
+                          <span>Mode lecture zen</span>
+                        </button>
+                      </div>
                     </div>
+
+                    {showAudioDescriptionPanel && (
+                      <ReadingAudioDescriptionBar
+                        controller={audioDescController}
+                        paragraphFocusMode={paragraphFocusMode}
+                        onToggleParagraphFocusMode={() => setParagraphFocusMode((p) => !p)}
+                        onClose={() => setShowAudioDescriptionPanel(false)}
+                      />
+                    )}
                   </div>
                 )}
 
@@ -2665,24 +2923,64 @@ export function StoryReaderModal({
                     </div>
                   )}
                 <div
+                  key={`${story.storyId}-ch-${activeChapterIdx}`}
                   ref={storyParagraphsRef}
                   onMouseUp={inspectSelection}
                   onTouchEnd={() => window.setTimeout(inspectSelection, 120)}
-                  className={
+                  className={`lisiere-chapter-enter ${
                     zenMode
                       ? `space-y-6 select-text ${zenTypefaceClass} ${zenFontClass} ${zenBodyTextClass}`
                       : 'space-y-5 select-text text-base sm:text-[17px] leading-[1.8] text-stone-800 dark:text-stone-200'
-                  }
+                  }`}
                 >
-                  {paragraphs.map((para, idx) => (
-                    <p
-                      key={idx}
-                      data-paragraph-index={idx}
-                      className={idx === 0 ? 'editorial-drop-cap' : ''}
-                    >
-                      {renderHighlightedParagraph(para, idx)}
-                    </p>
-                  ))}
+                  {paragraphs.map((para, idx) => {
+                    const activeIdx =
+                      audioDescController.activeParagraphIndex !== null
+                        ? audioDescController.activeParagraphIndex
+                        : paragraphFocusMode
+                          ? focusedParagraphIdx
+                          : null;
+                    const isHighlighted = activeIdx === idx;
+                    const isDimmed = activeIdx !== null && activeIdx !== idx;
+                    const highlightStyle =
+                      zenMode && zenTheme === 'night'
+                        ? 'border-l-2 border-amber-300 bg-amber-200/10 pl-3.5 py-1.5 rounded-r-md'
+                        : zenMode && zenTheme === 'sepia'
+                          ? 'border-l-2 border-[#8C4D0E] bg-[#EADAB8]/60 pl-3.5 py-1.5 rounded-r-md'
+                          : 'border-l-2 border-[#1B365D] dark:border-amber-400 bg-[#F3F6FA]/85 dark:bg-stone-900/90 pl-3.5 py-1.5 rounded-r-md';
+
+                    return (
+                      <p
+                        key={idx}
+                        data-paragraph-index={idx}
+                        style={{ animationDelay: `${Math.min(idx, 10) * 42}ms` }}
+                        onClick={() => {
+                          const sel = window.getSelection();
+                          if (sel && !sel.isCollapsed) return;
+                          if (audioDescController.isPlaying) {
+                            audioDescController.playFromParagraph(idx);
+                          } else if (paragraphFocusMode) {
+                            setFocusedParagraphIdx((prev) => (prev === idx ? null : idx));
+                          }
+                        }}
+                        className={`lisiere-paragraph-reveal lisiere-reading-paragraph ${
+                          idx === 0 ? 'editorial-drop-cap' : ''
+                        } ${
+                          isHighlighted
+                            ? `${highlightStyle} opacity-100`
+                            : isDimmed
+                              ? 'opacity-45'
+                              : 'opacity-100'
+                        } ${
+                          paragraphFocusMode || audioDescController.isPlaying
+                            ? 'cursor-pointer'
+                            : ''
+                        }`}
+                      >
+                        {renderHighlightedParagraph(para, idx)}
+                      </p>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -2919,6 +3217,63 @@ export function StoryReaderModal({
                   <span>
                     {visibleEchoes.length} commentaire{visibleEchoes.length > 1 ? 's' : ''}
                   </span>
+                </div>
+              </div>
+            )}
+
+            {/* Quick Social Share Bar under public stories */}
+            {!zenMode && canSharePublicLink && (
+              <div className="mt-4 p-3.5 rounded-md border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900/80 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2.5">
+                  <span className="text-[11px] uppercase tracking-widest font-medium text-stone-500 dark:text-stone-400">
+                    Partage rapide sur les réseaux
+                  </span>
+
+                  {canUseNativeShare && !quickShareFallbackNotice ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleQuickLinkedInShare()}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#0A66C2] hover:bg-[#004182] text-white text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <Share2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Partager sur LinkedIn</span>
+                    </button>
+                  ) : (
+                    <a
+                      href={linkedInShareUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => {
+                        try {
+                          void navigator.clipboard.writeText(`${shareSummaryText}\n${directStoryUrl}`);
+                        } catch {
+                          // Ignore clipboard restriction
+                        }
+                      }}
+                      className="min-h-[36px] px-3.5 py-1.5 rounded-md bg-[#0A66C2] hover:bg-[#004182] text-white text-xs font-medium inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0"
+                    >
+                      <Share2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Partager sur LinkedIn</span>
+                      <ArrowUpRight className="w-3.5 h-3.5 shrink-0 opacity-85" />
+                    </a>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {socialShareTargets
+                    .filter((target) => target.id !== 'linkedin')
+                    .map((target) => (
+                      <a
+                        key={target.id}
+                        href={target.href}
+                        target={target.isExternal ? '_blank' : undefined}
+                        rel={target.isExternal ? 'noopener noreferrer' : undefined}
+                        className="min-h-[32px] px-2.5 py-1 rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 hover:border-[#1B365D] dark:hover:border-amber-400 text-xs font-medium text-stone-700 dark:text-stone-200 inline-flex items-center gap-1 transition-colors"
+                      >
+                        <span>{target.label}</span>
+                        <ArrowUpRight className="w-3 h-3 text-stone-400" />
+                      </a>
+                    ))}
                 </div>
               </div>
             )}
@@ -3196,6 +3551,7 @@ export function StoryReaderModal({
                               )}
                               isModerator={storySalonModeratorIds.has(echo.authorId)}
                               profileBadges={commenterProfile?.badges}
+                              engagementBadges={engagementByAuthor.get(echo.authorId)?.badges}
                               compact
                             />
                             <span aria-hidden="true">·</span>
@@ -3564,49 +3920,18 @@ export function StoryReaderModal({
               <div className="space-y-2">
                 <p className="text-xs font-medium text-stone-700 dark:text-stone-300">Partager sur un réseau</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(`${shareSummaryText} ${directStoryUrl}`)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
-                  >
-                    <span>WhatsApp</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                  </a>
-                  <a
-                    href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareSummaryText)}&url=${encodeURIComponent(directStoryUrl)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
-                  >
-                    <span>X / Twitter</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                  </a>
-                  <a
-                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(directStoryUrl)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
-                  >
-                    <span>Facebook</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                  </a>
-                  <a
-                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(directStoryUrl)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
-                  >
-                    <span>LinkedIn</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                  </a>
-                  <a
-                    href={`mailto:?subject=${encodeURIComponent(shareSummaryText)}&body=${encodeURIComponent(`${shareSummaryText}\n\nLire ce récit sur Lisière :\n${directStoryUrl}`)}`}
-                    className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5 col-span-2 sm:col-span-1"
-                  >
-                    <span>E-mail</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
-                  </a>
+                  {socialShareTargets.map((target) => (
+                    <a
+                      key={target.id}
+                      href={target.href}
+                      target={target.isExternal ? '_blank' : undefined}
+                      rel={target.isExternal ? 'noopener noreferrer' : undefined}
+                      className="min-h-[38px] px-3 py-2 rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-medium text-stone-800 dark:text-stone-200 hover:border-stone-400 inline-flex items-center justify-between gap-1.5"
+                    >
+                      <span>{target.label}</span>
+                      <ArrowUpRight className="w-3.5 h-3.5 text-stone-400" />
+                    </a>
+                  ))}
                 </div>
               </div>
             </div>

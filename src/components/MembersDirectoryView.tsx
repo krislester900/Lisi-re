@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  ArrowLeft,
   ArrowRight,
   BookOpen,
   MessageCircle,
@@ -12,7 +13,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  AnyProfileBadgeId,
+  buildEngagementBadgesByUser,
+  ENGAGEMENT_BADGE_DEFINITIONS,
   getProfileBadges,
+  isValidEngagementBadgeId,
   MEMBER_BADGE_DEFINITIONS,
   profileMatchesBadgeQuery,
 } from '../lib/memberBadges';
@@ -20,6 +25,7 @@ import { isModerationAdminEmail } from '../lib/moderationLabels';
 import { toggleFavoriteAuthor } from '../lib/storyService';
 import { STORY_THEMES, THEME_MAP } from '../lib/themes';
 import {
+  EngagementBadgeId,
   Exchange,
   MemberBadgeId,
   PredefinedSalonModerator,
@@ -32,7 +38,7 @@ import {
 import { ProfileSettingsPanel } from './ProfileSettingsPanel';
 import { ProfileWallView } from './ProfileWallView';
 import type { ReportDraft } from './ReportModal';
-import { ProfileBadgeChip, RoleBadgesRow } from './RoleBadge';
+import { EngagementBadgeChip, ProfileBadgeChip, RoleBadgesRow } from './RoleBadge';
 
 export type ProfilesPageTab = 'directory' | 'my-profile' | 'edit-profile';
 
@@ -40,7 +46,9 @@ interface MembersDirectoryViewProps {
   profiles: PublicProfile[];
   profilesLoaded: boolean;
   selectedMemberId: string | null;
+  subTab?: ProfilesPageTab;
   initialSubTab?: ProfilesPageTab;
+  onChangeSubTab?: (tab: ProfilesPageTab) => void;
   publicStories: Story[];
   myStories?: Story[];
   myReposts?: StoryRepost[];
@@ -61,7 +69,9 @@ export function MembersDirectoryView({
   profiles,
   profilesLoaded,
   selectedMemberId,
+  subTab: controlledSubTab,
   initialSubTab = 'directory',
+  onChangeSubTab,
   publicStories,
   myStories = [],
   myReposts = [],
@@ -78,9 +88,14 @@ export function MembersDirectoryView({
   onOpenReport,
 }: MembersDirectoryViewProps) {
   const { user, favoriteAuthors, signInWithGoogle } = useAuth();
-  const [subTab, setSubTab] = useState<ProfilesPageTab>(initialSubTab);
+  const [internalSubTab, setInternalSubTab] = useState<ProfilesPageTab>(initialSubTab);
+  const subTab = controlledSubTab ?? internalSubTab;
+  const setSubTab = (next: ProfilesPageTab) => {
+    setInternalSubTab(next);
+    onChangeSubTab?.(next);
+  };
   const [searchQuery, setSearchQuery] = useState('');
-  const [badgeFilter, setBadgeFilter] = useState<'all' | MemberBadgeId>('all');
+  const [badgeFilter, setBadgeFilter] = useState<'all' | AnyProfileBadgeId>('all');
   const [failedAvatars, setFailedAvatars] = useState<Record<string, boolean>>({});
   const [favBusyId, setFavBusyId] = useState<string | null>(null);
 
@@ -106,7 +121,7 @@ export function MembersDirectoryView({
   };
 
   useEffect(() => {
-    setSubTab(initialSubTab);
+    setInternalSubTab(initialSubTab);
   }, [initialSubTab]);
 
   const storyCountByAuthor = useMemo(() => {
@@ -124,7 +139,7 @@ export function MembersDirectoryView({
   );
 
   const visibleProfiles = useMemo(
-    () => profiles.filter((p) => p.userId === user?.uid || !hiddenMemberIds.has(p.userId)),
+    () => profiles.filter((p) => p.userId !== user?.uid && !hiddenMemberIds.has(p.userId)),
     [profiles, hiddenMemberIds, user?.uid]
   );
 
@@ -141,9 +156,21 @@ export function MembersDirectoryView({
     return map;
   }, [predefinedSalonModerators]);
 
-  const memberHasBadge = (member: PublicProfile, targetBadge: MemberBadgeId): boolean => {
+  const engagementByAuthor = useMemo(
+    () => buildEngagementBadgesByUser(publicStories, existingExchanges),
+    [publicStories, existingExchanges]
+  );
+
+  const memberHasBadge = (
+    member: PublicProfile,
+    targetBadge: AnyProfileBadgeId
+  ): boolean => {
+    if (isValidEngagementBadgeId(targetBadge)) {
+      const earned = engagementByAuthor.get(member.userId)?.badges ?? [];
+      return earned.includes(targetBadge as EngagementBadgeId);
+    }
     const badges = getProfileBadges(member);
-    if (badges.includes(targetBadge)) return true;
+    if (badges.includes(targetBadge as MemberBadgeId)) return true;
     if (
       targetBadge === 'administrateur' &&
       (member.isAdmin ||
@@ -161,13 +188,24 @@ export function MembersDirectoryView({
     return false;
   };
 
-  const availableBadgeFilters = useMemo(
-    () =>
-      MEMBER_BADGE_DEFINITIONS.filter((def) =>
-        visibleProfiles.some((member) => memberHasBadge(member, def.id))
-      ),
-    [visibleProfiles, adminUserIds, moderatedSalonsByUser, user?.uid, user?.email]
-  );
+  const availableBadgeFilters = useMemo(() => {
+    const manualFilters = MEMBER_BADGE_DEFINITIONS.filter((def) =>
+      visibleProfiles.some((member) => memberHasBadge(member, def.id))
+    ).map((def) => ({ id: def.id as AnyProfileBadgeId, kind: 'manual' as const }));
+
+    const engagementFilters = ENGAGEMENT_BADGE_DEFINITIONS.filter((def) =>
+      visibleProfiles.some((member) => memberHasBadge(member, def.id))
+    ).map((def) => ({ id: def.id as AnyProfileBadgeId, kind: 'engagement' as const }));
+
+    return [...engagementFilters, ...manualFilters];
+  }, [
+    visibleProfiles,
+    engagementByAuthor,
+    adminUserIds,
+    moderatedSalonsByUser,
+    user?.uid,
+    user?.email,
+  ]);
 
   const filteredProfiles = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -178,17 +216,19 @@ export function MembersDirectoryView({
         ...(adminUserIds?.has(p.userId) ? ['Administrateur'] : []),
         ...((moderatedSalonsByUser[p.userId]?.length ?? 0) > 0 ? ['Modérateur'] : []),
       ];
+      const earnedEngagement = engagementByAuthor.get(p.userId)?.badges ?? [];
       return (
         p.displayName.toLowerCase().includes(q) ||
         (p.bio || '').toLowerCase().includes(q) ||
         (p.favoriteTrackTitle || '').toLowerCase().includes(q) ||
         (p.favoriteNovel || '').toLowerCase().includes(q) ||
         (p.interests || '').toLowerCase().includes(q) ||
-        profileMatchesBadgeQuery(p, q, extraRoles)
+        profileMatchesBadgeQuery(p, q, extraRoles, earnedEngagement)
       );
     });
   }, [
     visibleProfiles,
+    engagementByAuthor,
     searchQuery,
     badgeFilter,
     adminUserIds,
@@ -259,60 +299,73 @@ export function MembersDirectoryView({
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 sm:py-10 space-y-8">
-      {/* Dedicated Profiles Page Header + Clean Navigation Tabs */}
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 pb-6 border-b border-stone-200 dark:border-stone-800">
-        <div className="space-y-2 max-w-2xl">
+      {/* Focused Header: My Profile (from top-right corner) vs Other Profiles (from sidebar) */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-stone-200 dark:border-stone-800">
+        <div className="space-y-1.5 max-w-2xl">
           <p className="text-xs uppercase tracking-widest text-stone-500 dark:text-stone-400">
-            Espace Profils · Communauté & mur personnel
+            {subTab === 'directory'
+              ? 'Communauté · Autres membres'
+              : 'Espace personnel · Informations & mur'}
           </p>
           <h1 className="font-display text-3xl sm:text-4xl font-medium text-stone-900 dark:text-stone-100">
             {subTab === 'my-profile'
               ? 'Mon profil'
               : subTab === 'edit-profile'
-                ? 'Paramètres du profil'
-                : 'Profils de la communauté'}
+                ? 'Modifier mon profil'
+                : 'Autres profils'}
           </h1>
           <p className="text-sm text-stone-600 dark:text-stone-400 leading-relaxed">
             {subTab === 'my-profile'
-              ? 'Votre page personnelle avec vos photos, votre musique, vos récits et vos repartages.'
+              ? 'Vos informations, votre album photo, votre musique, vos récits et vos repartages.'
               : subTab === 'edit-profile'
-                ? 'Modifiez votre présentation, choisissez votre musique sur Audius, Spotify ou Deezer, et réglez la confidentialité.'
-                : 'Parcourez les profils publics, écoutez leurs musiques favorites ou ouvrez une discussion privée.'}
+                ? 'Modifiez votre présentation, votre musique et vos réglages de confidentialité.'
+                : 'Découvrez les profils des autres membres, leurs murs et leurs lectures.'}
           </p>
         </div>
 
-        <div
-          role="tablist"
-          aria-label="Navigation de l’espace profils"
-          className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-900 border border-transparent dark:border-stone-800 rounded-lg w-fit shrink-0"
-        >
-          {(
-            [
-              { id: 'directory', label: 'Tous les profils', icon: Users },
-              { id: 'my-profile', label: 'Mon profil', icon: UserIcon },
-              { id: 'edit-profile', label: 'Modifier mon profil', icon: Settings },
-            ] as const
-          ).map((tab) => {
-            const Icon = tab.icon;
-            const active = subTab === tab.id;
-            return (
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {subTab === 'my-profile' && (
+            <>
               <button
-                key={tab.id}
                 type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setSubTab(tab.id)}
-                className={`min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md transition-colors inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
-                  active
-                    ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-sm'
-                    : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100'
-                }`}
+                onClick={() => setSubTab('edit-profile')}
+                className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 hover:border-[#1B365D] dark:hover:border-amber-400 inline-flex items-center gap-1.5 whitespace-nowrap"
               >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
+                <Settings className="w-3.5 h-3.5" />
+                <span>Paramètres</span>
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => setSubTab('directory')}
+                className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md text-[#1B365D] dark:text-amber-300 hover:underline inline-flex items-center gap-1.5 whitespace-nowrap"
+              >
+                <Users className="w-3.5 h-3.5" />
+                <span>Autres profils</span>
+              </button>
+            </>
+          )}
+
+          {subTab === 'edit-profile' && (
+            <button
+              type="button"
+              onClick={() => setSubTab('my-profile')}
+              className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Retour à mon profil</span>
+            </button>
+          )}
+
+          {subTab === 'directory' && (
+            <button
+              type="button"
+              onClick={() => setSubTab('my-profile')}
+              className="min-h-[38px] px-3.5 py-1.5 text-xs font-medium rounded-md border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-200 hover:border-[#1B365D] inline-flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <UserIcon className="w-3.5 h-3.5" />
+              <span>Mon profil</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -351,13 +404,13 @@ export function MembersDirectoryView({
                 >
                   Tous les membres
                 </button>
-                {availableBadgeFilters.map((def) => {
-                  const active = badgeFilter === def.id;
+                {availableBadgeFilters.map((item) => {
+                  const active = badgeFilter === item.id;
                   return (
                     <button
-                      key={def.id}
+                      key={item.id}
                       type="button"
-                      onClick={() => setBadgeFilter(active ? 'all' : def.id)}
+                      onClick={() => setBadgeFilter(active ? 'all' : item.id)}
                       aria-pressed={active}
                       className={`min-h-[30px] px-2 py-1 rounded-md border transition-colors inline-flex items-center gap-1 ${
                         active
@@ -365,7 +418,14 @@ export function MembersDirectoryView({
                           : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 hover:border-stone-400'
                       }`}
                     >
-                      <ProfileBadgeChip badgeId={def.id} compact />
+                      {item.kind === 'engagement' ? (
+                        <EngagementBadgeChip
+                          badgeId={item.id as EngagementBadgeId}
+                          compact
+                        />
+                      ) : (
+                        <ProfileBadgeChip badgeId={item.id as MemberBadgeId} compact />
+                      )}
                     </button>
                   );
                 })}
@@ -437,6 +497,7 @@ export function MembersDirectoryView({
                                 )}
                                 isModerator={(moderatedSalonsByUser[member.userId]?.length ?? 0) > 0}
                                 profileBadges={member.badges}
+                                engagementBadges={engagementByAuthor.get(member.userId)?.badges}
                                 compact
                               />
                             </div>

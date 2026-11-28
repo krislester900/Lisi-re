@@ -39,12 +39,22 @@ export type WallItemKind = 'photo' | 'music' | 'novel' | 'note';
 
 export type WallAccentTone = 'ink' | 'ochre' | 'terracotta' | 'sage' | 'sand';
 
+export type WallPhotoLayout = 'album' | 'cote' | 'bento' | 'galerie';
+
+export type WallPhotoPlacement = 'auto' | 'top' | 'side';
+
 export type MemberBadgeId =
   | 'administrateur'
   | 'moderateur'
   | 'expert_litteraire'
   | 'plume_confirmee'
   | 'grand_lecteur';
+
+export type EngagementBadgeId =
+  | 'contributeur_bienveillant'
+  | 'romancier_prolifique'
+  | 'plume_reguliere'
+  | 'voix_des_salons';
 
 export interface PublicProfile {
   userId: string;
@@ -57,6 +67,9 @@ export interface PublicProfile {
   favoriteNovel?: string;
   interests?: string;
   avatarUrl?: string;
+  photoLayout?: WallPhotoLayout;
+  photoAlbumTitle?: string;
+  photoAlbumNote?: string;
   discoverable?: boolean;
   commentsDisabled?: boolean;
   isAdmin?: boolean;
@@ -76,6 +89,8 @@ export interface WallItem {
   body: string;
   mediaUrl: string;
   accentTone: WallAccentTone;
+  displayOrder?: number;
+  photoPlacement?: WallPhotoPlacement;
   createdAt: Timestamp | null;
   updatedAt: Timestamp | null;
 }
@@ -514,6 +529,8 @@ export const FIELD_LIMITS = {
   favoriteNovel: { max: 140 },
   interests: { max: 240 },
   avatarUrl: { max: 60000 },
+  photoAlbumTitle: { max: 100 },
+  photoAlbumNote: { max: 240 },
   memberBadgesMax: 5,
   userAge: { min: 13, max: 115 },
   wallTitle: { min: 1, max: 140 },

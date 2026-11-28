@@ -103,7 +103,9 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'userId', 'displayName', 'bio', 'listeningNote',
           'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-          'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'commentsDisabled',
+          'favoriteNovel', 'interests', 'avatarUrl',
+          'photoLayout', 'photoAlbumTitle', 'photoAlbumNote',
+          'discoverable', 'commentsDisabled',
           'isAdmin', 'badges', 'createdAt', 'updatedAt'
         ])
         && isValidId(data.userId)
@@ -116,6 +118,9 @@ service cloud.firestore {
         && (!('favoriteNovel' in data) || (data.favoriteNovel is string && data.favoriteNovel.size() <= 140))
         && (!('interests' in data) || (data.interests is string && data.interests.size() <= 240))
         && (!('avatarUrl' in data) || (data.avatarUrl is string && data.avatarUrl.size() <= 60000))
+        && (!('photoLayout' in data) || data.photoLayout in ['album', 'cote', 'bento', 'galerie'])
+        && (!('photoAlbumTitle' in data) || (data.photoAlbumTitle is string && data.photoAlbumTitle.size() <= 100))
+        && (!('photoAlbumNote' in data) || (data.photoAlbumNote is string && data.photoAlbumNote.size() <= 240))
         && (!('discoverable' in data) || data.discoverable is bool)
         && (!('commentsDisabled' in data) || data.commentsDisabled is bool)
         && (!('isAdmin' in data) || data.isAdmin is bool)
@@ -144,6 +149,7 @@ service cloud.firestore {
         && data.keys().hasOnly([
           'itemId', 'ownerId', 'ownerName', 'visibility', 'kind',
           'title', 'subtitle', 'body', 'mediaUrl', 'accentTone',
+          'displayOrder', 'photoPlacement',
           'createdAt', 'updatedAt'
         ])
         && isValidId(data.itemId)
@@ -156,6 +162,8 @@ service cloud.firestore {
         && data.body is string && data.body.size() <= 600
         && data.mediaUrl is string && data.mediaUrl.size() <= 160000
         && data.accentTone in ['ink', 'ochre', 'terracotta', 'sage', 'sand']
+        && (!('displayOrder' in data) || (data.displayOrder is int && data.displayOrder >= 0 && data.displayOrder <= 10000))
+        && (!('photoPlacement' in data) || data.photoPlacement in ['auto', 'top', 'side'])
         && data.createdAt is timestamp
         && data.updatedAt is timestamp;
     }
@@ -801,7 +809,9 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'displayName', 'bio', 'listeningNote',
               'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'commentsDisabled', 'updatedAt'
+              'favoriteNovel', 'interests', 'avatarUrl',
+              'photoLayout', 'photoAlbumTitle', 'photoAlbumNote',
+              'discoverable', 'commentsDisabled', 'updatedAt'
             ])
           )
           || (
@@ -810,7 +820,9 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly([
               'displayName', 'bio', 'listeningNote',
               'favoriteTrackTitle', 'favoriteTrackArtist', 'favoriteTrackUrl',
-              'favoriteNovel', 'interests', 'avatarUrl', 'discoverable', 'commentsDisabled',
+              'favoriteNovel', 'interests', 'avatarUrl',
+              'photoLayout', 'photoAlbumTitle', 'photoAlbumNote',
+              'discoverable', 'commentsDisabled',
               'isAdmin', 'badges', 'updatedAt'
             ])
           )
@@ -849,7 +861,8 @@ service cloud.firestore {
           && incoming().createdAt == existing().createdAt
           && incoming().updatedAt == request.time
           && incoming().diff(existing()).affectedKeys().hasOnly([
-            'ownerName', 'kind', 'title', 'subtitle', 'body', 'mediaUrl', 'accentTone', 'updatedAt'
+            'ownerName', 'kind', 'title', 'subtitle', 'body', 'mediaUrl', 'accentTone',
+            'displayOrder', 'photoPlacement', 'updatedAt'
           ]);
         allow delete: if isVerifiedUser()
           && isValidId(userId)

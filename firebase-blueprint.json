@@ -47,6 +47,18 @@
           "type": "string",
           "maxLength": 60000
         },
+        "photoLayout": {
+          "type": "string",
+          "enum": ["album", "cote", "bento", "galerie"]
+        },
+        "photoAlbumTitle": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "photoAlbumNote": {
+          "type": "string",
+          "maxLength": 240
+        },
         "discoverable": {
           "type": "boolean"
         },
@@ -131,6 +143,13 @@
         "accentTone": {
           "type": "string",
           "enum": ["ink", "ochre", "terracotta", "sage", "sand"]
+        },
+        "displayOrder": {
+          "type": "integer"
+        },
+        "photoPlacement": {
+          "type": "string",
+          "enum": ["auto", "top", "side"]
         },
         "createdAt": {
           "type": "string",

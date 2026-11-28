@@ -89,6 +89,7 @@ jobs:
           bun add -D @capacitor/cli@^8 @capacitor/android@^8
           ./node_modules/.bin/cap add android
           ./node_modules/.bin/cap sync android
+          rm -rf android/app/src/main/assets/public/promo
 
       - name: Configurer Firebase Android (Google Sign-In & strings.xml / google-services.json)
         if: ${{ (github.event_name != 'workflow_dispatch' && vars.BUILD_ANDROID_PACKAGES != 'false') || inputs.build_android_packages == true }}

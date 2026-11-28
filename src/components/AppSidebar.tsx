@@ -39,6 +39,7 @@ interface AppSidebarProps {
   mobileOpen: boolean;
   onCloseMobile: () => void;
   activeTab: SidebarNavTab;
+  isOtherProfilesActive?: boolean;
   activeSalonId: StoryThemeId | null;
   activeCustomSalonId: string | null;
   exchangesCount: number;
@@ -60,6 +61,7 @@ export function AppSidebar({
   mobileOpen,
   onCloseMobile,
   activeTab,
+  isOtherProfilesActive,
   activeSalonId,
   activeCustomSalonId,
   exchangesCount,
@@ -85,7 +87,7 @@ export function AppSidebar({
     { id: 'recits', label: 'Accueil & salons', icon: Home },
     { id: 'pour-vous', label: 'Pour vous', icon: Star },
     { id: 'pelemele', label: 'Pêle-mêle', icon: Compass },
-    { id: 'membres', label: 'Profils', icon: Users },
+    { id: 'membres', label: 'Autres profils', icon: Users },
     { id: 'themes', label: 'Romans & confessions', icon: Award },
     { id: 'passerelles', label: 'Passerelles', icon: MessageSquareHeart, badge: exchangesCount },
     { id: 'carnet', label: 'Mon carnet', icon: BookOpen, badge: warningsCount },
@@ -159,7 +161,9 @@ export function AppSidebar({
               const isActive =
                 item.id === 'recits'
                   ? isHomeSelected
-                  : activeTab === item.id;
+                  : item.id === 'membres'
+                    ? (isOtherProfilesActive ?? activeTab === 'membres')
+                    : activeTab === item.id;
 
               return (
                 <button

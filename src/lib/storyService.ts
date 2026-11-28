@@ -80,6 +80,8 @@ import {
   WallAccentTone,
   WallItem,
   WallItemKind,
+  WallPhotoLayout,
+  WallPhotoPlacement,
   WarningSeverity,
 } from '../types/story';
 
@@ -380,9 +382,15 @@ export interface ProfileUpdatePayload {
   favoriteNovel?: string;
   interests?: string;
   avatarUrl?: string;
+  photoLayout?: WallPhotoLayout;
+  photoAlbumTitle?: string;
+  photoAlbumNote?: string;
   discoverable?: boolean;
   commentsDisabled?: boolean;
 }
+
+const VALID_PHOTO_LAYOUT_SET = new Set<WallPhotoLayout>(['album', 'cote', 'bento', 'galerie']);
+const VALID_PHOTO_PLACEMENT_SET = new Set<WallPhotoPlacement>(['auto', 'top', 'side']);
 
 export async function updatePublicProfile(
   userId: string,
@@ -428,12 +436,64 @@ export async function updatePublicProfile(
   if (payload.avatarUrl !== undefined) {
     updateFields.avatarUrl = clampString(payload.avatarUrl, FIELD_LIMITS.avatarUrl.max);
   }
+  if (payload.photoLayout !== undefined && VALID_PHOTO_LAYOUT_SET.has(payload.photoLayout)) {
+    updateFields.photoLayout = payload.photoLayout;
+  }
+  if (payload.photoAlbumTitle !== undefined) {
+    updateFields.photoAlbumTitle = clampString(
+      payload.photoAlbumTitle,
+      FIELD_LIMITS.photoAlbumTitle.max
+    );
+  }
+  if (payload.photoAlbumNote !== undefined) {
+    updateFields.photoAlbumNote = clampString(
+      payload.photoAlbumNote,
+      FIELD_LIMITS.photoAlbumNote.max
+    );
+  }
   if (payload.discoverable !== undefined) {
     updateFields.discoverable = Boolean(payload.discoverable);
   }
   if (payload.commentsDisabled !== undefined) {
     updateFields.commentsDisabled = Boolean(payload.commentsDisabled);
   }
+
+  const path = `publicProfiles/${userId}`;
+  try {
+    await updateDoc(doc(db, 'publicProfiles', userId), updateFields);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function updateProfilePhotoGallerySettings(
+  userId: string,
+  patch: {
+    photoLayout?: WallPhotoLayout;
+    photoAlbumTitle?: string;
+    photoAlbumNote?: string;
+  }
+): Promise<void> {
+  assertValidId(userId, 'userId');
+  const updateFields: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+  if (patch.photoLayout !== undefined && VALID_PHOTO_LAYOUT_SET.has(patch.photoLayout)) {
+    updateFields.photoLayout = patch.photoLayout;
+  }
+  if (patch.photoAlbumTitle !== undefined) {
+    updateFields.photoAlbumTitle = clampString(
+      patch.photoAlbumTitle,
+      FIELD_LIMITS.photoAlbumTitle.max
+    );
+  }
+  if (patch.photoAlbumNote !== undefined) {
+    updateFields.photoAlbumNote = clampString(
+      patch.photoAlbumNote,
+      FIELD_LIMITS.photoAlbumNote.max
+    );
+  }
+  if (Object.keys(updateFields).length <= 1) return;
 
   const path = `publicProfiles/${userId}`;
   try {
@@ -498,7 +558,12 @@ export function subscribeToWallItems(
     q,
     (snapshot) => {
       const list = snapshot.docs.map((d) => d.data() as WallItem);
-      list.sort((a, b) => toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt));
+      list.sort((a, b) => {
+        const orderA = typeof a.displayOrder === 'number' ? a.displayOrder : 0;
+        const orderB = typeof b.displayOrder === 'number' ? b.displayOrder : 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return toTimestampMs(b.createdAt) - toTimestampMs(a.createdAt);
+      });
       onData(list);
     },
     (error) => {
@@ -514,6 +579,8 @@ export interface CreateWallItemInput {
   body: string;
   mediaUrl: string;
   accentTone: WallAccentTone;
+  displayOrder?: number;
+  photoPlacement?: WallPhotoPlacement;
 }
 
 export async function createWallItem(
@@ -530,6 +597,14 @@ export async function createWallItem(
   const cleanOwnerName = clampString(ownerName, FIELD_LIMITS.displayName.max);
   const itemId = generateSafeId('wall');
   const path = `publicProfiles/${ownerId}/wallItems/${itemId}`;
+  const cleanOrder =
+    typeof input.displayOrder === 'number' && Number.isFinite(input.displayOrder)
+      ? Math.max(0, Math.min(10000, Math.round(input.displayOrder)))
+      : 0;
+  const cleanPlacement =
+    input.photoPlacement && VALID_PHOTO_PLACEMENT_SET.has(input.photoPlacement)
+      ? input.photoPlacement
+      : 'auto';
 
   try {
     await setDoc(doc(db, 'publicProfiles', ownerId, 'wallItems', itemId), {
@@ -543,12 +618,74 @@ export async function createWallItem(
       body: clampString(input.body, FIELD_LIMITS.wallBody.max),
       mediaUrl: clampString(input.mediaUrl, FIELD_LIMITS.wallMediaUrl.max),
       accentTone: input.accentTone,
+      ...(input.kind === 'photo'
+        ? { displayOrder: cleanOrder, photoPlacement: cleanPlacement }
+        : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
     return itemId;
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
+export async function updateWallItemPhotoSettings(
+  ownerId: string,
+  itemId: string,
+  patch: { displayOrder?: number; photoPlacement?: WallPhotoPlacement }
+): Promise<void> {
+  assertValidId(ownerId, 'ownerId');
+  assertValidId(itemId, 'itemId');
+  const updateFields: Record<string, unknown> = {
+    updatedAt: serverTimestamp(),
+  };
+  if (typeof patch.displayOrder === 'number' && Number.isFinite(patch.displayOrder)) {
+    updateFields.displayOrder = Math.max(0, Math.min(10000, Math.round(patch.displayOrder)));
+  }
+  if (patch.photoPlacement && VALID_PHOTO_PLACEMENT_SET.has(patch.photoPlacement)) {
+    updateFields.photoPlacement = patch.photoPlacement;
+  }
+  if (Object.keys(updateFields).length <= 1) return;
+
+  const path = `publicProfiles/${ownerId}/wallItems/${itemId}`;
+  try {
+    await updateDoc(doc(db, 'publicProfiles', ownerId, 'wallItems', itemId), updateFields);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function reorderWallPhotos(
+  ownerId: string,
+  orderedUpdates: Array<{
+    itemId: string;
+    displayOrder: number;
+    photoPlacement?: WallPhotoPlacement;
+  }>
+): Promise<void> {
+  assertValidId(ownerId, 'ownerId');
+  if (orderedUpdates.length === 0) return;
+
+  const batch = writeBatch(db);
+  for (const entry of orderedUpdates) {
+    assertValidId(entry.itemId, 'itemId');
+    const ref = doc(db, 'publicProfiles', ownerId, 'wallItems', entry.itemId);
+    const fields: Record<string, unknown> = {
+      displayOrder: Math.max(0, Math.min(10000, Math.round(entry.displayOrder))),
+      updatedAt: serverTimestamp(),
+    };
+    if (entry.photoPlacement && VALID_PHOTO_PLACEMENT_SET.has(entry.photoPlacement)) {
+      fields.photoPlacement = entry.photoPlacement;
+    }
+    batch.update(ref, fields);
+  }
+
+  const path = `publicProfiles/${ownerId}/wallItems`;
+  try {
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
 

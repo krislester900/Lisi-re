@@ -7,6 +7,7 @@ import {
   Copy,
   Download,
   ExternalLink,
+  Film,
   FolderGit2,
   Loader2,
   Settings2,
@@ -161,6 +162,9 @@ export function MobileAppModal({
   const [showAdminConfig, setShowAdminConfig] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(Boolean(initialShowDiagnostics));
   const [savingRepo, setSavingRepo] = useState(false);
+  const [linkedInCopied, setLinkedInCopied] = useState(false);
+  const [linkedInSharing, setLinkedInSharing] = useState(false);
+  const [linkedInFeedback, setLinkedInFeedback] = useState<string | null>(null);
   const [repoFeedback, setRepoFeedback] = useState<{
     type: 'success' | 'error';
     text: string;
@@ -287,6 +291,88 @@ export function MobileAppModal({
       });
     } finally {
       setSavingRepo(false);
+    }
+  };
+
+  const LINKEDIN_PROMO_TEXT = `Et si on prenait encore le temps d’écrire, vraiment, pour aller à la rencontre des autres ?
+
+Je viens de lancer Lisière, un espace calme et littéraire pensé pour partager des récits personnels, des confessions anonymes ou signées, des fragments de romans et des carnets de vie — loin du bruit des fils d’actualité classiques.
+
+Ce qu’on y trouve :
+- Des salons thématiques (Création, Premiers élans, Rencontres, Solitudes, Quotidien…) et la possibilité d’ouvrir vos propres salons.
+- Des échos bienveillants et des passerelles privées pour prolonger une lecture par une vraie conversation.
+- Une expérience fluide sur navigateur, installable sur mobile (PWA) et disponible en APK Android.
+
+Si vous aimez lire, écrire, ou simplement découvrir des histoires sincères, venez y jeter un œil et me dire ce que vous en pensez :
+https://lisi-re.krislester900.workers.dev
+
+Vos retours et premières histoires sont les bienvenus !
+
+#Écriture #Récits #Littérature #Communauté #ProjetWeb #Lisière`;
+
+  const handleCopyLinkedInPost = async () => {
+    setLinkedInFeedback(null);
+    try {
+      await navigator.clipboard.writeText(LINKEDIN_PROMO_TEXT);
+      setLinkedInCopied(true);
+      window.setTimeout(() => setLinkedInCopied(false), 2500);
+    } catch {
+      setLinkedInFeedback('Copie automatique bloquée par le navigateur.');
+    }
+  };
+
+  const handleShareLinkedInKit = async () => {
+    setLinkedInFeedback(null);
+    setLinkedInSharing(true);
+    try {
+      try {
+        await navigator.clipboard.writeText(LINKEDIN_PROMO_TEXT);
+        setLinkedInCopied(true);
+        window.setTimeout(() => setLinkedInCopied(false), 2500);
+      } catch {
+        // Continue even if clipboard write fails
+      }
+
+      if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+        const res = await fetch('/promo/lisiere_linkedin_promo.mp4');
+        if (res.ok) {
+          const blob = await res.blob();
+          const videoFile = new File([blob], 'lisiere-linkedin-promo.mp4', {
+            type: 'video/mp4',
+          });
+          const canShareFiles =
+            typeof navigator.canShare === 'function' &&
+            navigator.canShare({ files: [videoFile] });
+
+          if (canShareFiles) {
+            await navigator.share({
+              title: 'Lisière — Récits personnels & salons',
+              text: LINKEDIN_PROMO_TEXT,
+              files: [videoFile],
+            });
+            return;
+          }
+        }
+
+        await navigator.share({
+          title: 'Lisière — Récits personnels & salons',
+          text: LINKEDIN_PROMO_TEXT,
+          url: 'https://lisi-re.krislester900.workers.dev',
+        });
+        return;
+      }
+
+      setLinkedInFeedback(
+        'Texte copié ! Téléchargez la vidéo ci-dessous puis joignez-la à votre post LinkedIn.'
+      );
+    } catch (err) {
+      if ((err as Error)?.name !== 'AbortError') {
+        setLinkedInFeedback(
+          'Texte copié ! Utilisez le bouton Télécharger la vidéo puis importez-la dans LinkedIn.'
+        );
+      }
+    } finally {
+      setLinkedInSharing(false);
     }
   };
 
@@ -486,6 +572,70 @@ export function MobileAppModal({
               </p>
             )}
           </div>
+
+          {isAdmin && (
+            <div className="p-4 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <Film className="w-4 h-4 text-[#1B365D] dark:text-amber-300 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                    Kit de publication LinkedIn (admin)
+                  </p>
+                  <p className="text-xs text-stone-600 dark:text-stone-400 leading-relaxed mt-0.5">
+                    Vidéo carrée 1080×1080 (19 s avec musique) et texte prêts à poster sur votre profil.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <a
+                  href="/promo/lisiere_linkedin_promo.mp4"
+                  download="lisiere-linkedin-promo.mp4"
+                  className="min-h-[38px] px-3 py-1.5 rounded-md bg-[#1B365D] dark:bg-amber-600 text-white hover:bg-[#132744] dark:hover:bg-amber-500 text-xs font-medium inline-flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 shrink-0" />
+                  <span>Télécharger la vidéo (.mp4)</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyLinkedInPost()}
+                  className="min-h-[38px] px-3 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 bg-[#FBF9F5] dark:bg-stone-950 hover:border-[#1B365D] dark:hover:border-amber-400 text-xs font-medium text-stone-800 dark:text-stone-200 inline-flex items-center justify-center gap-1.5"
+                >
+                  {linkedInCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                      <span>Texte copié !</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copier le texte LinkedIn</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <button
+                type="button"
+                disabled={linkedInSharing}
+                onClick={() => void handleShareLinkedInKit()}
+                className="w-full min-h-[38px] px-3 py-1.5 rounded-md border border-[#CBD6E6] dark:border-stone-700 bg-[#F3F6FA] dark:bg-stone-950 hover:border-[#1B365D] dark:hover:border-amber-400 text-xs font-medium text-[#1B365D] dark:text-amber-300 inline-flex items-center justify-center gap-1.5 disabled:opacity-60"
+              >
+                {linkedInSharing ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                ) : (
+                  <Share2 className="w-3.5 h-3.5 shrink-0" />
+                )}
+                <span>Partager vidéo + texte vers LinkedIn (mobile)</span>
+              </button>
+
+              {linkedInFeedback && (
+                <p className="text-xs text-stone-600 dark:text-stone-400">
+                  {linkedInFeedback}
+                </p>
+              )}
+            </div>
+          )}
 
           {isInstalled ? (
             <div className="p-3.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-950 dark:text-emerald-100 flex items-center gap-2">
